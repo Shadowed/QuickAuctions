@@ -1,0 +1,10 @@
+## Interface: 30000
+## Title: Quick Auctions
+## Notes: Speeds up posting auctions
+## Version: $Revision$
+## Author: Mayen
+## SavedVariables: QuickAuctionsDB
+## LoadOnDemand: 1
+## LoadWith: Blizzard_AuctionUI
+
+QuickAuctions.lua
