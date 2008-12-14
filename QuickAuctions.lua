@@ -1,6 +1,6 @@
 QA = {}
 
-local isScanning, searchFilter, scanType, scanTotal
+local isScanning, searchFilter, scanType, scanTotal, scanIndex, incrementNext
 local page = 0
 local badRetries = 0
 local activeAuctions = {}
@@ -56,6 +56,12 @@ local function checkSend(self, elapsed)
 			
 			QueryAuctionItems(filter, nil, nil, 0, 0, 0, page, 0, 0)
 			
+			-- Increment the counter since we have sent off this query
+			if( isScanning ) then
+				scanIndex = scanIndex + 1
+				QA.scanButton:SetFormattedText("%d/%d items", scanIndex, scanTotal)
+			end
+			
 			-- Done with our queries
 			if( #(queryQueue) == 0 ) then
 				QA.isQuerying = nil
@@ -69,6 +75,12 @@ end
 function QA:SendQuery(filter, page)
 	if( CanSendAuctionQuery("list") ) then
 		QueryAuctionItems(filter, nil, nil, 0, 0, 0, page, 0, 0)
+
+		-- Increment the counter since we have sent off this query
+		if( isScanning ) then
+			scanIndex = scanIndex + 1
+			self.scanButton:SetFormattedText("%d/%d items", scanIndex, scanTotal)
+		end
 		return
 	end
 	
@@ -156,11 +168,12 @@ function QA:StartScan(list, type)
 	end
 
 	self.scanButton:Disable()
-	self.scanButton:SetFormattedText("%d/%d items", 1, #(scanList) + 1)
+	self.scanButton:SetFormattedText("%d/%d items", 0, #(scanList) + 1)
 
 	page = 0
 	scanType = type
 	scanTotal = #(scanList) + 1
+	scanIndex = 0
 	isScanning = true
 	
 	self:SendQuery(searchFilter, page)
@@ -302,8 +315,8 @@ function QA:AUCTION_ITEM_LIST_UPDATE()
 	-- Reset the counter since we got good owners
 	elseif( badRetries > 0 ) then
 		badRetries = 0
-	end
-		
+	end	
+	
 	-- If it's an active scan, and we have shown as much as possible, then scan the next page
 	if( shown == 50 ) then
 		page = page + 1
@@ -316,11 +329,9 @@ function QA:AUCTION_ITEM_LIST_UPDATE()
 		-- Nothing else to search, done!
 		if( not searchFilter ) then
 			if( self.isQuerying ) then
-				print("Still sending queries, not finished yet.")
 				return
 			end
 			
-			print("Done")
 			isScanning = nil
 			
 			if( scanType == "scan" ) then
@@ -331,7 +342,6 @@ function QA:AUCTION_ITEM_LIST_UPDATE()
 			return
 		end
 		
-		self.scanButton:SetFormattedText("%d/%d items", scanTotal - #(scanList), scanTotal)
 		self:SendQuery(searchFilter, page)
 	end
 end
