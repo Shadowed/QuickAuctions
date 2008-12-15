@@ -10,7 +10,7 @@ local queryQueue = {}
 local postList = {}
 
 function QA:OnInitialize()
-	QuickAuctionsDB = QuickAuctionsDB or {undercutBy = 100, fallbackBid = 2250000, fallbackBuyout = 2250000, postCap = 2, whitelist = {}}
+	QuickAuctionsDB = QuickAuctionsDB or {undercutBy = 100, threshold = (100 * 10000), specialThresh = {}, fallbackBid = 2250000, fallbackBuyout = 2250000, postCap = 2, whitelist = {}}
 		
 	-- Interrupt our scan if they start to browse
 	local orig = BrowseSearchButton:GetScript("OnClick")
@@ -18,6 +18,16 @@ function QA:OnInitialize()
 		isScanning = nil
 		orig(self, ...)
 	end)
+	
+	-- Hook the query function so we know what we last sent a search on
+	local orig_QueryAuctionItems = QueryAuctionItems
+	QueryAuctionItems = function(name, ...)
+		if( CanSendAuctionQuery() ) then
+			searchFilter = name
+		end
+		
+		return orig_QueryAuctionItems(name, ...)
+	end
 	
 	-- Scan our posted gems
 	local button = CreateFrame("Button", nil, AuctionFrameAuctions, "UIPanelButtonTemplate")
@@ -40,6 +50,8 @@ function QA:OnInitialize()
 	button:SetScript("OnClick", function(self)
 		QA:PostAuctions()
 	end)
+	
+	self.postButton = button
 end
 
 local timeElapsed = 0
@@ -50,16 +62,16 @@ local function checkSend(self, elapsed)
 		timeElapsed = 0
 		
 		-- Can we send it yet?
-		if( CanSendAuctionQuery("list") ) then
+		if( CanSendAuctionQuery() ) then
 			local filter = table.remove(queryQueue, 1)
 			local page = table.remove(queryQueue, 1)
-			
+
 			QueryAuctionItems(filter, nil, nil, 0, 0, 0, page, 0, 0)
 			
 			-- Increment the counter since we have sent off this query
-			if( isScanning ) then
-				scanIndex = scanIndex + 1
+			if( isScanning and page == 0 ) then
 				QA.scanButton:SetFormattedText("%d/%d items", scanIndex, scanTotal)
+				scanIndex = scanIndex + 1
 			end
 			
 			-- Done with our queries
@@ -73,13 +85,13 @@ local function checkSend(self, elapsed)
 end
 
 function QA:SendQuery(filter, page)
-	if( CanSendAuctionQuery("list") ) then
+	if( CanSendAuctionQuery() ) then
 		QueryAuctionItems(filter, nil, nil, 0, 0, 0, page, 0, 0)
 
 		-- Increment the counter since we have sent off this query
-		if( isScanning ) then
-			scanIndex = scanIndex + 1
+		if( isScanning and page == 0 ) then
 			self.scanButton:SetFormattedText("%d/%d items", scanIndex, scanTotal)
+			scanIndex = scanIndex + 1
 		end
 		return
 	end
@@ -149,8 +161,11 @@ function QA:PostAuctions()
 		end
 	end
 	
+	-- Need data before we post
 	if( scanAuctions ) then
 		self:StartScan(tempList, "post")
+	else
+		self:PostItems()
 	end
 end
 
@@ -162,21 +177,21 @@ function QA:StartScan(list, type)
 		table.insert(scanList, name)
 	end
 
-	searchFilter = table.remove(scanList, 1)
-	if( not searchFilter ) then
+	local filter = table.remove(scanList, 1)
+	if( not filter ) then
 		return
 	end
-
+	
 	self.scanButton:Disable()
 	self.scanButton:SetFormattedText("%d/%d items", 0, #(scanList) + 1)
 
-	page = 0
 	scanType = type
 	scanTotal = #(scanList) + 1
-	scanIndex = 0
+	scanIndex = 1
 	isScanning = true
+	page = 0
 	
-	self:SendQuery(searchFilter, page)
+	self:SendQuery(filter, page)
 end
 
 function QA:CheckItems()
@@ -212,10 +227,25 @@ function QA:PostItems()
 	-- Figure out how many of this is already posted
 	for k in pairs(activeAuctions) do activeAuctions[k] = nil end
 	for i=1, (GetNumAuctionItems("owner")) do
-		local name = GetAuctionItemInfo("owner", i)     
-		activeAuctions[name] = (activeAuctions[name] or 0) + 1
+		local name, _, _, _, _, _, _, _, _, _, _, _, wasSold = GetAuctionItemInfo("owner", i)   
+		if( wasSold == 0 ) then
+			activeAuctions[name] = (activeAuctions[name] or 0) + 1
+		end
 	end
 	
+	-- Quick check for threshold info
+	for i=#(postList), 1, -1 do
+		local name = postList[i]
+		local priceData = priceList[name]
+		local threshold = QuickAuctionsDB.specialThresh[name] or QuickAuctionsDB.threshold
+		
+		if( priceData and priceData.buyout <= threshold) then
+			print(string.format("Not posting %s, because the buyout is %.2fg and the threshold is %.2fg.", name, priceData.buyout / 10000, QuickAuctionsDB.threshold / 10000))
+			table.remove(postList, i)
+		end
+	end
+	
+	-- Start posting
 	for i=#(postList), 1, -1 do
 		local name = table.remove(postList, i)
 		local priceData = priceList[name]
@@ -225,7 +255,7 @@ function QA:PostItems()
 		if( priceData ) then
 			minBid = priceData.minBid
 			buyout = priceData.buyout
-
+						
 			-- Don't undercut people on our whitelist, match them
 			if( not QuickAuctionsDB.whitelist[priceData.owner] ) then
 				buyout = buyout / 10000
@@ -271,11 +301,30 @@ function QA:PostItems()
 				end
 			end
 		end
-
 	end
 end
 
+-- Do a delay before scanning the auctions so it has time to load all of the owner information
+local scanElapsed = 0
+local scanFrame = CreateFrame("Frame")
+scanFrame:Hide()
+scanFrame:SetScript("OnUpdate", function(self, elapsed)
+	scanElapsed = scanElapsed + elapsed
+	
+	if( scanElapsed >= 0.5 ) then
+		scanElapsed = 0
+		self:Hide()
+		
+		QA:ScanAuctionList()
+	end
+end)
+
 function QA:AUCTION_ITEM_LIST_UPDATE()
+	scanElapsed = 0
+	scanFrame:Show()
+end
+
+function QA:ScanAuctionList()
 	local shown, total = GetNumAuctionItems("list")
 	
 	-- Scan the list of auctions and find the one with the lowest bidder, using the data we have.
@@ -286,32 +335,29 @@ function QA:AUCTION_ITEM_LIST_UPDATE()
 			priceList[name] = {buyout = 99999999999999999}
 		end
 
-		if( buyoutPrice <= priceList[name].buyout and buyoutPrice > 0 ) then
+		if( owner and buyoutPrice <= priceList[name].buyout and buyoutPrice > 0 ) then
 			priceList[name].minBid = minBid
 			priceList[name].buyout = buyoutPrice
 			priceList[name].owner = owner
-			
-			if( not owner ) then
-				hasBadOwners = true
-			end
+		elseif( not owner ) then
+			hasBadOwners = true
 		end
 	end
 	
 	-- Not scanning, done here
-	if( not isScanning ) then
+	if( not isScanning or not searchFilter ) then
 		return
 	end
 	
 	-- Found a query with bad owners
 	if( hasBadOwners ) then
 		badRetries = badRetries + 1
-		
 		if( badRetries <= 3 ) then
 			badRetries = 0
 			self:SendQuery(searchFilter, page)
 			return
 		end
-		
+			
 	-- Reset the counter since we got good owners
 	elseif( badRetries > 0 ) then
 		badRetries = 0
@@ -323,11 +369,11 @@ function QA:AUCTION_ITEM_LIST_UPDATE()
 		self:SendQuery(searchFilter, page)
 	-- Move on to the next in the list
 	else
-		searchFilter = table.remove(scanList, 1)
+		local filter = table.remove(scanList, 1)
 		page = 0
 		
 		-- Nothing else to search, done!
-		if( not searchFilter ) then
+		if( not filter ) then
 			if( self.isQuerying ) then
 				return
 			end
@@ -342,7 +388,7 @@ function QA:AUCTION_ITEM_LIST_UPDATE()
 			return
 		end
 		
-		self:SendQuery(searchFilter, page)
+		self:SendQuery(filter, page)
 	end
 end
 
@@ -389,7 +435,29 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 	elseif( cmd == "fallbid" and arg ) then
 		QuickAuctionsDB.fallbackBid = tonumber(arg) * 10000
 		QA:Print(string.format("Set fallback bid to %.2fg", QuickAuctionsDB.fallbackBid / 10000))
-
+	
+	elseif( cmd == "threshold" and arg ) then
+		QuickAuctionsDB.threshold = tonumber(arg) * 10000
+		QA:Print(string.format("Set default threshold to %.2fg", QuickAuctionsDB.threshold / 10000))
+	
+	elseif( cmd == "spthresh" and arg ) then
+		local amount, link = string.split(" ", arg, 2)
+		amount = tonumber(amount)
+		if( not amount or not link ) then
+			QA:Print("You must provide both an item link and the amount in gold.")
+			return
+		end
+		
+		local name = GetItemInfo(link)
+		if( amount <= 0 ) then
+			QuickAuctionsDB.specialThresh[name] = nil
+			QA:Print(string.format("Removed threshold on %s.", link))
+			return
+		end
+		
+		QuickAuctionsDB.specialThresh[name] = amount * 10000
+		QA:Print(string.format("Set threshold for %s to %.2fg.", link, QuickAuctionsDB.specialThresh[name] / 10000))
+	
 	elseif( cmd == "fallbo" and arg ) then
 		QuickAuctionsDB.fallbackBuyout = tonumber(arg) * 10000
 		QA:Print(string.format("Set fallback buyout to %.2fg", QuickAuctionsDB.fallbackBuyout / 10000))
@@ -414,6 +482,8 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 		print("/qa fallbid <amount in gold> - How much gold to put the bid on for auctions we have no data on.")
 		print("/qa fallbo <amount in gold> - How much gold to put the buyout on for auctions we have no data on.")
 		print("/qa cap <amount> - Only allow <amount> of the same kind of auction to be up at the same time.")
+		print("/qa threshold <amount in gold> - Don't post any auctions that would go below this amount.")
+		print("/qa spthresh <amount in gold> <link> - Don't post any auctions of that item link if it goes below the entered amount.")
 		print("/qa add <name> - Adds a name to the whitelist to not undercut.")
 		print("/qa remove <name> - Removes a name from the whitelist.")
 		print("/qa reset - Resets the whitelist")
