@@ -1,12 +1,13 @@
 QA = {}
 
 local isScanning, searchFilter, scanType, scanTotal, scanIndex
+local spamFrame
 local page, badRetries, totalCancels, totalPosts = 0, 0, 0, 0
 local activeAuctions, scanList, priceList, queryQueue, postList = {}, {}, {}, {}, {}
 local AHTime = 12 * 60
 
 function QA:OnInitialize()
-	QuickAuctionsDB = QuickAuctionsDB or {undercutBy = 100, uncut = false, smartUndercut = true, threshold = (100 * 10000), specialThresh = {}, fallback = 2250000, specialFallback = {}, postCap = 2, whitelist = {}}
+	QuickAuctionsDB = QuickAuctionsDB or {undercutBy = 100, uncut = false, spammyFrame = 1, smartUndercut = true, smartCancel = true, specialCap = {}, threshold = (100 * 10000), specialThresh = {}, fallback = 2250000, specialFallback = {}, postCap = 2, whitelist = {}}
 		
 	-- Interrupt our scan if they start to browse
 	--[[
@@ -16,6 +17,8 @@ function QA:OnInitialize()
 		orig(self, ...)
 	end)
 	]]
+	
+	spamFrame = getglobal("ChatFrame" .. QuickAuctionsDB.spammyFrame) or DEFAULT_CHAT_FRAME
 	
 	-- Hook the query function so we know what we last sent a search on
 	local orig_QueryAuctionItems = QueryAuctionItems
@@ -202,8 +205,11 @@ function QA:PostAuctions()
 			local link = GetContainerItemLink(bag, slot)
 			if( link ) then
 				local name = GetItemInfo(link)
+				local postCap = QuickAuctionsDB.specialCap[name] or QuickAuctionsDB.postCap
+				
 				-- Make sure we aren't already at the post cap, to reduce the item scans needed
-				if( not tempList[name] and self:IsValidGem(link) and ( not activeAuctions[name] or ( activeAuctions[name] < QuickAuctionsDB.postCap ) ) ) then
+				-- also, only post it if it's a single item (for uncut gems that can stack)
+				if( not tempList[name] and select(2, GetContainerItemInfo(bag, slot)) == 1 and self:IsValidGem(link) and ( not activeAuctions[name] or ( activeAuctions[name] < postCap ) ) ) then
 					table.insert(postList, name)
 					tempList[name] = true
 				end
@@ -257,14 +263,27 @@ function QA:CheckItems()
 			-- if they aren't us
 			-- and if they aren't on our whitelist (We don't care if they undercut us)
 			if( ( priceData.buyout < buyoutPrice or ( priceData.buyout == buyoutPrice and priceData.minBid <= minBid ) ) and priceData.owner ~= owner and not QuickAuctionsDB.whitelist[priceData.owner] ) then
+				local threshold, belowThresh
+				
+				if( QuickAuctionsDB.smartCancel ) then
+					threshold = QuickAuctionsDB.specialThresh[name] or QuickAuctionsDB.threshold
+					belowThresh = priceData.buyout <= threshold
+				end
+				
 				if( not tempList[name] ) then
-					print(string.format("Undercut on %s, by %s, buyout %s, bid %s, our buyout %s, our bid %s", name, priceData.owner, self:FormatTextMoney(priceData.buyout), self:FormatTextMoney(priceData.minBid), self:FormatTextMoney(buyoutPrice), self:FormatTextMoney(minBid)))
+					if( not belowThresh ) then
+						print(string.format("Undercut on %s, by %s, buyout %s, bid %s, our buyout %s, our bid %s", name, priceData.owner, self:FormatTextMoney(priceData.buyout), self:FormatTextMoney(priceData.minBid), self:FormatTextMoney(buyoutPrice), self:FormatTextMoney(minBid)))
+					else
+						spamFrame:AddMessage(string.format("Undercut on %s, by %s, buyout %s, our buyout %s, threshold is %s so not cancelling.", name, priceData.owner, self:FormatTextMoney(priceData.buyout), self:FormatTextMoney(buyoutPrice), self:FormatTextMoney(threshold)))
+					end
 				end
 
-				totalCancels = totalCancels + 1
+				if( not belowThresh ) then
+					totalCancels = totalCancels + 1
 
-				tempList[name] = true
-				CancelAuction(i)
+					tempList[name] = true
+					CancelAuction(i)
+				end
 			end
 		end
 	end
@@ -281,7 +300,7 @@ function QA:PostItems()
 		local threshold = QuickAuctionsDB.specialThresh[name] or QuickAuctionsDB.threshold
 		
 		if( priceData and priceData.buyout <= threshold ) then
-			print(string.format("Not posting %s, because the buyout is %s and the threshold is %s.", name, self:FormatTextMoney(priceData.buyout), self:FormatTextMoney(QuickAuctionsDB.threshold)))
+			spamFrame:AddMessage(string.format("Not posting %s, because the buyout is %s and the threshold is %s.", name, self:FormatTextMoney(priceData.buyout), self:FormatTextMoney(threshold)))
 			table.remove(postList, i)
 		end
 	end
@@ -339,7 +358,8 @@ function QA:PostItems()
 						totalPosted = totalPosted + 1
 
 						-- Hit limit, done with this item
-						if( totalPosted > QuickAuctionsDB.postCap ) then
+						local postCap = QuickAuctionsDB.specialCap[name] or QuickAuctionsDB.postCap
+						if( totalPosted > postCap ) then
 							break
 						end
 
@@ -583,6 +603,11 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 		
 		-- Set it for this specific item
 		local name = GetItemInfo(link)
+		if( not name ) then
+			self:Print("Invalid item link given.")
+			return
+		end
+
 		if( amount <= 0 ) then
 			QuickAuctionsDB.specialFallback[name] = nil
 			self:Print(string.format("Removed fallback buyout on %s.", link))
@@ -611,6 +636,11 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 		
 		-- Set it for this specific item
 		local name = GetItemInfo(link)
+		if( not name ) then
+			self:Print("Invalid item link given.")
+			return
+		end
+
 		if( amount <= 0 ) then
 			QuickAuctionsDB.specialThresh[name] = nil
 			self:Print(string.format("Removed threshold on %s.", link))
@@ -622,8 +652,33 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 
 	-- Post cap
 	elseif( cmd == "cap" and arg ) then
-		QuickAuctionsDB.postCap = tonumber(arg) or 2
-		self:Print(string.format("Set maximum number of the same auction to %d.", QuickAuctionsDB.postCap))
+		local amount, link = string.split(" ", arg, 2)
+		amount = tonumber(amount)
+		if( not amount ) then
+			self:Print("Invalid cap entered, must be a number.")
+			return
+		end
+		
+		if( not link ) then
+			QuickAuctionsDB.postCap = tonumber(amount)
+			self:Print(string.format("Set maximum number of the same auction to %d.", QuickAuctionsDB.postCap))
+			return
+		end
+		
+		local name = GetItemInfo(link)
+		if( not name ) then
+			self:Print("Invalid item link given.")
+			return
+		end
+
+		if( amount <= 0 ) then
+			QuickAuctionsDB.specialCap[name] = nil
+			self:Print(string.format("Removed specific cap on %s.", link))
+			return
+		end
+		
+		QuickAuctionsDB.specialCap[name] = amount
+		self:Print(string.format("Only keeping up to %d of %s up in the auction house at the same time.", amount, link))
 	
 	-- Post time
 	elseif( cmd == "time" and arg ) then
@@ -653,6 +708,16 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 			self:Print("Now posting uncut metas and gems.")
 		else
 			self:Print("No longer posting uncut metas and gems.")
+		end
+	
+	-- Smart cancelling
+	elseif( cmd == "cancel" ) then
+		QuickAuctionsDB.smartCancel = not QuickAuctionsDB.smartCancel
+		
+		if( QuickAuctionsDB.smartCancel ) then
+			self:Print("Only cancelling if the lowest price isn't below the threshold.")
+		else
+			self:Print("Always cancelling if someone undercuts us.")
 		end
 	
 	-- Enables asshole mode! Automatically scans every 60 seconds, and posts every 30 seconds
@@ -700,14 +765,15 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 		self:Print("Slash commands")
 		print("/qa undercut <money> - How much to undercut people by.")
 		print("/qa smartcut - Toggles smart undercutting (Going from 1.9g -> 1g first instead of 1.9g - undercut amount.")
-		--print("/qa uncut - Toggles posting of uncut metas and gems.")
-		print("/qa cap <amount> - Only allow <amount> of the same kind of auction to be up at the same time.")
+		print("/qa uncut - Toggles posting of uncut metas and gems, only posts uncut gems that aren't stacked.")
+		print("/qa cap <amount> <link> - Only allow <amount> of the same kind of auction to be up at the same time.")
 		print("/qa fallback <money> <link> - How much money to default to if nobody else has an auction up.")
 		print("/qa threshold <money> <link> - Don't post any auctions that would go below this amount.")
 		print("/qa time <12/24/48> - Amount of hours to put auctions up for, only works for the current sesson.")
+		print("/qa cancel - Disables undercutting if the lowest price falls below the the threshold.")
 		print("/qa add <name> - Adds a name to the whitelist to not undercut.")
 		print("/qa remove <name> - Removes a name from the whitelist.")
-		print("For fallback and threshold, if a link is provided it's set for the specific item, if none is then it's set globally as a default.")
+		print("For fallback, threshold and cap, if a link is provided it's set for the specific item, if none is then it's set globally as a default.")
 		print("<money> format is \"#g\" for gold \"#s\" for silver and \"#c\" for copper, so \"5g2s5c\" will be 5 gold, 2 silver, 5 copper.")
 	end
 end
