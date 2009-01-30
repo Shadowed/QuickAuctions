@@ -1,8 +1,8 @@
+-- Ugly code, need to clean it up later
 QA = {}
 
-local isScanning, searchFilter, scanType, scanTotal, scanIndex
-local spamFrame
-local page, badRetries, totalCancels, totalPosts = 0, 0, 0, 0
+local isScanning, searchFilter, scanType, scanTotal, scanIndex, spamFrame, money
+local page, badRetries, totalCancels, totalPosts, totalPostsSet = 0, 0, 0, 0, 0
 local activeAuctions, scanList, priceList, queryQueue, postList, splitQueue, foundSlots = {}, {}, {}, {}, {}, {}, {}
 local AHTime = 12 * 60
 
@@ -25,6 +25,7 @@ function QA:OnInitialize()
 	}
 	
 	-- Load defaults in
+	QuickAuctionsDB = QuickAuctionsDB or {}
 	for key, value in pairs(defaults) do
 		if( QuickAuctionsDB[key] == nil ) then
 			if( type(value) == "table" ) then
@@ -47,24 +48,41 @@ function QA:OnInitialize()
 		return orig_QueryAuctionItems(name, ...)
 	end
 	
+	-- Tooltips!
+	local function showTooltip(self)
+		GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
+		GameTooltip:SetText(self.tooltip)
+		GameTooltip:Show()
+	end
+	
+	local function hideTooltip(self)
+		GameTooltip:Hide()
+	end
+	
 	-- Scan our posted items
 	local button = CreateFrame("Button", nil, AuctionFrameAuctions, "UIPanelButtonTemplate")
+	button.tooltip = "Scan posted auctions to see if any were undercut."
 	button:SetPoint("TOPRIGHT", AuctionFrameAuctions, "TOPRIGHT", 49, -15)
 	button:SetText("Scan Items")
 	button:SetWidth(100)
 	button:SetHeight(18)
+	button:SetScript("OnEnter", showTooltip)
+	button:SetScript("OnLeave", hideTooltip)
 	button:SetScript("OnClick", function(self)
 		QA:ScanAuctions()
 	end)
-	
+		
 	self.scanButton = button
 
 	-- Post inventory items
 	local button = CreateFrame("Button", nil, AuctionFrameAuctions, "UIPanelButtonTemplate")
+	button.tooltip = "Post items from your inventory into the auction house."
 	button:SetPoint("TOPRIGHT", self.scanButton, "TOPLEFT", 0, 0)
 	button:SetText("Post Items")
 	button:SetWidth(100)
 	button:SetHeight(18)
+	button:SetScript("OnEnter", showTooltip)
+	button:SetScript("OnLeave", hideTooltip)
 	button:SetScript("OnClick", function(self)
 		QA:PostAuctions()
 	end)
@@ -84,6 +102,12 @@ function QA:OnInitialize()
 
 		elseif( msg == "Auction created." and totalPosts > 0 ) then
 			totalPosts = totalPosts - 1
+			totalPostsSet = totalPostsSet - 1
+			
+			if( totalPostsSet <= 0 ) then
+				QA:QueueSet()
+			end
+			
 			if( totalPosts <= 0 ) then
 				totalPosts = 0
 				QA:Print("Done posting auctions.")
@@ -210,27 +234,39 @@ function QA:FindEmptyInventorySlot()
 	return nil, nil
 end
 
--- Do an initial check, so we remove anything that is already stacked in the proper amounts
-function QA:CheckItemQuantites()
-	-- Scan bags
+-- Split an item if needed
+function QA:ProcessSplitQueue()
+	local foundSomething
+	
+	-- Loop through bags
 	for bag=0, 4 do
-		-- Scan items in bag
+		-- Scanning a bag
 		for slot=1, GetContainerNumSlots(bag) do
 			local link = GetContainerItemLink(bag, slot)
 			local itemCount = select(2, GetContainerItemInfo(bag, slot))
-			-- Valid link + it's not a slot we already looked at
-			if( link and not foundSlots[bag .. slot] ) then
+			-- Slot has something in it
+			if( link ) then
 				local name = GetItemInfo(link)
+				-- Scan queue for what we want
 				for i=#(splitQueue), 1, -1 do
 					local itemName = splitQueue[i]
 					if( itemName == name ) then
 						local quantity = splitQueue[i - 1]
-
-						-- No split needed (Whoo!)
-						if( itemCount == quantity ) then
-							-- This makes sure if we need to do 2 slots of Bloodstone x 3
-							-- we won't think that one slot is two (When, it's really just one)
-							foundSlots[bag .. slot] = true
+						
+						if( itemCount > quantity ) then
+							local freeBag, freeSlot = self:FindEmptyInventorySlot()
+							-- Bad, ran out of space
+							if( not freeBag and not freeSlot ) then
+								self:Print("Ran out of free space to keep splitting, not going to finish up splits.")
+								return
+							end
+							
+							self.frame:RegisterEvent("BAG_UPDATE")
+							SplitContainerItem(bag, slot, quantity)
+							PickupContainerItem(freeBag, freeSlot)
+							
+							-- Remove from queue, we basically just hope that it went through.
+							foundSomething = true
 							
 							table.remove(splitQueue, i)
 							table.remove(splitQueue, i - 1)
@@ -241,6 +277,14 @@ function QA:CheckItemQuantites()
 			end
 		end
 	end
+	
+	-- We have nothing else we can really do
+	if( not foundSomething and #(splitQueue) > 0 ) then
+		for i=#(splitQueue), 1, -1 do table.remove(splitQueue, i) end
+		
+		self:FinishedSplitting()
+		self:Print("Split isn't finished completely, but we do not have an easy stack to split so exiting.")
+	end
 end
 
 -- Player bags changed, will have to be ready to do a split again soon
@@ -248,21 +292,12 @@ local timerFrame
 local timeElapsed = 0
 function QA:BAG_UPDATE()
 	local self = QA
-	local totalQueued = #(splitQueue)
-
 	self.frame:UnregisterEvent("BAG_UPDATE")
-	self:CheckItemQuantites()
 	
 	-- Check if we are done splitting
 	if( #(splitQueue) == 0 ) then
-		self.postButton:Enable()
-		self.postButton:SetText("Post Items")
-
-		self:StartScan(tempList, "post")
-		
-	-- The queue changed, we're going to start up a timer and in 0.10s will continue with processing
-	-- if we don't do this, then splitting things fails and the game cries and it doesn't work in general
-	elseif( totalQueued > #(splitQueue) ) then
+		self:FinishedSplitting()
+	else
 		-- Create it if needed
 		if( not timerFrame ) then
 			timerFrame = CreateFrame("Frame")
@@ -283,56 +318,83 @@ function QA:BAG_UPDATE()
 	end
 end
 
--- Split an item if needed
-function QA:ProcessSplitQueue()
-	local foundSomething
+-- Finished splitting this queue
+function QA:FinishedSplitting()
+	self:PostItem(table.remove(postList, 1))
+end
+
+-- Queue a set for splitting... or post it if it can't be split
+function QA:QueueSet()
+	if( #(postList) == 0 ) then
+		return
+	end
+
+	local link = postList[1]
+	local name, _, _, _, _, itemType, _, stackCount = GetItemInfo(link)
+	local quantity = type(QuickAuctionsDB.itemList[name]) == "number" and QuickAuctionsDB.itemList[name] or 1
 	
-	-- Loop through bags
+	-- This item cannot stack, so we don't need to bother with splitting and can post it all
+	if( stackCount == 1 ) then
+		self:PostItem(table.remove(postList, 1))
+		return
+	end
+	
+	-- If we already have some active options, we want to start our index a little bit higher
+	local startIndex = 1
+	if( activeAuctions[name] ) then
+		startIndex = activeAuctions[name] + 1
+	end
+
+	-- Figure out how much we can post
+	local canPost = math.floor(GetItemCount(link) / quantity)
+	local postCap = QuickAuctionsDB.specialCap[name] or QuickAuctionsDB.postCap
+	if( canPost > postCap ) then
+		canPost = postCap
+	end
+	
+	-- Figure out if we even need to do a split
+	local validStacks = 0
 	for bag=0, 4 do
 		-- Scanning a bag
 		for slot=1, GetContainerNumSlots(bag) do
-			local link = GetContainerItemLink(bag, slot)
-			local itemCount = select(2, GetContainerItemInfo(bag, slot))
-			-- Slot has something in it
-			if( link ) then
-				local name = GetItemInfo(link)
-				-- Scan queue for what we want
-				for i=#(splitQueue), 1, -1 do
-					local itemName = splitQueue[i]
-					if( itemName == name ) then
-						local quantity = splitQueue[i - 1]
-						-- We have enough of this to split it
-						if( itemCount > quantity ) then
-							local freeBag, freeSlot = self:FindEmptyInventorySlot()
-							-- Bad, ran out of space
-							if( not freeBag and not freeSlot ) then
-								self:Print("Ran out of free space to keep splitting, not going to finish up splits.")
-								return
-							end
-
-							foundSomething = true
-							
-							self.frame:RegisterEvent("BAG_UPDATE")
-							SplitContainerItem(bag, slot, quantity)
-							PickupContainerItem(freeBag, freeSlot)
-							break
-						end
-					end
+			local itemLink = GetContainerItemLink(bag, slot)
+			if( itemLink == link ) then
+				local itemCount = select(2, GetContainerItemInfo(bag, slot))
+				if( itemCount == quantity ) then
+					validStacks = validStacks + 1
+					
+					-- Start us off a little bit higher, since it's one less split we need
+					startIndex = startIndex + 1
 				end
 			end
 		end
 	end
 	
-	-- We have nothing else we can really do
-	if( not foundSomething ) then
-		for i=#(splitQueue), 1, -1 do table.remove(splitQueue, i) end
-		
-		self.postButton:Enable()
-		self.postButton:SetText("Post Items")
-
-		self:StartScan(tempList, "post")
-		self:Print("Split isn't finished completely, but we do not have an easy stack to split so exiting.")
+	-- Yay we do!
+	if( validStacks >= canPost ) then
+		self:PostItem(table.remove(postList, 1))
+		return
 	end
+
+	-- This is a slightly odd, basically what it means is, we need that that item in the quantity provided
+	-- so two entries of Bloodstone 4 means we want two x Bloodstones that are stacked up to 4
+	for i=startIndex, canPost do
+		table.insert(splitQueue, quantity)
+		table.insert(splitQueue, name)
+	end
+	
+	-- Nothing queued, meaning we have nothing to post for this item
+	if( #(splitQueue) == 0 ) then
+		table.remove(postList, 1)
+		
+		self:Echo(string.format("You only have %d of %s, and posting it in stacks of %d, not posting.", GetItemCount(link), link, quantity))
+		self:QueueSet()
+		return
+	end
+	
+	-- Get us going
+	for k in pairs(foundSlots) do foundSlots[k] = nil end
+	self:ProcessSplitQueue()
 end
 
 -- Prepare to post auctions
@@ -340,7 +402,6 @@ function QA:PostAuctions()
 	-- Reset data
 	for k in pairs(splitQueue) do splitQueue[k] = nil end
 	for k in pairs(tempList) do tempList[k] = nil end
-	for k in pairs(foundSlots) do foundSlots[k] = nil end
 	for i=#(postList), 1, -1 do table.remove(postList, i) end
 	for _, data in pairs(priceList) do
 		data.buyout = 99999999999999999
@@ -366,58 +427,14 @@ function QA:PostAuctions()
 				local postCap = QuickAuctionsDB.specialCap[name] or QuickAuctionsDB.postCap
 				
 				-- Make sure we aren't already at the post cap, to reduce the item scans needed
-				if( not tempList[name] and self:IsValidItem(link) and ( not activeAuctions[name] or ( activeAuctions[name] < postCap ) ) ) then
-					-- This item can stack, so we need to do some checks to see if it should be split
-					if( stackCount > 1 ) then
-						local quantity = 1
-						
-						-- Figure out the quantity to post this in
-						if( type(QuickAuctionsDB.itemList[name]) == "number" ) then
-							quantity = QuickAuctionsDB.itemList[name]
-						end
-
-						-- If we already have some active options, we want to start our index a little bit higher
-						local startIndex = 1
-						if( activeAuctions[name] ) then
-							startIndex = activeAuctions[name] + 1
-						end
-						
-						-- Figure out how much we can post
-						local canPost = math.floor(GetItemCount(link) / quantity)
-						if( canPost > postCap ) then
-							postCap = postCap
-						end
-												
-						-- This is a slightly odd, basically what it means is, we need that that item in the quantity provided
-						-- so two entries of Bloodstone 4 means we want two x Bloodstones that are stacked up to 4
-						for i=startIndex, postCap do
-							table.insert(splitQueue, quantity)
-							table.insert(splitQueue, name)
-						end
-					end
-					
-					
-					table.insert(postList, name)
+				if( not tempList[name] and self:IsValidItem(link) and ( not activeAuctions[name] or activeAuctions[name] < postCap ) ) then
+					table.insert(postList, link)
 					tempList[name] = true
 				end
 			end
 		end
 	end
-	
-	-- Going to have to do fun scans
-	if( #(splitQueue) > 0 ) then
-		self:CheckItemQuantites()
 		
-		-- Still got things to split, so process it
-		if( #(splitQueue) > 0 ) then
-			self.postButton:Disable()
-			self.postButton:SetText("Splitting...")
-
-			self:ProcessSplitQueue()
-			return
-		end
-	end
-	
 	self:StartScan(tempList, "post")
 end
 
@@ -446,6 +463,131 @@ function QA:StartScan(list, type)
 	page = 0
 	
 	self:SendQuery(filter, page, "new")
+end
+
+function QA:PostItem(link)
+	if( not link ) then
+		return
+	end
+	
+	local name = GetItemInfo(link)
+	local priceData = priceList[name]
+	local totalPosted = activeAuctions[name] or 0
+	local minBid, buyout
+	
+	-- Figure out what price we are posting at
+	if( priceData and priceData.owner ) then
+		minBid = math.floor(priceData.minBid)
+		buyout = math.floor(priceData.buyout)
+
+		-- Don't undercut people on our whitelist, match them
+		if( not QuickAuctionsDB.whitelist[priceData.owner] ) then
+			buyout = buyout / 10000
+
+			-- If smart undercut is on, then someone who posts an auction of 99g99s0c, it will auto undercut to 99g
+			-- instead of 99g99s0c - undercutBy
+			if( not QuickAuctionsDB.smartUndercut or  buyout == math.floor(buyout) ) then
+				buyout = ( buyout * 10000 ) - (QuickAuctionsDB.specialUndercut[name] or QuickAuctionsDB.undercutBy)
+			else
+				buyout = math.floor(buyout) * 10000
+			end
+
+			minBid = buyout
+		end
+
+	-- No other data available, default to our fallback for it
+	else
+		minBid = QuickAuctionsDB.specialFallback[name] or QuickAuctionsDB.fallback
+		buyout = QuickAuctionsDB.specialFallback[name] or QuickAuctionsDB.fallback
+
+		self:Echo(string.format("No data found for %s, using %s buyout and %s bid default.", name, self:FormatTextMoney(buyout), self:FormatTextMoney(minBid)))
+	end
+
+	-- Find the item in our inventory
+	for bag=0, 4 do
+		for slot=1, GetContainerNumSlots(bag) do
+			local link = GetContainerItemLink(bag, slot)
+			local itemCount = select(2, GetContainerItemInfo(bag, slot))
+			if( link ) then
+				local itemName = GetItemInfo(link)
+
+				-- Figure out the quantity to post this in
+				local quantity = 1
+				if( type(QuickAuctionsDB.itemList[name]) == "number" ) then
+					quantity = QuickAuctionsDB.itemList[name]
+				end
+
+				-- It's the correct quantity, so we can post this one
+				if( name == itemName and itemCount == quantity ) then
+					totalPosted = totalPosted + 1
+
+					-- Hit limit, done with this item
+					local postCap = QuickAuctionsDB.specialCap[name] or QuickAuctionsDB.postCap
+					if( totalPosted > postCap ) then
+						break
+					end
+
+					-- Post this auction
+					PickupContainerItem(bag, slot)
+					ClickAuctionSellItemButton()
+
+					-- Make sure we can post this auction, we save the money and subtract it here
+					-- because we chain post before the server gives us the new money
+					money = money - CalculateAuctionDeposit(AHTime)
+					if( money >= 0 ) then
+						totalPosts = totalPosts + 1
+						totalPostsSet = totalPostsSet + 1
+						StartAuction(minBid * quantity, buyout * quantity, AHTime)
+
+						-- Update post totals
+						self.postButton.totalPosts = self.postButton.totalPosts + 1
+						self.postButton:Disable()
+						self.postButton:SetFormattedText("%d/%d items", totalPosts, self.postButton.totalPosts)
+					else
+						ClickAuctionSellItemButton()
+						ClearCursor()
+
+						self.postButton:SetText("Post Items")
+						self.postButton:Enable()
+						self:Print("Cannot post remaining auctions, you do not have enough money.")
+						return
+					end
+				end
+			end
+		end
+	end
+end
+
+function QA:PostItems()
+	self.scanButton:Enable()
+	self.scanButton:SetText("Scan Items")
+
+	-- Quick check for threshold info
+	for i=#(postList), 1, -1 do
+		local link = postList[i]
+		local name = GetItemInfo(link)
+		local priceData = priceList[name]
+		local threshold = QuickAuctionsDB.specialThresh[name] or QuickAuctionsDB.threshold
+		
+		if( priceData and priceData.buyout <= threshold ) then
+			spamFrame:AddMessage(string.format("Not posting %s, because the buyout is %s per item and the threshold is %s", name, self:FormatTextMoney(priceData.buyout), self:FormatTextMoney(threshold)))
+			table.remove(postList, i)
+		end
+	end
+
+	-- Nothing to post, it's all below a threshold
+	if( #(postList) == 0 ) then
+		return
+	end
+	
+	self.postButton.totalPosts = 0
+	self.postButton:Disable()
+
+	-- Save money so we can check if we have enough to post
+	money = GetMoney()
+	
+	-- Post a group of items
+	self:QueueSet()
 end
 
 -- Check if any of our posted auctions were undercut by someone, using the data we got earlier
@@ -479,7 +621,7 @@ function QA:CheckItems()
 				
 				if( not tempList[name] ) then
 					if( not belowThresh ) then
-						print(string.format("Undercut on %s, by %s, buyout %s, bid %s, our buyout %s, our bid %s (per item)", name, priceData.owner, self:FormatTextMoney(priceData.buyout), self:FormatTextMoney(priceData.minBid), self:FormatTextMoney(buyoutPrice / quantity), self:FormatTextMoney(minBid / quantity)))
+						self:Echo(string.format("Undercut on %s, by %s, buyout %s, bid %s, our buyout %s, our bid %s (per item)", name, priceData.owner, self:FormatTextMoney(priceData.buyout), self:FormatTextMoney(priceData.minBid), self:FormatTextMoney(buyoutPrice / quantity), self:FormatTextMoney(minBid / quantity)))
 					else
 						spamFrame:AddMessage(string.format("Undercut on %s, by %s, buyout %s, our buyout %s (per item), threshold is %s so not cancelling.", name, priceData.owner, self:FormatTextMoney(priceData.buyout), self:FormatTextMoney(buyoutPrice / quantity), self:FormatTextMoney(threshold)))
 					end
@@ -490,119 +632,6 @@ function QA:CheckItems()
 
 					tempList[name] = true
 					CancelAuction(i)
-				end
-			end
-		end
-	end
-end
-
-function QA:PostItems()
-	self.scanButton:Enable()
-	self.scanButton:SetText("Scan Items")
-
-	-- Quick check for threshold info
-	for i=#(postList), 1, -1 do
-		local name = postList[i]
-		local priceData = priceList[name]
-		local threshold = QuickAuctionsDB.specialThresh[name] or QuickAuctionsDB.threshold
-		
-		if( priceData and priceData.buyout <= threshold ) then
-			spamFrame:AddMessage(string.format("Not posting %s, because the buyout is %s per item and the threshold is %s", name, self:FormatTextMoney(priceData.buyout), self:FormatTextMoney(threshold)))
-			table.remove(postList, i)
-		end
-	end
-
-	-- Save money
-	local money = GetMoney()
-	
-	if( #(postList) > 0 ) then
-		self.postButton.totalPosts = 0
-		self.postButton:Disable()
-	end
-	
-	-- Start posting
-	for i=#(postList), 1, -1 do
-		local name = table.remove(postList, i)
-		local priceData = priceList[name]
-		
-		local totalPosted = activeAuctions[name] or 0
-		local minBid, buyout
-		if( priceData and priceData.owner ) then
-			minBid = math.floor(priceData.minBid)
-			buyout = math.floor(priceData.buyout)
-						
-			-- Don't undercut people on our whitelist, match them
-			if( not QuickAuctionsDB.whitelist[priceData.owner] ) then
-				buyout = buyout / 10000
-				
-				-- If smart undercut is on, then someone who posts an auction of 99g99s0c, it will auto undercut to 99g
-				-- instead of 99g99s0c - undercutBy
-				if( not QuickAuctionsDB.smartUndercut or  buyout == math.floor(buyout) ) then
-					buyout = ( buyout * 10000 ) - (QuickAuctionsDB.specialUndercut[name] or QuickAuctionsDB.undercutBy)
-				else
-					buyout = math.floor(buyout) * 10000
-				end
-
-				minBid = buyout
-			end
-		
-		-- No other data available, default to our fallback for it
-		else
-			minBid = QuickAuctionsDB.specialFallback[name] or QuickAuctionsDB.fallback
-			buyout = QuickAuctionsDB.specialFallback[name] or QuickAuctionsDB.fallback
-			
-			print(string.format("No data found for %s, using %s buyout and %s bid default.", name, self:FormatTextMoney(buyout), self:FormatTextMoney(minBid)))
-		end
-		
-		-- Find the item in our inventory
-		for bag=0, 4 do
-			for slot=1, GetContainerNumSlots(bag) do
-				local link = GetContainerItemLink(bag, slot)
-				local itemCount = select(2, GetContainerItemInfo(bag, slot))
-				if( link ) then
-					local itemName = GetItemInfo(link)
-
-					-- Figure out the quantity to post this in
-					local quantity = 1
-					if( type(QuickAuctionsDB.itemList[name]) == "number" ) then
-						quantity = QuickAuctionsDB.itemList[name]
-					end
-
-					-- It's the correct quantity, so we can post this one
-					if( name == itemName and itemCount == quantity ) then
-						totalPosted = totalPosted + 1
-
-						-- Hit limit, done with this item
-						local postCap = QuickAuctionsDB.specialCap[name] or QuickAuctionsDB.postCap
-						if( totalPosted > postCap ) then
-							break
-						end
-
-						-- Post this auction
-						PickupContainerItem(bag, slot)
-						ClickAuctionSellItemButton()
-						
-						-- Make sure we can post this auction, we save the money and subtract it here
-						-- because we chain post before the server gives us the new money
-						money = money - CalculateAuctionDeposit(AHTime)
-						if( money >= 0 ) then
-							totalPosts = totalPosts + 1
-							StartAuction(minBid * quantity, buyout * quantity, AHTime)
-
-							-- Update post totals
-							self.postButton.totalPosts = self.postButton.totalPosts + 1
-							self.postButton:Disable()
-							self.postButton:SetFormattedText("%d/%d items", totalPosts, self.postButton.totalPosts)
-						else
-							ClickAuctionSellItemButton()
-							ClearCursor()
-							
-							self.postButton:SetText("Post Items")
-							self.postButton:Enable()
-							self:Print("Cannot post remaining auctions, you do not have enough money.")
-							return
-						end
-					end
 				end
 			end
 		end
@@ -727,6 +756,10 @@ QA.frame = frame
 
 function QA:Print(msg)
 	DEFAULT_CHAT_FRAME:AddMessage(string.format("|cff33ff99Quick Auctions|r: %s", msg))
+end
+
+function QA:Echo(msg)
+	DEFAULT_CHAT_FRAME:AddMessage(msg)
 end
 
 -- Stolen from Blizzard!
@@ -1087,19 +1120,19 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 		self:Print("Enabled super auctioning!")
 	else
 		self:Print("Slash commands")
-		print("/qa undercut <money> <link> - How much to undercut people by.")
-		print("/qa smartcut - Toggles smart undercutting (Going from 1.9g -> 1g first instead of 1.9g - undercut amount.")
-		print("/qa cap <amount> <link> - Only allow <amount> of the same kind of auction to be up at the same time.")
-		print("/qa fallback <money> <link> - How much money to default to if nobody else has an auction up.")
-		print("/qa threshold <money> <link> - Don't post any auctions that would go below this amount.")
-		print("/qa time <12/24/48> - Amount of hours to put auctions up for, only works for the current sesson.")
-		print("/qa cancel - Disables undercutting if the lowest price falls below the the threshold.")
-		print("/qa add <name> - Adds a name to the whitelist to not undercut.")
-		print("/qa remove <name> - Removes a name from the whitelist.")
-		print("/qa additem <link> <quantity> - Adds an item to the list of things that should be managed, *IF* the item can stack you must provide a quantity to post it in.")
-		print("/qa removeitem <link> - Removes an item from the managed list.")
-		print("/qa toggle <gems/uncut/glyphs> - Lets you toggle entire categories of items: All cut gems, all uncut gems, and all glyphs. These will always be put onto the AH as the single item, if you want to override it to post multiple then use the additem command.")
-		print("For undercut, fallback, threshold and cap, if a link is provided it's set for the specific item, if none is then it's set globally as a default.")
-		print("<money> format is \"#g\" for gold \"#s\" for silver and \"#c\" for copper, so \"5g2s5c\" will be 5 gold, 2 silver, 5 copper.")
+		self:Echo("/qa undercut <money> <link> - How much to undercut people by.")
+		self:Echo("/qa smartcut - Toggles smart undercutting (Going from 1.9g -> 1g first instead of 1.9g - undercut amount.")
+		self:Echo("/qa cap <amount> <link> - Only allow <amount> of the same kind of auction to be up at the same time.")
+		self:Echo("/qa fallback <money> <link> - How much money to default to if nobody else has an auction up.")
+		self:Echo("/qa threshold <money> <link> - Don't post any auctions that would go below this amount.")
+		self:Echo("/qa time <12/24/48> - Amount of hours to put auctions up for, only works for the current sesson.")
+		self:Echo("/qa cancel - Disables undercutting if the lowest price falls below the the threshold.")
+		self:Echo("/qa add <name> - Adds a name to the whitelist to not undercut.")
+		self:Echo("/qa remove <name> - Removes a name from the whitelist.")
+		self:Echo("/qa additem <link> <quantity> - Adds an item to the list of things that should be managed, *IF* the item can stack you must provide a quantity to post it in.")
+		self:Echo("/qa removeitem <link> - Removes an item from the managed list.")
+		self:Echo("/qa toggle <gems/uncut/glyphs> - Lets you toggle entire categories of items: All cut gems, all uncut gems, and all glyphs. These will always be put onto the AH as the single item, if you want to override it to post multiple then use the additem command.")
+		self:Echo("For undercut, fallback, threshold and cap, if a link is provided it's set for the specific item, if none is then it's set globally as a default.")
+		self:Echo("<money> format is \"#g\" for gold \"#s\" for silver and \"#c\" for copper, so \"5g2s5c\" will be 5 gold, 2 silver, 5 copper.")
 	end
 end
