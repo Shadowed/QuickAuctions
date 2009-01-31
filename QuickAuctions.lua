@@ -1,9 +1,9 @@
 -- Ugly code, need to clean it up later
 QA = {}
 
-local isScanning, searchFilter, scanType, scanTotal, scanIndex, spamFrame, money
-local page, badRetries, totalCancels, totalPosts, totalPostsSet = 0, 0, 0, 0, 0
-local activeAuctions, scanList, priceList, queryQueue, postList, splitQueue, foundSlots = {}, {}, {}, {}, {}, {}, {}
+local isScanning, searchFilter, scanType, scanTotal, scanIndex, spamFrame, money, splittingLink
+local page, badRetries, totalCancels, totalPosts, totalPostsSet, totalNewStacks, splitQuantity = 0, 0, 0, 0, 0, 0, 0
+local activeAuctions, scanList, priceList, queryQueue, postList, foundSlots, auctionPostQueue = {}, {}, {}, {}, {}, {}, {}
 local AHTime = 12 * 60
 
 function QA:OnInitialize()
@@ -22,6 +22,8 @@ function QA:OnInitialize()
 		specialFallback = {},
 		postCap = 2,
 		specialCap = {},
+		logging = false,
+		logs = {},
 	}
 	
 	-- Load defaults in
@@ -112,16 +114,35 @@ function QA:OnInitialize()
 				totalPosts = 0
 				QA:Print("Done posting auctions.")
 
-				QA.postButton:Enable()
 				QA.postButton:SetText("Post Items")
+				QA.postButton:Enable()
 			else
-				QA.postButton:Disable()
+				-- This one went throughdo next
+				if( totalPostsSet > 0 ) then
+					QA:PostQueuedAuction()
+				end
+				
 				QA.postButton:SetFormattedText("%d/%d items", totalPosts, QA.postButton.totalPosts)
+				QA.postButton:Disable()
 			end
 			
 			return true
 		end
 	end
+end
+
+-- Debugging
+function QA:Log(...)
+	if( not QuickAuctionsDB.logging ) then
+		return
+	end
+	
+	local msg = ""
+	for i=1, select("#", ...) do
+		msg = msg .. " " .. tostring(select(i, ...))
+	end
+	
+	table.insert(QuickAuctionsDB.logs, string.trim(msg))
 end
 
 local timeElapsed = 0
@@ -220,9 +241,10 @@ function QA:ScanAuctions()
 end
 
 -- Find out where we can place something, if we can.
-function QA:FindEmptyInventorySlot()
-	for bag=0, 4 do
-		if( bag == 0 or bag == -1 or GetItemFamily(GetInventoryItemLink("player", ContainerIDToInventoryID(bag))) == 0 ) then
+function QA:FindEmptyInventorySlot(forItemFamily)
+	for bag=4, 0, -1 do
+		local bagFamily = GetItemFamily(GetInventoryItemLink("player", ContainerIDToInventoryID(bag)))
+		if( bag == 0 or bag == -1 or bagFamily == 0 or ( bagFamily ~= 0 and bagFamily == forItemFamily ) ) then
 			for slot=1, GetContainerNumSlots(bag) do
 				if( not GetContainerItemLink(bag, slot) ) then
 					return bag, slot
@@ -235,67 +257,61 @@ function QA:FindEmptyInventorySlot()
 end
 
 -- Split an item if needed
+local timerFrame
+local timeElapsed = 0
 function QA:ProcessSplitQueue()
-	local foundSomething
-	
 	-- Loop through bags
 	for bag=0, 4 do
 		-- Scanning a bag
 		for slot=1, GetContainerNumSlots(bag) do
 			local link = GetContainerItemLink(bag, slot)
-			local itemCount = select(2, GetContainerItemInfo(bag, slot))
+			local itemCount, itemLocked = select(2, GetContainerItemInfo(bag, slot))
 			-- Slot has something in it
-			if( link ) then
-				local name = GetItemInfo(link)
-				-- Scan queue for what we want
-				for i=#(splitQueue), 1, -1 do
-					local itemName = splitQueue[i]
-					if( itemName == name ) then
-						local quantity = splitQueue[i - 1]
-						
-						if( itemCount > quantity ) then
-							local freeBag, freeSlot = self:FindEmptyInventorySlot()
-							-- Bad, ran out of space
-							if( not freeBag and not freeSlot ) then
-								self:Print("Ran out of free space to keep splitting, not going to finish up splits.")
-								return
-							end
-							
-							self.frame:RegisterEvent("BAG_UPDATE")
-							SplitContainerItem(bag, slot, quantity)
-							PickupContainerItem(freeBag, freeSlot)
-							
-							-- Remove from queue, we basically just hope that it went through.
-							foundSomething = true
-							
-							table.remove(splitQueue, i)
-							table.remove(splitQueue, i - 1)
-							break
-						end
-					end
+			if( link == splittingLink and itemCount > splitQuantity ) then
+				-- It's still locked, so we have to wait before we try and use it again
+				if( itemLocked ) then
+					timeElapsed = 0.15
+					timerFrame:Show()
+					return
 				end
+				
+				local freeBag, freeSlot = self:FindEmptyInventorySlot(GetItemFamily(link))
+				-- Bad, ran out of space
+				if( not freeBag and not freeSlot ) then
+					self:Print("Ran out of free space to keep splitting, not going to finish up splits.")
+					return
+				end
+
+				self:Log("Splitting", (GetItemInfo(link)), "from bag", bag, "slot", slot, "moving into bag", freeBag, "slot", freeSlot)
+
+				self.frame:RegisterEvent("BAG_UPDATE")
+				SplitContainerItem(bag, slot, splitQuantity)
+				PickupContainerItem(freeBag, freeSlot)
+				
+				totalNewStacks = totalNewStacks - 1
+				return
 			end
 		end
 	end
 	
 	-- We have nothing else we can really do
-	if( not foundSomething and #(splitQueue) > 0 ) then
-		for i=#(splitQueue), 1, -1 do table.remove(splitQueue, i) end
+	if( totalNewStacks > 0 ) then
+		totalNewStacks = 0
+		splittingLink = 0
 		
+		self:Log("Odd stack size, cannot split everything.")
 		self:FinishedSplitting()
-		self:Print("Split isn't finished completely, but we do not have an easy stack to split so exiting.")
 	end
 end
 
 -- Player bags changed, will have to be ready to do a split again soon
-local timerFrame
-local timeElapsed = 0
+
 function QA:BAG_UPDATE()
 	local self = QA
 	self.frame:UnregisterEvent("BAG_UPDATE")
 	
 	-- Check if we are done splitting
-	if( #(splitQueue) == 0 ) then
+	if( totalNewStacks == 0 ) then
 		self:FinishedSplitting()
 	else
 		-- Create it if needed
@@ -304,10 +320,11 @@ function QA:BAG_UPDATE()
 			timerFrame:SetScript("OnUpdate", function(self, elapsed)
 				timeElapsed = timeElapsed + elapsed
 				if( timeElapsed >= 0.25 ) then
+					self:Hide()
 					timeElapsed = 0
 					
 					QA:ProcessSplitQueue()
-					self:Hide()
+					
 				end
 			end)
 		end
@@ -320,12 +337,14 @@ end
 
 -- Finished splitting this queue
 function QA:FinishedSplitting()
+	self:Log("Finished split.")
 	self:PostItem(table.remove(postList, 1))
 end
 
 -- Queue a set for splitting... or post it if it can't be split
 function QA:QueueSet()
 	if( #(postList) == 0 ) then
+		self:Log("Was going to queue set, but the post list is empty.")
 		return
 	end
 
@@ -335,6 +354,7 @@ function QA:QueueSet()
 	
 	-- This item cannot stack, so we don't need to bother with splitting and can post it all
 	if( stackCount == 1 ) then
+		self:Log("Item queue", name, "only stacks to", stackCount, "so posting it now.")
 		self:PostItem(table.remove(postList, 1))
 		return
 	end
@@ -372,21 +392,24 @@ function QA:QueueSet()
 	
 	-- Yay we do!
 	if( validStacks >= canPost ) then
+		self:Log("We have enough valid stacks", validStacks, "only posting", canPost)
 		self:PostItem(table.remove(postList, 1))
 		return
 	end
-
+	
+	self:Log("Starting at", startIndex, "going to be posting", canPost, "of", name, "x", quantity)
+	
 	-- This is a slightly odd, basically what it means is, we need that that item in the quantity provided
 	-- so two entries of Bloodstone 4 means we want two x Bloodstones that are stacked up to 4
-	for i=startIndex, canPost do
-		table.insert(splitQueue, quantity)
-		table.insert(splitQueue, name)
-	end
-	
+	totalNewStacks = canPost - (startIndex - 1)
+	splittingLink = link
+	splitQuantity = quantity
+		
 	-- Nothing queued, meaning we have nothing to post for this item
-	if( #(splitQueue) == 0 ) then
+	if( totalNewStacks == 0 ) then
 		table.remove(postList, 1)
 		
+		self:Log("Only have", GetItemCount(link), "of", name, "we want", quantity)
 		self:Echo(string.format("You only have %d of %s, and posting it in stacks of %d, not posting.", GetItemCount(link), link, quantity))
 		self:QueueSet()
 		return
@@ -400,7 +423,6 @@ end
 -- Prepare to post auctions
 function QA:PostAuctions()
 	-- Reset data
-	for k in pairs(splitQueue) do splitQueue[k] = nil end
 	for k in pairs(tempList) do tempList[k] = nil end
 	for i=#(postList), 1, -1 do table.remove(postList, i) end
 	for _, data in pairs(priceList) do
@@ -446,12 +468,14 @@ function QA:StartScan(list, type)
 	for name in pairs(list) do
 		table.insert(scanList, name)
 	end
+	
+	self:Log("Starting scan", type, "items", #(scanList))
 
 	local filter = table.remove(scanList, 1)
 	if( not filter ) then
 		return
 	end
-	
+		
 	self.scanButton:Disable()
 	self.scanButton:SetFormattedText("%d/%d items", 0, #(scanList) + 1)
 	
@@ -465,16 +489,37 @@ function QA:StartScan(list, type)
 	self:SendQuery(filter, page, "new")
 end
 
-function QA:PostItem(link)
-	if( not link ) then
+function QA:PostQueuedAuction()
+	if( #(auctionPostQueue) == 0 ) then
 		return
 	end
 	
+	local bag = table.remove(auctionPostQueue, 1)
+	local slot = table.remove(auctionPostQueue, 1)
+	local minBid = table.remove(auctionPostQueue, 1)
+	local buyout = table.remove(auctionPostQueue, 1)
+
+	self:Log("Posted bag", bag, "slot", slot, "in the AH for", AHTime, " at", self:FormatTextMoney(buyout), self:FormatTextMoney(minBid))
+
+	PickupContainerItem(bag, slot)
+	ClickAuctionSellItemButton()
+	StartAuction(minBid, buyout, AHTime)
+end
+
+function QA:PostItem(link)
+	if( not link ) then
+		self:Log("No link provided to post item, exited.")
+		return
+	end
+		
 	local name = GetItemInfo(link)
 	local priceData = priceList[name]
 	local totalPosted = activeAuctions[name] or 0
+	local quantity = type(QuickAuctionsDB.itemList[name]) == "number" and QuickAuctionsDB.itemList[name] or 1
 	local minBid, buyout
 	
+	totalPostsSet = 0
+
 	-- Figure out what price we are posting at
 	if( priceData and priceData.owner ) then
 		minBid = math.floor(priceData.minBid)
@@ -495,72 +540,76 @@ function QA:PostItem(link)
 			minBid = buyout
 		end
 
+		self:Log("Going to post", name, "at buyout/bid", self:FormatTextMoney(buyout), " data says owner is", (priceData.owner or "<none>"), "with posted at", self:FormatTextMoney(priceData.buyout))
+
 	-- No other data available, default to our fallback for it
 	else
 		minBid = QuickAuctionsDB.specialFallback[name] or QuickAuctionsDB.fallback
 		buyout = QuickAuctionsDB.specialFallback[name] or QuickAuctionsDB.fallback
 
 		self:Echo(string.format("No data found for %s, using %s buyout and %s bid default.", name, self:FormatTextMoney(buyout), self:FormatTextMoney(minBid)))
+		self:Log("Going to post", name, "at buyout/bid", self:FormatTextMoney(buyout), " no owner found.")
 	end
 
 	-- Find the item in our inventory
+	for i=#(auctionPostQueue), 1, -1 do table.remove(auctionPostQueue, i) end
 	for bag=0, 4 do
 		for slot=1, GetContainerNumSlots(bag) do
-			local link = GetContainerItemLink(bag, slot)
+			local itemLink = GetContainerItemLink(bag, slot)
 			local itemCount = select(2, GetContainerItemInfo(bag, slot))
-			if( link ) then
-				local itemName = GetItemInfo(link)
+			-- It's the correct quantity/link so can post it
+			if( itemLink == link and itemCount == quantity ) then
+				totalPosted = totalPosted + 1
 
-				-- Figure out the quantity to post this in
-				local quantity = 1
-				if( type(QuickAuctionsDB.itemList[name]) == "number" ) then
-					quantity = QuickAuctionsDB.itemList[name]
+				-- Hit limit, done with this item
+				local postCap = QuickAuctionsDB.specialCap[name] or QuickAuctionsDB.postCap
+				if( totalPosted > postCap ) then
+					break
 				end
 
-				-- It's the correct quantity, so we can post this one
-				if( name == itemName and itemCount == quantity ) then
-					totalPosted = totalPosted + 1
+				-- Post this auction
+				PickupContainerItem(bag, slot)
+				ClickAuctionSellItemButton()
 
-					-- Hit limit, done with this item
-					local postCap = QuickAuctionsDB.specialCap[name] or QuickAuctionsDB.postCap
-					if( totalPosted > postCap ) then
-						break
-					end
-
-					-- Post this auction
-					PickupContainerItem(bag, slot)
-					ClickAuctionSellItemButton()
-
-					-- Make sure we can post this auction, we save the money and subtract it here
-					-- because we chain post before the server gives us the new money
-					money = money - CalculateAuctionDeposit(AHTime)
-					if( money >= 0 ) then
-						totalPosts = totalPosts + 1
-						totalPostsSet = totalPostsSet + 1
-						StartAuction(minBid * quantity, buyout * quantity, AHTime)
-
-						-- Update post totals
-						self.postButton.totalPosts = self.postButton.totalPosts + 1
-						self.postButton:Disable()
-						self.postButton:SetFormattedText("%d/%d items", totalPosts, self.postButton.totalPosts)
-					else
-						ClickAuctionSellItemButton()
-						ClearCursor()
-
-						self.postButton:SetText("Post Items")
-						self.postButton:Enable()
-						self:Print("Cannot post remaining auctions, you do not have enough money.")
-						return
-					end
+				-- Make sure we can post this auction, we save the money and subtract it here
+				-- because we chain post before the server gives us the new money
+				money = money - CalculateAuctionDeposit(AHTime)
+				if( money >= 0 ) then
+					table.insert(auctionPostQueue, bag)
+					table.insert(auctionPostQueue, slot)
+					table.insert(auctionPostQueue, minBid * quantity)
+					table.insert(auctionPostQueue, buyout * quantity)
+					
+					totalPostsSet = totalPostsSet + 1
+				else
+					for i=#(auctionPostQueue), 1, -1 do table.remove(auctionPostQueue, i) end
+					totalPosts = 0
+					
+					self.postButton:SetText("Post Items")
+					self.postButton:Enable()
+					self:Print("Cannot post remaining auctions, you do not have enough money.")
+					return
 				end
+
+				-- Now reset the button quickly
+				ClickAuctionSellItemButton()
+				ClearCursor()
 			end
 		end
 	end
+		
+	-- And now update post totals
+	self.postButton:SetFormattedText("%d/%d items", totalPosts, self.postButton.totalPosts)
+	self.postButton:Disable()
+
+	-- Now actually post everything
+	self:PostQueuedAuction()
 end
 
 function QA:PostItems()
 	self.scanButton:Enable()
 	self.scanButton:SetText("Scan Items")
+	self.postButton.totalPosts = 0
 
 	-- Quick check for threshold info
 	for i=#(postList), 1, -1 do
@@ -569,22 +618,31 @@ function QA:PostItems()
 		local priceData = priceList[name]
 		local threshold = QuickAuctionsDB.specialThresh[name] or QuickAuctionsDB.threshold
 		
-		if( priceData and priceData.buyout <= threshold ) then
+		if( priceData and priceData.owner and priceData.buyout <= threshold ) then
 			spamFrame:AddMessage(string.format("Not posting %s, because the buyout is %s per item and the threshold is %s", name, self:FormatTextMoney(priceData.buyout), self:FormatTextMoney(threshold)))
 			table.remove(postList, i)
+		else
+			-- Figure out how many auctions we will be posting quickly
+			local quantity = type(QuickAuctionsDB.itemList[name]) == "number" and QuickAuctionsDB.itemList[name] or 1
+			local willPost = math.floor(GetItemCount(link) / quantity)
+			local postCap = QuickAuctionsDB.specialCap[name] or QuickAuctionsDB.postCap
+			willPost = willPost > postCap and postCap or willPost
+			
+			self.postButton.totalPosts = self.postButton.totalPosts + willPost
 		end
 	end
 
 	-- Nothing to post, it's all below a threshold
 	if( #(postList) == 0 ) then
+		self.postButton.totalPosts = 0
 		return
 	end
 	
-	self.postButton.totalPosts = 0
 	self.postButton:Disable()
 
 	-- Save money so we can check if we have enough to post
 	money = GetMoney()
+	totalPosts = self.postButton.totalPosts
 	
 	-- Post a group of items
 	self:QueueSet()
@@ -664,6 +722,11 @@ end
 
 -- Time to scan auctions!
 function QA:ScanAuctionList()
+	-- Not scanning, done here
+	if( not isScanning or not searchFilter ) then
+		return
+	end
+	
 	local shown, total = GetNumAuctionItems("list")
 	
 	-- Scan the list of auctions and find the one with the lowest bidder, using the data we have.
@@ -690,10 +753,7 @@ function QA:ScanAuctionList()
 		end
 	end
 	
-	-- Not scanning, done here
-	if( not isScanning or not searchFilter ) then
-		return
-	end
+	self:Log("Finished scan for", (searchFilter or "<none>"), "has bad owners?", hasBadOwners, "retries", badRetries, "total/shown", total, shown, "scan type", scanType)
 	
 	-- Found a query with bad owners
 	if( hasBadOwners ) then
@@ -913,13 +973,13 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 		
 		-- Set it globally as a default
 		if( not link ) then
-			QuickAuctionsDB.threshold = self:DeformatMoney(amount) or QuickAuctionsDB.threshold
+			QuickAuctionsDB.threshold = amount
 			self:Print(string.format("Set default threshold to %s", self:FormatTextMoney(QuickAuctionsDB.threshold)))
 			return
 		end
 		
 		-- Set it for this specific item
-		local name = GetItemInfo(link)
+		local name, link = GetItemInfo(link)
 		if( not name ) then
 			self:Print("Invalid item link given.")
 			return
@@ -949,7 +1009,7 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 			return
 		end
 		
-		local name = GetItemInfo(link)
+		local name, link = GetItemInfo(link)
 		if( not name ) then
 			self:Print("Invalid item link given.")
 			return
@@ -1033,7 +1093,7 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 			QuickAuctionsDB.itemTypes[type] = stackCheck
 			self:Print(string.format("Now posting all %s.", textType))
 		else
-			QuuickAuctionsDB.itemTypes[type] = nil
+			QuickAuctionsDB.itemTypes[type] = nil
 			self:Print(string.format("No longer posting all %s.", textType))
 		end
 
