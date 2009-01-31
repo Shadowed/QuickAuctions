@@ -393,35 +393,31 @@ function QA:QueueSet()
 		return
 	end
 	
-	-- If we already have some active options, we want to start our index a little bit higher
-	local startIndex = 1
-	if( activeAuctions[name] ) then
-		startIndex = activeAuctions[name] + 1
-	end
-
-	-- Figure out how much we can post
+	-- If post cap is 20, we have 4 on the AH, then we can post 16 more before hitting cap
+	local leftToCap = (QuickAuctionsDB.specialCap[name] or QuickAuctionsDB.postCap)  - (activeAuctions[name] or 0)
+	-- If we have 4 of the item, we post it in stacks of 1, we can can post 4
 	local canPost = math.floor(GetItemCount(link) / quantity)
-	local postCap = QuickAuctionsDB.specialCap[name] or QuickAuctionsDB.postCap
-	if( canPost > postCap ) then
-		canPost = postCap
-	end
 	
+	-- Can't post any more
+	if( leftToCap <= 0 ) then
+		self:Log("Can't post any more of", name, "or we will go past the cap, already have", (activeAuctions[name] or 0), "in AH")
+		self:QueueSet()
+		return
+	-- If we can make more than we have left to post, set it to what we have left
+	elseif( canPost > leftToCap ) then
+		canPost = leftToCap
+	end
+		
 	-- Figure out if we even need to do a split
 	local validStacks = 0
 	for bag=0, 4 do
-		-- Scanning a bag
 		for slot=1, GetContainerNumSlots(bag) do
-			local itemLink = GetContainerItemLink(bag, slot)
-			local itemCount = select(2, GetContainerItemInfo(bag, slot))
-			if( itemLink == link and itemCount == quantity ) then
+			if( GetContainerItemLink(bag, slot) == link and select(2, GetContainerItemInfo(bag, slot)) == quantity ) then
 				validStacks = validStacks + 1
-					
-				-- Start us off a little bit higher, since it's one less split we need
-				startIndex = startIndex + 1
 			end
 		end
 	end
-	
+		
 	-- Yay we do!
 	if( validStacks >= canPost ) then
 		self:Log("We have enough valid stacks", validStacks, "only posting", canPost, "total of item", GetItemCount(link), "post cap", postCap)
@@ -429,11 +425,11 @@ function QA:QueueSet()
 		return
 	end
 	
-	self:Log("Starting at", startIndex, "going to be posting", canPost, "of", name, "x", quantity, "total of item", GetItemCount(link), "valid stacks", validStacks, "post cap", postCap)
+	self:Log("Going to be posting", canPost, "of", name, "x", quantity, "total of item", GetItemCount(link), "valid stacks", validStacks, "left before cap", leftToCap, "active auctions", (activeAuctions[name] or 0))
 	
 	-- This is a slightly odd, basically what it means is, we need that that item in the quantity provided
 	-- so two entries of Bloodstone 4 means we want two x Bloodstones that are stacked up to 4
-	totalNewStacks = canPost - (startIndex - 1)
+	totalNewStacks = canPost - validStacks
 	splittingLink = link
 	splitQuantity = quantity
 		
