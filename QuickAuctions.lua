@@ -64,9 +64,9 @@ function QA:OnInitialize()
 	-- Scan our posted items
 	local button = CreateFrame("Button", nil, AuctionFrameAuctions, "UIPanelButtonTemplate")
 	button.tooltip = "Scan posted auctions to see if any were undercut."
-	button:SetPoint("TOPRIGHT", AuctionFrameAuctions, "TOPRIGHT", 49, -15)
+	button:SetPoint("TOPRIGHT", AuctionFrameAuctions, "TOPRIGHT", 51, -15)
 	button:SetText("Scan Items")
-	button:SetWidth(100)
+	button:SetWidth(110)
 	button:SetHeight(18)
 	button:SetScript("OnEnter", showTooltip)
 	button:SetScript("OnLeave", hideTooltip)
@@ -81,7 +81,7 @@ function QA:OnInitialize()
 	button.tooltip = "Post items from your inventory into the auction house."
 	button:SetPoint("TOPRIGHT", self.scanButton, "TOPLEFT", 0, 0)
 	button:SetText("Post Items")
-	button:SetWidth(100)
+	button:SetWidth(110)
 	button:SetHeight(18)
 	button:SetScript("OnEnter", showTooltip)
 	button:SetScript("OnLeave", hideTooltip)
@@ -96,8 +96,15 @@ function QA:OnInitialize()
 	ChatFrame_SystemEventHandler = function(self, event, msg)
 		if( msg == "Auction cancelled." and totalCancels > 0 ) then
 			totalCancels = totalCancels - 1
+			
+			QA.scanButton:SetFormattedText("%d/%d items", totalCancels, QA.scanButton.totalCancels)
+			QA.scanButton:Disable()
+			
 			if( totalCancels <= 0 ) then
 				totalCancels = 0
+				
+				QA.scanButton:SetText("Scan Items")
+				QA.scanButton:Enable()
 				QA:Print("Done cancelling auctions.")
 			end
 			return true
@@ -310,8 +317,8 @@ function QA:ProcessSplitQueue()
 		for slot=1, GetContainerNumSlots(bag) do
 			local link = GetContainerItemLink(bag, slot)
 			local itemCount = select(2, GetContainerItemInfo(bag, slot))
-			if( not foundSlots[freeBag .. freeSlot] and link == splittingLink and itemCount == splitQuantity ) then
-				foundSlots[freeBag .. freeSlot] = true
+			if( not foundSlots[bag .. slot] and link == splittingLink and itemCount == splitQuantity ) then
+				foundSlots[bag .. slot] = true
 				totalNewStacks = totalNewStacks - 1
 			end
 		end
@@ -324,6 +331,9 @@ function QA:ProcessSplitQueue()
 		totalNewStacks = 0
 		splittingLink = nil
 
+		self:FinishedSplitting()
+	else
+		self:Log("Finished split of", (GetItemInfo(splittingLink)))
 		self:FinishedSplitting()
 	end
 end
@@ -674,10 +684,11 @@ end
 function QA:CheckItems()
 	for k in pairs(tempList) do tempList[k] = nil end
 	
-	self.scanButton:Enable()
+	self.scanButton:Disable()
 	self.scanButton:SetText("Scan Items")
 	
 	totalCancels = 0
+	self.scanButton.totalCancels = 0
 	
 	for i=1, (GetNumAuctionItems("owner")) do
 		local name, texture, quantity, _, _, _, minBid, _, buyoutPrice, _, _, owner, wasSold = GetAuctionItemInfo("owner", i)     
@@ -709,12 +720,19 @@ function QA:CheckItems()
 
 				if( not belowThresh ) then
 					totalCancels = totalCancels + 1
+					self.scanButton.totalCancels = self.scanButton.totalCancels + 1
+					self.scanButton:SetFormattedText("%d/%d items", totalCancels, QA.scanButton.totalCancels)
 
 					tempList[name] = true
 					CancelAuction(i)
 				end
 			end
 		end
+	end
+	
+	if( self.scanButton.totalCancels == 0 ) then
+		self:Print("Nothing to cancel, all auctions are the lowest price.")
+		self.scanButton:Enable()
 	end
 end
 
