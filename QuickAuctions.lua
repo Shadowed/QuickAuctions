@@ -3,7 +3,7 @@ QA = {}
 
 local isScanning, searchFilter, scanType, scanTotal, scanIndex, spamFrame, money, splittingLink
 local page, badRetries, totalCancels, totalPosts, totalPostsSet, totalNewStacks, splitQuantity = 0, 0, 0, 0, 0, 0, 0
-local activeAuctions, scanList, priceList, queryQueue, postList, foundSlots, auctionPostQueue = {}, {}, {}, {}, {}, {}, {}
+local activeAuctions, scanList, priceList, queryQueue, postList, auctionPostQueue, foundSlots = {}, {}, {}, {}, {}, {}, {}
 local AHTime = 12 * 60
 
 function QA:OnInitialize()
@@ -107,6 +107,7 @@ function QA:OnInitialize()
 			totalPostsSet = totalPostsSet - 1
 			
 			if( totalPostsSet <= 0 ) then
+				QA:Log("Done posting current set.")
 				QA:QueueSet()
 			end
 			
@@ -116,6 +117,8 @@ function QA:OnInitialize()
 
 				QA.postButton:SetText("Post Items")
 				QA.postButton:Enable()
+				
+				QA:Log("Done posting auctions.")
 			else
 				-- This one went throughdo next
 				if( totalPostsSet > 0 ) then
@@ -142,7 +145,7 @@ function QA:Log(...)
 		msg = msg .. " " .. tostring(select(i, ...))
 	end
 	
-	table.insert(QuickAuctionsDB.logs, string.trim(msg))
+	table.insert(QuickAuctionsDB.logs, string.format("[%s] %s", GetTime(), string.trim(string.gsub(string.gsub(msg, "|r", ""), "|c%x%x%x%x%x%x%x%x", ""))))
 end
 
 local timeElapsed = 0
@@ -243,8 +246,12 @@ end
 -- Find out where we can place something, if we can.
 function QA:FindEmptyInventorySlot(forItemFamily)
 	for bag=4, 0, -1 do
-		local bagFamily = GetItemFamily(GetInventoryItemLink("player", ContainerIDToInventoryID(bag)))
-		if( bag == 0 or bag == -1 or bagFamily == 0 or ( bagFamily ~= 0 and bagFamily == forItemFamily ) ) then
+		local bagFamily = 0
+		if( bag ~= 0 and bag ~= -1 ) then
+			bagFamily = GetItemFamily(GetInventoryItemLink("player", ContainerIDToInventoryID(bag)))
+		end
+		
+		if( bagFamily == 0 or bagFamily == forItemFamily ) then
 			for slot=1, GetContainerNumSlots(bag) do
 				if( not GetContainerItemLink(bag, slot) ) then
 					return bag, slot
@@ -288,18 +295,35 @@ function QA:ProcessSplitQueue()
 				SplitContainerItem(bag, slot, splitQuantity)
 				PickupContainerItem(freeBag, freeSlot)
 				
+				foundSlots[freeBag .. freeSlot] = true
 				totalNewStacks = totalNewStacks - 1
 				return
 			end
 		end
 	end
 	
+	-- Do a second loop, let's make sure we really ran out of things to split
+	-- This solves the issue where, if we had 5 stacks of Glyph of Dash, we want to post all 5
+	-- It would split 4 of them into single stacks, then error because it doesn't think it can split it anymore
+	for bag=0, 4 do
+		-- Scanning a bag
+		for slot=1, GetContainerNumSlots(bag) do
+			local link = GetContainerItemLink(bag, slot)
+			local itemCount = select(2, GetContainerItemInfo(bag, slot))
+			if( not foundSlots[freeBag .. freeSlot] and link == splittingLink and itemCount == splitQuantity ) then
+				foundSlots[freeBag .. freeSlot] = true
+				totalNewStacks = totalNewStacks - 1
+			end
+		end
+	end
+	
 	-- We have nothing else we can really do
 	if( totalNewStacks > 0 ) then
+		self:Log("Odd stack size, cannot split everything, we still have to split", totalNewStacks, "of", (GetItemInfo(splittingLink)))
+
 		totalNewStacks = 0
-		splittingLink = 0
-		
-		self:Log("Odd stack size, cannot split everything.")
+		splittingLink = nil
+
 		self:FinishedSplitting()
 	end
 end
@@ -378,26 +402,24 @@ function QA:QueueSet()
 		-- Scanning a bag
 		for slot=1, GetContainerNumSlots(bag) do
 			local itemLink = GetContainerItemLink(bag, slot)
-			if( itemLink == link ) then
-				local itemCount = select(2, GetContainerItemInfo(bag, slot))
-				if( itemCount == quantity ) then
-					validStacks = validStacks + 1
+			local itemCount = select(2, GetContainerItemInfo(bag, slot))
+			if( itemLink == link and itemCount == quantity ) then
+				validStacks = validStacks + 1
 					
-					-- Start us off a little bit higher, since it's one less split we need
-					startIndex = startIndex + 1
-				end
+				-- Start us off a little bit higher, since it's one less split we need
+				startIndex = startIndex + 1
 			end
 		end
 	end
 	
 	-- Yay we do!
 	if( validStacks >= canPost ) then
-		self:Log("We have enough valid stacks", validStacks, "only posting", canPost)
+		self:Log("We have enough valid stacks", validStacks, "only posting", canPost, "total of item", GetItemCount(link), "post cap", postCap)
 		self:PostItem(table.remove(postList, 1))
 		return
 	end
 	
-	self:Log("Starting at", startIndex, "going to be posting", canPost, "of", name, "x", quantity)
+	self:Log("Starting at", startIndex, "going to be posting", canPost, "of", name, "x", quantity, "total of item", GetItemCount(link), "valid stacks", validStacks, "post cap", postCap)
 	
 	-- This is a slightly odd, basically what it means is, we need that that item in the quantity provided
 	-- so two entries of Bloodstone 4 means we want two x Bloodstones that are stacked up to 4
