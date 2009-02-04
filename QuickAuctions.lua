@@ -1,30 +1,67 @@
 -- Ugly code, need to clean it up later
 QA = {}
 
-local isScanning, searchFilter, scanType, scanTotal, scanIndex, spamFrame, money, splittingLink
+local isScanning, searchFilter, scanType, scanTotal, scanIndex, money, splittingLink, defaults
 local page, badRetries, totalCancels, totalPosts, totalPostsSet, totalNewStacks, splitQuantity = 0, 0, 0, 0, 0, 0, 0
-local activeAuctions, scanList, priceList, queryQueue, postList, auctionPostQueue, foundSlots = {}, {}, {}, {}, {}, {}, {}
+local activeAuctions, scanList, priceList, queryQueue, postList, auctionPostQueue, foundSlots, tempList = {}, {}, {}, {}, {}, {}, {}, {}
+local validTypes = {["uncut"] = "uncut gems", ["gems"] = "cut gems", ["glyphs"] = "glyphs", ["enchants"] = "enchanting materials"}
+local typeInfo = {["Gem1"] = "gems", ["Gem20"] = "uncut", ["Glyph20"] = "glyphs", ["Enchanting20"] = "enchants"}
 local AHTime = 12 * 60
 
+-- Addon loaded
 function QA:OnInitialize()
-	local defaults = {
-		spammyFrame = 1,
+	-- Default things
+	defaults = {
 		smartUndercut = true,
 		smartCancel = true,
-		itemTypes = {["Gem"] = 1},
+		logging = false,
+		bidpercent = 1.0,
+		itemTypes = {},
 		itemList = {},
 		whitelist = {},
-		specialUndercut = {},
-		undercutBy = 100,
-		threshold = (100 * 10000),
-		specialThresh = {},
-		fallback = (225 * 10000),
-		specialFallback = {},
-		postCap = 2,
-		specialCap = {},
-		logging = false,
+		undercut = {},
+		threshold = {},
+		fallback = {},
+		postCap = {},
 		logs = {},
 	}
+	
+	-- Upgrade DB format
+	if( QuickAuctionsDB and not QuickAuctionsDB.revision ) then
+		QuickAuctionsDB.spammyFrame = nil
+		QuickAuctionsDB.uncut = nil
+
+		-- Swap it from [type] = stack to [type .. stack] to prevent conflicts (Cut vs uncut gems)
+		local types = {}
+		for type, stack in pairs(QuickAuctionsDB.itemTypes) do
+			types[type .. stack] = true
+		end
+		
+		QuickAuctionsDB.itemTypes = types
+		
+		-- Move post cap over
+		QuickAuctionsDB.specialCap.default = QuickAuctionsDB.postCap
+		QuickAuctionsDB.postCap = CopyTable(QuickAuctionsDB.specialCap)
+		QuickAuctionsDB.specialCap = nil
+
+		-- Move thresholds over
+		QuickAuctionsDB.specialThresh.default = QuickAuctionsDB.threshold
+		QuickAuctionsDB.threshold = CopyTable(QuickAuctionsDB.specialThresh)
+		QuickAuctionsDB.specialThresh = nil
+		
+		-- Move fallback over
+		QuickAuctionsDB.specialFallback.default = QuickAuctionsDB.fallback
+		QuickAuctionsDB.fallback = CopyTable(QuickAuctionsDB.specialFallback)
+		QuickAuctionsDB.specialFallback = nil
+		QuickAuctionsDB.fallbackBuyout = nil
+		QuickAuctionsDB.fallbackBid = nil
+		
+		-- Move undercut over
+		QuickAuctionsDB.undercut = CopyTable(QuickAuctionsDB.specialUndercut)
+		QuickAuctionsDB.undercut.default = QuickAuctionsDB.undercutBy
+		QuickAuctionsDB.specialUndercut = nil
+		QuickAuctionsDB.undercutBy = nil
+	end
 	
 	-- Load defaults in
 	QuickAuctionsDB = QuickAuctionsDB or {}
@@ -38,8 +75,12 @@ function QA:OnInitialize()
 		end
 	end
 	
-	spamFrame = getglobal("ChatFrame" .. QuickAuctionsDB.spammyFrame) or DEFAULT_CHAT_FRAME
-	
+	-- DB is now up to date
+	QuickAuctionsDB.revision = tonumber(string.match("$Revision$", "(%d+)") or 1)
+end
+
+-- AH loaded
+function QA:AHInitialize()
 	-- Hook the query function so we know what we last sent a search on
 	local orig_QueryAuctionItems = QueryAuctionItems
 	QueryAuctionItems = function(name, ...)
@@ -142,17 +183,19 @@ function QA:OnInitialize()
 end
 
 -- Debugging
-function QA:Log(...)
+function QA:ListDump()
+	Spew("", priceList)
+end
+
+function QA:Log(msg, ...)
 	if( not QuickAuctionsDB.logging ) then
 		return
 	end
 	
-	local msg = ""
-	for i=1, select("#", ...) do
-		msg = msg .. " " .. tostring(select(i, ...))
-	end
+	local msg = "[" .. GetTime() .. "] " .. string.format(msg, ...)
+	msg = string.trim(string.gsub(string.gsub(msg, "|r", ""), "|c%x%x%x%x%x%x%x%x", ""))
 	
-	table.insert(QuickAuctionsDB.logs, string.format("[%s] %s", GetTime(), string.trim(string.gsub(string.gsub(msg, "|r", ""), "|c%x%x%x%x%x%x%x%x", ""))))
+	table.insert(QuickAuctionsDB.logs, msg)
 end
 
 local timeElapsed = 0
@@ -208,9 +251,20 @@ end
 
 function QA:IsValidItem(link)
 	local name, _, _, _, _, itemType, _, stackCount = GetItemInfo(link)
-	if( QuickAuctionsDB.itemList[name] or QuickAuctionsDB.itemTypes[itemType] == stackCount ) then
+	if( QuickAuctionsDB.itemList[name] or QuickAuctionsDB.itemTypes[itemType .. stackCount] ) then
 		return true
 	end
+end
+
+function QA:GetItemCategory(link)
+	if( not link ) then return "" end
+	local name, _, _, _, _, itemType, _, stackCount = GetItemInfo(link)
+	return typeInfo[itemType .. stackCount]
+end
+
+function QA:GetSafeLink(link)
+	if( not link ) then return nil end
+	return (string.match(link, "|H(.-):([-0-9]+):([0-9]+)|h"))
 end
 
 local tempList = {}
@@ -252,7 +306,7 @@ end
 
 -- Find out where we can place something, if we can.
 function QA:FindEmptyInventorySlot(forItemFamily)
-	for bag=4, 0, -1 do
+	for bag=0, 4 do
 		local bagFamily = 0
 		if( bag ~= 0 and bag ~= -1 ) then
 			bagFamily = GetItemFamily(GetInventoryItemLink("player", ContainerIDToInventoryID(bag)))
@@ -278,7 +332,7 @@ function QA:ProcessSplitQueue()
 	for bag=0, 4 do
 		-- Scanning a bag
 		for slot=1, GetContainerNumSlots(bag) do
-			local link = GetContainerItemLink(bag, slot)
+			local link = self:GetSafeLink(GetContainerItemLink(bag, slot))
 			local itemCount, itemLocked = select(2, GetContainerItemInfo(bag, slot))
 			-- Slot has something in it
 			if( link == splittingLink and itemCount > splitQuantity ) then
@@ -296,7 +350,7 @@ function QA:ProcessSplitQueue()
 					return
 				end
 
-				self:Log("Splitting", (GetItemInfo(link)), "from bag", bag, "slot", slot, "moving into bag", freeBag, "slot", freeSlot)
+				self:Log("Splitting item [%s] from bag %d/slot %d, moving it into bag %d/slot %d.", (GetItemInfo(link)), bag, slot, freeBag, freeSlot)
 
 				self.frame:RegisterEvent("BAG_UPDATE")
 				SplitContainerItem(bag, slot, splitQuantity)
@@ -315,7 +369,7 @@ function QA:ProcessSplitQueue()
 	for bag=0, 4 do
 		-- Scanning a bag
 		for slot=1, GetContainerNumSlots(bag) do
-			local link = GetContainerItemLink(bag, slot)
+			local link = self:GetSafeLink(GetContainerItemLink(bag, slot))
 			local itemCount = select(2, GetContainerItemInfo(bag, slot))
 			if( not foundSlots[bag .. slot] and link == splittingLink and itemCount == splitQuantity ) then
 				foundSlots[bag .. slot] = true
@@ -326,20 +380,19 @@ function QA:ProcessSplitQueue()
 	
 	-- We have nothing else we can really do
 	if( totalNewStacks > 0 ) then
-		self:Log("Odd stack size, cannot split everything, we still have to split", totalNewStacks, "of", (GetItemInfo(splittingLink)))
+		self:Log("Unusual stack size found. We still need to split %s into %d new stacks of %d.", (GetItemInfo(splittingLink)), totalNewStacks, splitQuantity)
 
 		totalNewStacks = 0
 		splittingLink = nil
 
 		self:FinishedSplitting()
 	else
-		self:Log("Finished split of", (GetItemInfo(splittingLink)))
+		self:Log("Finished splitting %s.", (GetItemInfo(splittingLink)))
 		self:FinishedSplitting()
 	end
 end
 
 -- Player bags changed, will have to be ready to do a split again soon
-
 function QA:BAG_UPDATE()
 	local self = QA
 	self.frame:UnregisterEvent("BAG_UPDATE")
@@ -384,23 +437,30 @@ function QA:QueueSet()
 
 	local link = postList[1]
 	local name, _, _, _, _, itemType, _, stackCount = GetItemInfo(link)
+	local itemCategory = self:GetItemCategory(link)
 	local quantity = type(QuickAuctionsDB.itemList[name]) == "number" and QuickAuctionsDB.itemList[name] or 1
 	
 	-- This item cannot stack, so we don't need to bother with splitting and can post it all
 	if( stackCount == 1 ) then
-		self:Log("Item queue", name, "only stacks to", stackCount, "so posting it now.")
+		self:Log("Queued item %s x %d, only stacks up to %d and we have %d of them.", name, quantity, stackCount, GetItemCount(link))
 		self:PostItem(table.remove(postList, 1))
 		return
 	end
 	
 	-- If post cap is 20, we have 4 on the AH, then we can post 16 more before hitting cap
-	local leftToCap = (QuickAuctionsDB.specialCap[name] or QuickAuctionsDB.postCap)  - (activeAuctions[name] or 0)
+	local leftToCap = (QuickAuctionsDB.postCap[name] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default) - (activeAuctions[name] or 0)
 	-- If we have 4 of the item, we post it in stacks of 1, we can can post 4
 	local canPost = math.floor(GetItemCount(link) / quantity)
 	
 	-- Can't post any more
 	if( leftToCap <= 0 ) then
-		self:Log("Can't post any more of", name, "or we will go past the cap, already have", (activeAuctions[name] or 0), "in AH")
+		self:Log("Already past the post limit for %s, have %d active auctions.", name, (activeAuctions[name] or 0))
+		self:QueueSet()
+		return
+	-- Not enough to post it :(
+	elseif( canPost == 0 ) then
+		self:Log("We need at least %d of %s to post it, but we only have %d, moving on.", quantity, name, GetItemCount(link))
+		table.remove(postList, 1)
 		self:QueueSet()
 		return
 	-- If we can make more than we have left to post, set it to what we have left
@@ -412,7 +472,7 @@ function QA:QueueSet()
 	local validStacks = 0
 	for bag=0, 4 do
 		for slot=1, GetContainerNumSlots(bag) do
-			if( GetContainerItemLink(bag, slot) == link and select(2, GetContainerItemInfo(bag, slot)) == quantity ) then
+			if( self:GetSafeLink(GetContainerItemLink(bag, slot)) == link and select(2, GetContainerItemInfo(bag, slot)) == quantity ) then
 				validStacks = validStacks + 1
 			end
 		end
@@ -420,15 +480,14 @@ function QA:QueueSet()
 		
 	-- Yay we do!
 	if( validStacks >= canPost ) then
-		self:Log("We have enough valid stacks", validStacks, "only posting", canPost, "total of item", GetItemCount(link), "post cap", postCap)
+		self:Log("No splitting needed, going to be posting %d stacks of %s x %d, and we have %d in inventory, with %d left before cap.", canPost, name, quantity, GetItemCount(link), leftToCap)
 		self:PostItem(table.remove(postList, 1))
 		return
 	end
 	
-	self:Log("Going to be posting", canPost, "of", name, "x", quantity, "total of item", GetItemCount(link), "valid stacks", validStacks, "left before cap", leftToCap, "active auctions", (activeAuctions[name] or 0))
+	self:Log("Going to be splitting %s into %d stacks of %d each, we already have %d valid stacks, %d of the item in our inventory, will cap in %d posts, and have %d actives.", name, (canPost - validStacks), quantity, validStacks, GetItemCount(link), leftToCap, (activeAuctions[name] or 0))
 	
-	-- This is a slightly odd, basically what it means is, we need that that item in the quantity provided
-	-- so two entries of Bloodstone 4 means we want two x Bloodstones that are stacked up to 4
+	-- If we can post 4, we have 1 valid stack, we need to do 3 splits, if we have 4 to post and 0 valid stacks, then we need to do all 4 splits
 	totalNewStacks = canPost - validStacks
 	splittingLink = link
 	splitQuantity = quantity
@@ -437,7 +496,7 @@ function QA:QueueSet()
 	if( totalNewStacks == 0 ) then
 		table.remove(postList, 1)
 		
-		self:Log("Only have", GetItemCount(link), "of", name, "we want", quantity)
+		self:Log("We have nothing to post for %s, we wanted to post it in stacks of %d but only have %d of it in inventory.", name, quantity, GetItemCount(link))
 		self:Echo(string.format("You only have %d of %s, and posting it in stacks of %d, not posting.", GetItemCount(link), link, quantity))
 		self:QueueSet()
 		return
@@ -471,10 +530,11 @@ function QA:PostAuctions()
 	-- Scan inventory for posting
 	for bag=0, 4 do
 		for slot=1, GetContainerNumSlots(bag) do
-			local link = GetContainerItemLink(bag, slot)
+			local link = self:GetSafeLink(GetContainerItemLink(bag, slot))
 			if( link ) then
 				local name, _, _, _, _, _, _, stackCount = GetItemInfo(link)
-				local postCap = QuickAuctionsDB.specialCap[name] or QuickAuctionsDB.postCap
+				local itemCategory = self:GetItemCategory(link)
+				local postCap = QuickAuctionsDB.postCap[name] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default
 				
 				-- Make sure we aren't already at the post cap, to reduce the item scans needed
 				if( not tempList[name] and self:IsValidItem(link) and ( not activeAuctions[name] or activeAuctions[name] < postCap ) ) then
@@ -497,7 +557,7 @@ function QA:StartScan(list, type)
 		table.insert(scanList, name)
 	end
 	
-	self:Log("Starting scan", type, "items", #(scanList))
+	self:Log("Starting scan type %s, we will be scanning a total of %d items.", type, #(scanList))
 
 	local filter = table.remove(scanList, 1)
 	if( not filter ) then
@@ -527,7 +587,7 @@ function QA:PostQueuedAuction()
 	local minBid = table.remove(auctionPostQueue, 1)
 	local buyout = table.remove(auctionPostQueue, 1)
 
-	self:Log("Posted bag", bag, "slot", slot, "in the AH for", AHTime, " at", self:FormatTextMoney(buyout), self:FormatTextMoney(minBid))
+	self:Log("Posted item from bag %d/slot %d in the AH for %d at %s buyout and %s bid.", bag, slot, AHTime / 60, self:FormatTextMoney(buyout), self:FormatTextMoney(minBid))
 
 	PickupContainerItem(bag, slot)
 	ClickAuctionSellItemButton()
@@ -543,14 +603,15 @@ function QA:PostItem(link)
 	local name = GetItemInfo(link)
 	local priceData = priceList[name]
 	local totalPosted = activeAuctions[name] or 0
+	local itemCategory = self:GetItemCategory(link)
 	local quantity = type(QuickAuctionsDB.itemList[name]) == "number" and QuickAuctionsDB.itemList[name] or 1
+	local postCap = QuickAuctionsDB.postCap[name] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default
 	local minBid, buyout
 	
 	totalPostsSet = 0
 
 	-- Figure out what price we are posting at
 	if( priceData and priceData.owner ) then
-		minBid = math.floor(priceData.minBid)
 		buyout = math.floor(priceData.buyout)
 
 		-- Don't undercut people on our whitelist, match them
@@ -560,37 +621,37 @@ function QA:PostItem(link)
 			-- If smart undercut is on, then someone who posts an auction of 99g99s0c, it will auto undercut to 99g
 			-- instead of 99g99s0c - undercutBy
 			if( not QuickAuctionsDB.smartUndercut or  buyout == math.floor(buyout) ) then
-				buyout = ( buyout * 10000 ) - (QuickAuctionsDB.specialUndercut[name] or QuickAuctionsDB.undercutBy)
+				buyout = ( buyout * 10000 ) - (QuickAuctionsDB.undercut[name] or QuickAuctionsDB.undercut[itemCategory] or QuickAuctionsDB.undercut.default)
 			else
 				buyout = math.floor(buyout) * 10000
 			end
-
-			minBid = buyout
 		end
+		
+		-- And now the bid!
+		minBid = buyout * QuickAuctionsDB.bidpercent
 
-		self:Log("Going to post", name, "at buyout/bid", self:FormatTextMoney(buyout), " data says owner is", (priceData.owner or "<none>"), "with posted at", self:FormatTextMoney(priceData.buyout))
+		self:Log("Going to be posting %s x %d, have %d in inventory, %d cap, %d active, with buyout %s/bid %s, owner is %s who posted it at %s buyout.", name, quantity, GetItemCount(link), postCap, totalPosted, self:FormatTextMoney(buyout), self:FormatTextMoney(minBid), priceData.owner, self:FormatTextMoney(priceData.buyout))
 
 	-- No other data available, default to our fallback for it
 	else
-		minBid = QuickAuctionsDB.specialFallback[name] or QuickAuctionsDB.fallback
-		buyout = QuickAuctionsDB.specialFallback[name] or QuickAuctionsDB.fallback
+		buyout = QuickAuctionsDB.fallback[name] or QuickAuctionsDB.fallback[itemCategory] or QuickAuctionsDB.fallback.default
+		minBid = buyout * QuickAuctionsDB.bidpercent
 
 		self:Echo(string.format("No data found for %s, using %s buyout and %s bid default.", name, self:FormatTextMoney(buyout), self:FormatTextMoney(minBid)))
-		self:Log("Going to post", name, "at buyout/bid", self:FormatTextMoney(buyout), " no owner found.")
+		self:Log("No data found for %s x %d, have %d in inventory, %d cap, %d active,, so will be posting at %s buyout/%s bid.", name, quantity, GetItemCount(link), postCap, totalPosted, self:FormatTextMoney(buyout), self:FormatTextMoney(minBid))
 	end
 
 	-- Find the item in our inventory
 	for i=#(auctionPostQueue), 1, -1 do table.remove(auctionPostQueue, i) end
 	for bag=0, 4 do
 		for slot=1, GetContainerNumSlots(bag) do
-			local itemLink = GetContainerItemLink(bag, slot)
-			local itemCount = select(2, GetContainerItemInfo(bag, slot))
 			-- It's the correct quantity/link so can post it
-			if( itemLink == link and itemCount == quantity ) then
+			if( self:GetSafeLink(GetContainerItemLink(bag, slot)) == link and select(2, GetContainerItemInfo(bag, slot)) == quantity ) then
 				totalPosted = totalPosted + 1
-
+				
+				self:Log("Posting? %s, total %d posted, post cap is %d.", name, totalPosted, postCap)
+				
 				-- Hit limit, done with this item
-				local postCap = QuickAuctionsDB.specialCap[name] or QuickAuctionsDB.postCap
 				if( totalPosted > postCap ) then
 					break
 				end
@@ -608,11 +669,14 @@ function QA:PostItem(link)
 					table.insert(auctionPostQueue, minBid * quantity)
 					table.insert(auctionPostQueue, buyout * quantity)
 					
+					self:Log("Queued for auction in bag %d/slot %d.", bag, slot)
+					
 					totalPostsSet = totalPostsSet + 1
 				else
 					for i=#(auctionPostQueue), 1, -1 do table.remove(auctionPostQueue, i) end
 					totalPosts = 0
 					
+					self:Log("Ran out of money to post.")
 					self.postButton:SetText("Post Items")
 					self.postButton:Enable()
 					self:Print("Cannot post remaining auctions, you do not have enough money.")
@@ -625,7 +689,7 @@ function QA:PostItem(link)
 			end
 		end
 	end
-		
+			
 	-- And now update post totals
 	self.postButton:SetFormattedText("%d/%d items", totalPosts, self.postButton.totalPosts)
 	self.postButton:Disable()
@@ -644,16 +708,17 @@ function QA:PostItems()
 		local link = postList[i]
 		local name = GetItemInfo(link)
 		local priceData = priceList[name]
-		local threshold = QuickAuctionsDB.specialThresh[name] or QuickAuctionsDB.threshold
+		local itemCategory = self:GetItemCategory(link)
+		local threshold = QuickAuctionsDB.threshold[name] or QuickAuctionsDB.threshold[itemCategory] or QuickAuctionsDB.threshold.default
 		
 		if( priceData and priceData.owner and priceData.buyout <= threshold ) then
-			spamFrame:AddMessage(string.format("Not posting %s, because the buyout is %s per item and the threshold is %s", name, self:FormatTextMoney(priceData.buyout), self:FormatTextMoney(threshold)))
+			self:Echo(string.format("Not posting %s, because the buyout is %s per item and the threshold is %s", name, self:FormatTextMoney(priceData.buyout), self:FormatTextMoney(threshold)))
 			table.remove(postList, i)
 		else
 			-- Figure out how many auctions we will be posting quickly
 			local quantity = type(QuickAuctionsDB.itemList[name]) == "number" and QuickAuctionsDB.itemList[name] or 1
 			local willPost = math.floor(GetItemCount(link) / quantity)
-			local postCap = QuickAuctionsDB.specialCap[name] or QuickAuctionsDB.postCap
+			local postCap = QuickAuctionsDB.postCap[name] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default
 			willPost = willPost > postCap and postCap or willPost
 			
 			self.postButton.totalPosts = self.postButton.totalPosts + willPost
@@ -666,6 +731,7 @@ function QA:PostItems()
 		return
 	end
 	
+	self.postButton:SetFormattedText("%d/%d items", self.postButton.totalPosts, self.postButton.totalPosts)
 	self.postButton:Disable()
 
 	-- Save money so we can check if we have enough to post
@@ -697,12 +763,17 @@ function QA:CheckItems()
 			-- Check if buyout, our minimum bid are equal or lower than ours. 
 			-- If they aren't us and if they aren't on our whitelist (We don't care if they undercut us)
 			if( ( priceData.buyout < buyoutPrice or ( priceData.buyout == buyoutPrice and priceData.minBid <= minBid ) ) and priceData.owner ~= owner and not QuickAuctionsDB.whitelist[priceData.owner] ) then
+				-- Get the item link, BECAUSE BLIZZARD DOESN'T FUCKING PASS IT FOR SOME STUPID REASON
+				self.tooltip:ClearLines()
+				self.tooltip:SetAuctionItem("owner", i)
+
+				local itemCategory = self:GetItemCategory(select(2, self.tooltip:GetItem()))
 				local threshold, belowThresh
 				
 				-- Smart cancelling, lets us choose if we should cancel something
 				-- if the auction fell below the threshold
 				if( QuickAuctionsDB.smartCancel ) then
-					threshold = QuickAuctionsDB.specialThresh[name] or QuickAuctionsDB.threshold
+					threshold = QuickAuctionsDB.threshold[name] or QuickAuctionsDB.threshold[itemCategory] or QuickAuctionsDB.threshold.default
 					belowThresh = priceData.buyout <= threshold
 				end
 				
@@ -710,7 +781,7 @@ function QA:CheckItems()
 					if( not belowThresh ) then
 						self:Echo(string.format("Undercut on %s, by %s, buyout %s, bid %s, our buyout %s, our bid %s (per item)", name, priceData.owner, self:FormatTextMoney(priceData.buyout), self:FormatTextMoney(priceData.minBid), self:FormatTextMoney(buyoutPrice / quantity), self:FormatTextMoney(minBid / quantity)))
 					else
-						spamFrame:AddMessage(string.format("Undercut on %s, by %s, buyout %s, our buyout %s (per item), threshold is %s so not cancelling.", name, priceData.owner, self:FormatTextMoney(priceData.buyout), self:FormatTextMoney(buyoutPrice / quantity), self:FormatTextMoney(threshold)))
+						self:Echo(string.format("Undercut on %s, by %s, buyout %s, our buyout %s (per item), threshold is %s so not cancelling.", name, priceData.owner, self:FormatTextMoney(priceData.buyout), self:FormatTextMoney(buyoutPrice / quantity), self:FormatTextMoney(threshold)))
 					end
 				end
 
@@ -789,7 +860,7 @@ function QA:ScanAuctionList()
 		end
 	end
 	
-	self:Log("Finished scan for", (searchFilter or "<none>"), "has bad owners?", hasBadOwners, "retries", badRetries, "total/shown", total, shown, "scan type", scanType)
+	self:Log("Finished scan type %s of %s, bad owners? %s, retried %d times, %d total/%d shown.", scanType, searchFilter, tostring(hasBadOwners), badRetries, total, shown)
 	
 	-- Found a query with bad owners
 	if( hasBadOwners ) then
@@ -840,9 +911,18 @@ local frame = CreateFrame("Frame")
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("AUCTION_ITEM_LIST_UPDATE")
 frame:SetScript("OnEvent", function(self, event, ...)
-	if( event == "ADDON_LOADED" and IsAddOnLoaded("Blizzard_AuctionUI") ) then
-		self:UnregisterEvent("ADDON_LOADED")
+	if( event == "ADDON_LOADED" and select(1, ...) == "QuickAuctions" ) then
 		QA:OnInitialize()
+		
+		if( QA.scanButton ) then
+			self:UnregisterEvent("ADDON_LOADED")
+		end
+	elseif( event == "ADDON_LOADED" and IsAddOnLoaded("Blizzard_AuctionUI") ) then
+		QA:AHInitialize()
+		
+		if( defaults ) then
+			self:UnregisterEvent("ADDON_LOADED")
+		end
 	elseif( event ~= "ADDON_LOADED" ) then
 		QA[event](QA, ...)
 	end
@@ -912,6 +992,53 @@ function QA:FormatTextMoney(money)
 	return string.trim(text)
 end
 
+-- Quick method of setting these variables without duplicating it 500 times
+local function parseVariableOption(arg, configKey, isMoney, defaultMsg, setMsg, removedMsg)
+	local self = QA
+	local amount, link = string.split(" ", arg, 2)
+	amount = (isMoney and self:DeformatMoney(amount) or tonumber(amount))
+	if( not amount ) then
+		if( isMoney ) then
+			self:Print("Invalid money format given, should be #g for gold, #s for silver, #c for copper. For example: 5g2s10c would set it 5 gold, 2 silver, 10 copper.")
+		else
+			self:Print("Invalid number passed.")
+		end
+		return
+	end
+	
+	-- Default value
+	if( not link ) then
+		QuickAuctionsDB[configKey].default = amount
+		self:Print(string.format(defaultMsg, (isMoney and self:FormatTextMoney(amount) or amount)))
+		return
+	end
+	
+	-- Set it for a specific item
+	local name = GetItemInfo(link)
+
+	-- It's an entire category of items, not a specific one
+	if( not name and validTypes[link] ) then
+		name = link
+		link = validTypes[link]
+		
+	-- Bad link given
+	elseif( not name ) then
+		self:Print("Invalid item link, or item type passed.")
+		return
+	end
+	
+	-- If they passed 0 then we remove the value
+	if( amount <= 0 ) then
+		QuickAuctionsDB[configKey][name] = nil
+		self:Print(string.format(removedMsg, link))
+		return
+	end
+	
+	-- Set it for this item now!
+	QuickAuctionsDB[configKey][name] = amount
+	self:Print(string.format(setMsg, link, (isMoney and self:FormatTextMoney(amount) or amount)))
+end
+
 -- Slash commands
 SLASH_QUICKAUCTIONS1 = "/quickauctions"
 SLASH_QUICKAUCTIONS2 = "/qa"
@@ -924,35 +1051,27 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 
 	-- Undercut amount
 	if( cmd == "undercut" and arg ) then
-		local amount, link = string.split(" ", arg, 2)
-		amount = self:DeformatMoney(amount)
-		if( not amount ) then
-			self:Print("Invalid money format given, should be #g for gold, #s for silver, #c for copper, or 5g2s for 5 gold, 2 silver.")
-			return
-		end
-		
-		-- Set it globally as a default
-		if( not link ) then
-			QuickAuctionsDB.undercutBy = amount
-			self:Print(string.format("Undercutting auctions by %s", self:FormatTextMoney(QuickAuctionsDB.undercutBy)))
-			return
-		end
-		
-		-- Set it for this specific item
-		local name = GetItemInfo(link)
-		if( not name ) then
-			self:Print("Invalid item link given.")
-			return
-		end
+		parseVariableOption(arg, "undercut", true, "Default undercut for auctions set to %s.", "Set undercut for %s to %s.", "Removed undercut on %s.")
+	-- No data fallback
+	elseif( cmd == "fallback" and arg ) then
+		parseVariableOption(arg, "fallback", true, "Default fall back for auctions set to %s.", "Set fall back for %s to %s.", "Removed fall back on %s.")
+	
+	-- Post threshold
+	elseif( cmd == "threshold" and arg ) then
+		parseVariableOption(arg, "threshold", true, "Default threshold for auctions set to %s.", "Set threshold for %s to %s.", "Removed threshold on %s.")
 
-		if( amount <= 0 ) then
-			QuickAuctionsDB.specialUndercut[name] = nil
-			self:Print(string.format("Removed undercut on %s.", link))
-			return
-		end
+	-- Post cap
+	elseif( cmd == "cap" and arg ) then
+		parseVariableOption(arg, "postCap", false, "Default post cap for auctions set to %s.", "Set post cap for %s to %s.", "Removed post cap on %s.")
+
+	-- Bid percentage of something
+	elseif( cmd == "bidpercent" and arg ) then
+		local amount = tonumber(arg)
+		if( amount < 0 ) then amount = 0 end
+		if( amount > 100 ) then amount = 100 end
 		
-		QuickAuctionsDB.specialUndercut[name] = amount or QuickAuctionsDB.specialUndercut[name]
-		self:Print(string.format("Set undercut for %s to %s.", link, self:FormatTextMoney(QuickAuctionsDB.specialUndercut[name])))
+		self:Print(string.format("Bids will now be %d%% of the buyout price for all items.", amount))
+		QuickAuctionsDB.bidpercent = amount / 100
 	
 	-- Enable smart undercutting
 	elseif( cmd == "smartcut" ) then
@@ -963,102 +1082,6 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 		else
 			self:Print("Smart undercutting is now disabled.")
 		end
-	
-	-- No data fallback
-	elseif( cmd == "fallback" and arg ) then
-		local amount, link = string.split(" ", arg, 2)
-		amount = self:DeformatMoney(amount)
-		
-		if( not amount ) then
-			self:Print("Invalid money format given, should be #g for gold, #s for silver, #c for copper, or 5g2s for 5 gold, 2 silver.")
-			return
-		end
-		
-		-- Set it globally as a default
-		if( not link ) then
-			QuickAuctionsDB.fallback = self:DeformatMoney(arg) or QuickAuctionsDB.fallback
-			self:Print(string.format("Set fallback to %s", self:FormatTextMoney(QuickAuctionsDB.fallback)))
-			return
-		end
-		
-		-- Set it for this specific item
-		local name = GetItemInfo(link)
-		if( not name ) then
-			self:Print("Invalid item link given.")
-			return
-		end
-
-		if( amount <= 0 ) then
-			QuickAuctionsDB.specialFallback[name] = nil
-			self:Print(string.format("Removed fallback buyout on %s.", link))
-			return
-		end
-		
-		QuickAuctionsDB.specialFallback[name] = amount or QuickAuctionsDB.specialFallback[name]
-		self:Print(string.format("Set fallback for %s to %s.", link, self:FormatTextMoney(QuickAuctionsDB.specialFallback[name])))
-	
-	-- Post threshold
-	elseif( cmd == "threshold" and arg ) then
-		local amount, link = string.split(" ", arg, 2)
-		amount = self:DeformatMoney(amount)
-
-		if( not amount ) then
-			self:Print("Invalid money format given, should be #g for gold, #s for silver, #c for copper, or 5g2s for 5 gold, 2 silver.")
-			return
-		end
-		
-		-- Set it globally as a default
-		if( not link ) then
-			QuickAuctionsDB.threshold = amount
-			self:Print(string.format("Set default threshold to %s", self:FormatTextMoney(QuickAuctionsDB.threshold)))
-			return
-		end
-		
-		-- Set it for this specific item
-		local name, link = GetItemInfo(link)
-		if( not name ) then
-			self:Print("Invalid item link given.")
-			return
-		end
-
-		if( amount <= 0 ) then
-			QuickAuctionsDB.specialThresh[name] = nil
-			self:Print(string.format("Removed threshold on %s.", link))
-			return
-		end
-		
-		QuickAuctionsDB.specialThresh[name] = amount or QuickAuctionsDB.specialThresh[name]
-		self:Print(string.format("Set threshold for %s to %s.", link, self:FormatTextMoney(QuickAuctionsDB.specialThresh[name])))
-
-	-- Post cap
-	elseif( cmd == "cap" and arg ) then
-		local amount, link = string.split(" ", arg, 2)
-		amount = tonumber(amount)
-		if( not amount ) then
-			self:Print("Invalid cap entered, must be a number.")
-			return
-		end
-		
-		if( not link ) then
-			QuickAuctionsDB.postCap = tonumber(amount)
-			self:Print(string.format("Set maximum number of the same auction to %d.", QuickAuctionsDB.postCap))
-			return
-		end
-		
-		local name, link = GetItemInfo(link)
-		if( not name ) then
-			self:Print("Invalid item link given.")
-			return
-		end
-
-		if( amount <= 0 ) then
-			QuickAuctionsDB.specialCap[name] = nil
-			self:Print(string.format("Removed specific cap on %s.", link))
-			return
-		end
-		
-		QuickAuctionsDB.specialCap[name] = amount
-		self:Print(string.format("Only keeping up to %d of %s up in the auction house at the same time.", amount, link))
 	
 	-- Adding items to the managed list
 	elseif( cmd == "additem" and arg ) then
@@ -1105,32 +1128,26 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 	-- Toggling entire categories
 	elseif( cmd == "toggle" and arg ) then
 		arg = string.lower(arg)
-		local type, textType, stackCheck
-		if( arg == "gems" ) then
-			type = "Gem"	
-			textType = "cut gems"
-			stackCheck = 1
-		elseif( arg == "uncut" ) then
-			type = "Gem"
-			textType = "uncut gems"
-			stackCheck = 20
-		elseif( arg == "glyphs" ) then
-			type = "Glyph"
-			textType = "glyphs"
-			stackCheck = 20
+		
+		for data, key in pairs(typeInfo) do
+			if( key == arg ) then
+				toggleKey = data
+				toggleText = validTypes[key]
+				break
+			end
 		end
 		
-		if( not type ) then
+		if( not toggleKey ) then
 			self:Print("Invalid item type toggle entered.")
 			return
 		end
 		
-		if( not QuickAuctionsDB.itemTypes[type] ) then
-			QuickAuctionsDB.itemTypes[type] = stackCheck
-			self:Print(string.format("Now posting all %s.", textType))
+		if( not QuickAuctionsDB.itemTypes[toggleKey] ) then
+			QuickAuctionsDB.itemTypes[toggleKey] = true
+			self:Print(string.format("Now posting all %s.", toggleText))
 		else
-			QuickAuctionsDB.itemTypes[type] = nil
-			self:Print(string.format("No longer posting all %s.", textType))
+			QuickAuctionsDB.itemTypes[toggleKey] = nil
+			self:Print(string.format("No longer posting all %s.", toggleText))
 		end
 
 	-- Post time
@@ -1144,24 +1161,14 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 		self:Print(string.format("Set auction time to %d hours.", time))
 	
 	-- Add to whitelist
-	elseif( cmd == "add" and arg ) then
+	elseif( cmd == "addwhite" and arg ) then
 		QuickAuctionsDB.whitelist[arg] = true
 		self:Print(string.format("Added %s to the whitelist.", arg))
 
 	-- Remove from whitelist
-	elseif( cmd == "remove" and arg ) then
+	elseif( cmd == "removewhite" and arg ) then
 		QuickAuctionsDB.whitelist[arg] = nil
 		self:Print(string.format("Removed %s from whitelist.", arg))
-	
-	-- Post uncut gems
-	elseif( cmd == "uncut" ) then
-		QuickAuctionsDB.uncut = not QuickAuctionsDB.uncut
-		
-		if( QuickAuctionsDB.uncut ) then
-			self:Print("Now posting uncut metas and gems.")
-		else
-			self:Print("No longer posting uncut metas and gems.")
-		end
 	
 	-- Smart cancelling
 	elseif( cmd == "cancel" ) then
@@ -1216,19 +1223,18 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 		self:Print("Enabled super auctioning!")
 	else
 		self:Print("Slash commands")
-		self:Echo("/qa undercut <money> <link> - How much to undercut people by.")
 		self:Echo("/qa smartcut - Toggles smart undercutting (Going from 1.9g -> 1g first instead of 1.9g - undercut amount.")
-		self:Echo("/qa cap <amount> <link> - Only allow <amount> of the same kind of auction to be up at the same time.")
-		self:Echo("/qa fallback <money> <link> - How much money to default to if nobody else has an auction up.")
-		self:Echo("/qa threshold <money> <link> - Don't post any auctions that would go below this amount.")
-		self:Echo("/qa time <12/24/48> - Amount of hours to put auctions up for, only works for the current sesson.")
 		self:Echo("/qa cancel - Disables undercutting if the lowest price falls below the the threshold.")
-		self:Echo("/qa add <name> - Adds a name to the whitelist to not undercut.")
-		self:Echo("/qa remove <name> - Removes a name from the whitelist.")
+		self:Echo("/qa bidpercent <0-100> - Percentage of the buyout that the bid should be, 200g buyout and this set at 90 will put the bid at 180g.")
+		self:Echo("/qa time <12/24/48> - Amount of hours to put auctions up for, only works for the current sesson.")
+		self:Echo("/qa undercut <money> <link/type> - How much to undercut people by.")
+		self:Echo("/qa cap <amount> <link/type> - Only allow <amount> of the same kind of auction to be up at the same time.")
+		self:Echo("/qa fallback <money> <link/type> - How much money to default to if nobody else has an auction up.")
+		self:Echo("/qa threshold <money> <link/type> - Don't post any auctions that would go below this amount.")
+		self:Echo("/qa addwhite <name> - Adds a name to the whitelist to not undercut.")
+		self:Echo("/qa removewhite <name> - Removes a name from the whitelist.")
 		self:Echo("/qa additem <link> <quantity> - Adds an item to the list of things that should be managed, *IF* the item can stack you must provide a quantity to post it in.")
 		self:Echo("/qa removeitem <link> - Removes an item from the managed list.")
-		self:Echo("/qa toggle <gems/uncut/glyphs> - Lets you toggle entire categories of items: All cut gems, all uncut gems, and all glyphs. These will always be put onto the AH as the single item, if you want to override it to post multiple then use the additem command.")
-		self:Echo("For undercut, fallback, threshold and cap, if a link is provided it's set for the specific item, if none is then it's set globally as a default.")
-		self:Echo("<money> format is \"#g\" for gold \"#s\" for silver and \"#c\" for copper, so \"5g2s5c\" will be 5 gold, 2 silver, 5 copper.")
+		self:Echo("/qa toggle <gems/uncut/glyphs/enchants> - Lets you toggle entire categories of items: All cut gems, all uncut gems, and all glyphs. These will always be put onto the AH as the single item, if you want to override it to post multiple then use the additem command.")
 	end
 end
