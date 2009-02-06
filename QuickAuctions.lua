@@ -8,6 +8,8 @@ local validTypes = {["uncut"] = "uncut gems", ["gems"] = "cut gems", ["glyphs"] 
 local typeInfo = {["Gem1"] = "gems", ["Gem20"] = "uncut", ["Glyph20"] = "glyphs", ["Enchanting20"] = "enchants"}
 local AHTime = 12 * 60
 
+local L = QuickAuctionsLocals
+
 -- Addon loaded
 function QA:OnInitialize()
 	-- Default things
@@ -718,9 +720,9 @@ function QA:PostItems()
 			-- Figure out how many auctions we will be posting quickly
 			local quantity = type(QuickAuctionsDB.itemList[name]) == "number" and QuickAuctionsDB.itemList[name] or 1
 			local willPost = math.floor(GetItemCount(link) / quantity)
-			local postCap = QuickAuctionsDB.postCap[name] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default
-			willPost = willPost > postCap and postCap or willPost
-			
+			local leftToCap = (QuickAuctionsDB.postCap[name] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default) - (activeAuctions[name] or 0)
+			willPost = willPost > leftToCap and leftToCap or willPost
+		
 			self.postButton.totalPosts = self.postButton.totalPosts + willPost
 		end
 	end
@@ -756,42 +758,45 @@ function QA:CheckItems()
 		local name, texture, quantity, _, _, _, minBid, _, buyoutPrice, _, _, owner, wasSold = GetAuctionItemInfo("owner", i)     
 		local priceData = priceList[name]
 		
-		if( priceData and wasSold == 0 ) then
+		if( priceData and priceData.owner and wasSold == 0 ) then
 			buyoutPrice = buyoutPrice / quantity
 			minBid = minBid / quantity
 			
 			-- Check if buyout, our minimum bid are equal or lower than ours. 
 			-- If they aren't us and if they aren't on our whitelist (We don't care if they undercut us)
-			if( ( priceData.buyout < buyoutPrice or ( priceData.buyout == buyoutPrice and priceData.minBid <= minBid ) ) and priceData.owner ~= owner and not QuickAuctionsDB.whitelist[priceData.owner] ) then
-				-- Get the item link, BECAUSE BLIZZARD DOESN'T FUCKING PASS IT FOR SOME STUPID REASON
-				self.tooltip:ClearLines()
-				self.tooltip:SetAuctionItem("owner", i)
+			if( ( priceData.buyout < buyoutPrice or ( priceData.buyout == buyoutPrice and priceData.minBid <= minBid ) ) and priceData.owner ~= owner ) then
+				-- They are either not on the white list, or they are but they undercut us so we cancel it anyway.
+				if( not QuickAuctionsDB.whitelist[priceData.owner] or ( QuickAuctionsDB.whitelist[priceData.owner] and priceData.buyout < buyoutPrice ) ) then
+					-- Get the item link, BECAUSE BLIZZARD DOESN'T FUCKING PASS IT FOR SOME STUPID REASON
+					self.tooltip:ClearLines()
+					self.tooltip:SetAuctionItem("owner", i)
 
-				local itemCategory = self:GetItemCategory(select(2, self.tooltip:GetItem()))
-				local threshold, belowThresh
-				
-				-- Smart cancelling, lets us choose if we should cancel something
-				-- if the auction fell below the threshold
-				if( QuickAuctionsDB.smartCancel ) then
-					threshold = QuickAuctionsDB.threshold[name] or QuickAuctionsDB.threshold[itemCategory] or QuickAuctionsDB.threshold.default
-					belowThresh = priceData.buyout <= threshold
-				end
-				
-				if( not tempList[name] ) then
-					if( not belowThresh ) then
-						self:Echo(string.format("Undercut on %s, by %s, buyout %s, bid %s, our buyout %s, our bid %s (per item)", name, priceData.owner, self:FormatTextMoney(priceData.buyout), self:FormatTextMoney(priceData.minBid), self:FormatTextMoney(buyoutPrice / quantity), self:FormatTextMoney(minBid / quantity)))
-					else
-						self:Echo(string.format("Undercut on %s, by %s, buyout %s, our buyout %s (per item), threshold is %s so not cancelling.", name, priceData.owner, self:FormatTextMoney(priceData.buyout), self:FormatTextMoney(buyoutPrice / quantity), self:FormatTextMoney(threshold)))
+					local itemCategory = self:GetItemCategory(select(2, self.tooltip:GetItem()))
+					local threshold, belowThresh
+
+					-- Smart cancelling, lets us choose if we should cancel something
+					-- if the auction fell below the threshold
+					if( QuickAuctionsDB.smartCancel ) then
+						threshold = QuickAuctionsDB.threshold[name] or QuickAuctionsDB.threshold[itemCategory] or QuickAuctionsDB.threshold.default
+						belowThresh = priceData.buyout <= threshold
 					end
-				end
 
-				if( not belowThresh ) then
-					totalCancels = totalCancels + 1
-					self.scanButton.totalCancels = self.scanButton.totalCancels + 1
-					self.scanButton:SetFormattedText("%d/%d items", totalCancels, QA.scanButton.totalCancels)
+					if( not tempList[name] ) then
+						if( not belowThresh ) then
+							self:Echo(string.format("Undercut on %s, by %s, buyout %s, bid %s, our buyout %s, our bid %s (per item)", name, priceData.owner, self:FormatTextMoney(priceData.buyout), self:FormatTextMoney(priceData.minBid), self:FormatTextMoney(buyoutPrice / quantity), self:FormatTextMoney(minBid / quantity)))
+						else
+							self:Echo(string.format("Undercut on %s, by %s, buyout %s, our buyout %s (per item), threshold is %s so not cancelling.", name, priceData.owner, self:FormatTextMoney(priceData.buyout), self:FormatTextMoney(buyoutPrice / quantity), self:FormatTextMoney(threshold)))
+						end
+					end
 
-					tempList[name] = true
-					CancelAuction(i)
+					if( not belowThresh ) then
+						totalCancels = totalCancels + 1
+						self.scanButton.totalCancels = self.scanButton.totalCancels + 1
+						self.scanButton:SetFormattedText("%d/%d items", totalCancels, QA.scanButton.totalCancels)
+
+						tempList[name] = true
+						CancelAuction(i)
+					end
 				end
 			end
 		end

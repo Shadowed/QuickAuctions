@@ -5,4 +5,7 @@
 ## Author: Mayen
 ## SavedVariables: QuickAuctionsDB
 
+localization.enUS.lua
+
 QuickAuctions.lua
+summary.lua
