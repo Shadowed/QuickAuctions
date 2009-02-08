@@ -1,9 +1,9 @@
 -- Ugly code, need to clean it up later
 QA = {}
 
-local isScanning, searchFilter, scanType, scanTotal, scanIndex, money, splittingLink, defaults
-local page, badRetries, totalCancels, totalPosts, totalPostsSet, totalNewStacks, splitQuantity = 0, 0, 0, 0, 0, 0, 0
-local activeAuctions, scanList, priceList, queryQueue, postList, auctionPostQueue, foundSlots, tempList = {}, {}, {}, {}, {}, {}, {}, {}
+local scanType, scanTotal, scanIndex, money, splittingLink, defaults
+local badRetries, totalCancels, totalPosts, totalPostsSet, totalNewStacks, splitQuantity = 0, 0, 0, 0, 0, 0
+local activeAuctions, scanList, auctionData, queryQueue, postList, auctionPostQueue, foundSlots, tempList, currentQuery = {}, {}, {}, {}, {}, {}, {}, {}, {}
 local validTypes = {["uncut"] = "uncut gems", ["gems"] = "cut gems", ["glyphs"] = "glyphs", ["enchants"] = "enchanting materials"}
 local typeInfo = {["Gem1"] = "gems", ["Gem20"] = "uncut", ["Glyph20"] = "glyphs", ["Enchanting20"] = "enchants"}
 local AHTime = 12 * 60
@@ -85,12 +85,15 @@ end
 function QA:AHInitialize()
 	-- Hook the query function so we know what we last sent a search on
 	local orig_QueryAuctionItems = QueryAuctionItems
-	QueryAuctionItems = function(name, ...)
+	QueryAuctionItems = function(name, minLevel, maxLevel, invTypeIndex, classIndex, subClassIndex, page, isUsable, qualityIndex, getAll, ...)
 		if( CanSendAuctionQuery() ) then
-			searchFilter = name
+			currentQuery.name = name
+			currentQuery.page = page
+			currentQuery.classIndex = classIndex
+			currentQuery.subClassIndex = subClassIndex
 		end
 		
-		return orig_QueryAuctionItems(name, ...)
+		return orig_QueryAuctionItems(name, minLevel, maxLevel, invTypeIndex, classIndex, subClassIndex, page, isUsable, qualityIndex, getAll, ...)
 	end
 	
 	-- Tooltips!
@@ -186,7 +189,7 @@ end
 
 -- Debugging
 function QA:ListDump()
-	Spew("", priceList)
+	Spew("", auctionData)
 end
 
 function QA:Log(msg, ...)
@@ -211,12 +214,14 @@ local function checkSend(self, elapsed)
 		if( CanSendAuctionQuery() ) then
 			local filter = table.remove(queryQueue, 1)
 			local page = table.remove(queryQueue, 1)
+			local classIndex = table.remove(queryQueue, 1)
+			local subClassIndex = table.remove(queryQueue, 1)
 			local type = table.remove(queryQueue, 1)
-
-			QueryAuctionItems(filter, nil, nil, 0, 0, 0, page, 0, 0)
+			
+			QueryAuctionItems(filter, nil, nil, 0, (classIndex == "nil" and 0 or classIndex), (subClassIndex == "nil" and 0 or subClassIndex), page, 0, 0)
 			
 			-- It's a new request, meaning increment the item counter
-			if( isScanning and type == "new" ) then
+			if( currentQuery.scanning and type == "new" ) then
 				QA.scanButton:SetFormattedText("%d/%d items", scanIndex, scanTotal)
 				scanIndex = scanIndex + 1
 			end
@@ -231,12 +236,13 @@ local function checkSend(self, elapsed)
 
 end
 
-function QA:SendQuery(filter, page, type)
+
+function QA:SendQuery(filter, page, type, classIndex, subClassIndex)
 	if( CanSendAuctionQuery() ) then
-		QueryAuctionItems(filter, nil, nil, 0, 0, 0, page, 0, 0)
+		QueryAuctionItems(filter, nil, nil, 0, classIndex or 0, subClassIndex or 0, page, 0, 0)
 
 		-- It's a new request, meaning increment the item counter
-		if( isScanning and type == "new" ) then
+		if( currentQuery.scanning and type == "new" ) then
 			self.scanButton:SetFormattedText("%d/%d items", scanIndex, scanTotal)
 			scanIndex = scanIndex + 1
 		end
@@ -245,6 +251,8 @@ function QA:SendQuery(filter, page, type)
 	
 	table.insert(queryQueue, filter)
 	table.insert(queryQueue, page)
+	table.insert(queryQueue, classIndex or "nil")
+	table.insert(queryQueue, subClassIndex or "nil")
 	table.insert(queryQueue, type)
 	
 	self.frame:SetScript("OnUpdate", checkSend)
@@ -280,7 +288,7 @@ function QA:ScanAuctions()
 	-- Reset data
 	for i=#(scanList), 1, -1 do table.remove(scanList, i) end
 	for k in pairs(tempList) do tempList[k] = nil end
-	for _, data in pairs(priceList) do
+	for _, data in pairs(auctionData) do
 		data.buyout = 99999999999999999
 		data.minBid = 99999999999999999
 		data.owner = nil
@@ -357,19 +365,26 @@ function QA:ProcessSplitQueue()
 				self.frame:RegisterEvent("BAG_UPDATE")
 				SplitContainerItem(bag, slot, splitQuantity)
 				PickupContainerItem(freeBag, freeSlot)
-				
-				foundSlots[freeBag .. freeSlot] = true
-				totalNewStacks = totalNewStacks - 1
 				return
 			end
 		end
 	end
+		
+	self:Log("Bad stack size found. We still need to split %s into %d new stacks of %d.", (GetItemInfo(splittingLink)), totalNewStacks, splitQuantity)
 	
-	-- Do a second loop, let's make sure we really ran out of things to split
-	-- This solves the issue where, if we had 5 stacks of Glyph of Dash, we want to post all 5
-	-- It would split 4 of them into single stacks, then error because it doesn't think it can split it anymore
+	totalNewStacks = 0
+	splittingLink = nil
+
+	self:FinishedSplitting()
+end
+
+-- Player bags changed, will have to be ready to do a split again soon
+function QA:BAG_UPDATE()
+	local self = QA
+	self.frame:UnregisterEvent("BAG_UPDATE")
+
+	-- Check how many stacks we have left
 	for bag=0, 4 do
-		-- Scanning a bag
 		for slot=1, GetContainerNumSlots(bag) do
 			local link = self:GetSafeLink(GetContainerItemLink(bag, slot))
 			local itemCount = select(2, GetContainerItemInfo(bag, slot))
@@ -379,26 +394,7 @@ function QA:ProcessSplitQueue()
 			end
 		end
 	end
-	
-	-- We have nothing else we can really do
-	if( totalNewStacks > 0 ) then
-		self:Log("Unusual stack size found. We still need to split %s into %d new stacks of %d.", (GetItemInfo(splittingLink)), totalNewStacks, splitQuantity)
 
-		totalNewStacks = 0
-		splittingLink = nil
-
-		self:FinishedSplitting()
-	else
-		self:Log("Finished splitting %s.", (GetItemInfo(splittingLink)))
-		self:FinishedSplitting()
-	end
-end
-
--- Player bags changed, will have to be ready to do a split again soon
-function QA:BAG_UPDATE()
-	local self = QA
-	self.frame:UnregisterEvent("BAG_UPDATE")
-	
 	-- Check if we are done splitting
 	if( totalNewStacks == 0 ) then
 		self:FinishedSplitting()
@@ -514,7 +510,7 @@ function QA:PostAuctions()
 	-- Reset data
 	for k in pairs(tempList) do tempList[k] = nil end
 	for i=#(postList), 1, -1 do table.remove(postList, i) end
-	for _, data in pairs(priceList) do
+	for _, data in pairs(auctionData) do
 		data.buyout = 99999999999999999
 		data.minBid = 99999999999999999
 		data.owner = nil
@@ -573,8 +569,11 @@ function QA:StartScan(list, type)
 	scanType = type
 	scanTotal = #(scanList) + 1
 	scanIndex = 1
-	isScanning = true
-	page = 0
+
+	currentQuery.scanning = true
+	currentQuery.classIndex = nil
+	currentQuery.subClassIndex = nil
+	currentQuery.page = 0
 	
 	self:SendQuery(filter, page, "new")
 end
@@ -603,7 +602,7 @@ function QA:PostItem(link)
 	end
 		
 	local name = GetItemInfo(link)
-	local priceData = priceList[name]
+	local priceData = auctionData[name]
 	local totalPosted = activeAuctions[name] or 0
 	local itemCategory = self:GetItemCategory(link)
 	local quantity = type(QuickAuctionsDB.itemList[name]) == "number" and QuickAuctionsDB.itemList[name] or 1
@@ -709,7 +708,7 @@ function QA:PostItems()
 	for i=#(postList), 1, -1 do
 		local link = postList[i]
 		local name = GetItemInfo(link)
-		local priceData = priceList[name]
+		local priceData = auctionData[name]
 		local itemCategory = self:GetItemCategory(link)
 		local threshold = QuickAuctionsDB.threshold[name] or QuickAuctionsDB.threshold[itemCategory] or QuickAuctionsDB.threshold.default
 		
@@ -756,7 +755,7 @@ function QA:CheckItems()
 	
 	for i=1, (GetNumAuctionItems("owner")) do
 		local name, texture, quantity, _, _, _, minBid, _, buyoutPrice, _, _, owner, wasSold = GetAuctionItemInfo("owner", i)     
-		local priceData = priceList[name]
+		local priceData = auctionData[name]
 		
 		if( priceData and priceData.owner and wasSold == 0 ) then
 			buyoutPrice = buyoutPrice / quantity
@@ -835,7 +834,7 @@ end
 -- Time to scan auctions!
 function QA:ScanAuctionList()
 	-- Not scanning, done here
-	if( not isScanning or not searchFilter ) then
+	if( not currentQuery.scanning or not currentQuery.name ) then
 		return
 	end
 	
@@ -845,8 +844,8 @@ function QA:ScanAuctionList()
 	local hasBadOwners
 	for i=1, shown do
 		local name, texture, quantity, _, _, _, minBid, _, buyoutPrice, _, _, owner = GetAuctionItemInfo("list", i)     
-		if( not priceList[name] ) then
-			priceList[name] = {buyout = 99999999999999999, minBid = 99999999999999999}
+		if( not auctionData[name] ) then
+			auctionData[name] = {buyout = 99999999999999999, minBid = 99999999999999999}
 		end
 		
 		-- Turn it into price per an item
@@ -854,25 +853,25 @@ function QA:ScanAuctionList()
 		minBid = minBid / quantity
 		
 		-- Only pull good owner data, if they are the lowest
-		if( owner ~= UnitName("player") and ( buyoutPrice < priceList[name].buyout ) and buyoutPrice > 0 ) then
+		if( owner ~= UnitName("player") and ( buyoutPrice < auctionData[name].buyout ) and buyoutPrice > 0 ) then
 			if( owner ) then
-				priceList[name].minBid = minBid
-				priceList[name].buyout = buyoutPrice
-				priceList[name].owner = owner
+				auctionData[name].minBid = minBid
+				auctionData[name].buyout = buyoutPrice
+				auctionData[name].owner = owner
 			else
 				hasBadOwners = true
 			end
 		end
 	end
 	
-	self:Log("Finished scan type %s of %s, bad owners? %s, retried %d times, %d total/%d shown.", scanType, searchFilter, tostring(hasBadOwners), badRetries, total, shown)
+	self:Log("Finished scan type %s of %s, bad owners? %s, retried %d times, %d total/%d shown.", scanType, currentQuery.name, tostring(hasBadOwners), badRetries, total, shown)
 	
 	-- Found a query with bad owners
 	if( hasBadOwners ) then
 		badRetries = badRetries + 1
 		if( badRetries <= 3 ) then
 			badRetries = 0
-			self:SendQuery(searchFilter, page, "retry")
+			self:SendQuery(currentQuery.name, page, "retry")
 			return
 		end
 			
@@ -883,13 +882,12 @@ function QA:ScanAuctionList()
 	
 	-- If it's an active scan, and we have shown as much as possible, then scan the next page
 	if( shown == 50 ) then
-		page = page + 1
-		self:SendQuery(searchFilter, page, "page")
+		currentQuery.page = currentQuery.page + 1
+		self:SendQuery(currentQuery.name, page, "page", currentQuery.clasIndex, currentQuery.subClassIndex)
 
 	-- Move on to the next in the list
 	else
 		local filter = table.remove(scanList, 1)
-		page = 0
 		
 		-- Nothing else to search, done!
 		if( not filter ) then
@@ -897,7 +895,8 @@ function QA:ScanAuctionList()
 				return
 			end
 			
-			isScanning = nil
+			currentQuery.classIndex = nil
+			currentQuery.subClassIndex = nil
 			
 			if( scanType == "scan" ) then
 				self:CheckItems()
@@ -907,7 +906,7 @@ function QA:ScanAuctionList()
 			return
 		end
 		
-		self:SendQuery(filter, page, "new")
+		self:SendQuery(filter, 0, "new", currentQuery.clasIndex, currentQuery.subClassIndex)
 	end
 end
 
