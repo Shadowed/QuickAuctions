@@ -8,4 +8,5 @@
 localization.enUS.lua
 
 QuickAuctions.lua
+split.lua
 summary.lua
