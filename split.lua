@@ -8,7 +8,7 @@ local newStacks, timeElapsed = 0, 0
 function QA:StartSplitting(newStacks, link, quantity)
 	for k in pairs(foundSlots) do foundSlots[k] = nil end
 	
-	newStacks = newStatcks
+	newStacks = newStacks
 	splitLink = link
 	splitQuantity = quantity
 	
@@ -90,12 +90,14 @@ function QA:BAG_UPDATE()
 			if( not foundSlots[bag .. slot] and link == splitLink and itemCount == splitQuantity ) then
 				foundSlots[bag .. slot] = true
 				newStacks = newStacks - 1
+				
+				self:Log("Found valid stack, %s in bag %d/slot %d, quantity %d.", (GetItemInfo(link)), bag, slot, itemCount)
 			end
 		end
 	end
 
 	-- Check if we are done splitting
-	if( newStacks == 0 ) then
+	if( newStacks <= 0 ) then
 		self:FinishedSplitting()
 	else
 		-- Create it if needed
