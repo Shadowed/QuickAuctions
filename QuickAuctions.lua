@@ -816,6 +816,9 @@ function QA:ScanAuctionList()
 			return
 		end
 		
+		-- New query, reset page
+		currentQuery.page = 0
+		
 		self:SendQuery(filter, 0, "new", currentQuery.clasIndex, currentQuery.subClassIndex)
 	end
 end

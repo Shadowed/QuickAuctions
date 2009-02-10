@@ -5,10 +5,10 @@ local splitLink, splitQuantity, timerFrame
 local newStacks, timeElapsed = 0, 0
 
 -- Start splitting something new
-function QA:StartSplitting(newStacks, link, quantity)
+function QA:StartSplitting(stacks, link, quantity)
 	for k in pairs(foundSlots) do foundSlots[k] = nil end
 	
-	newStacks = newStacks
+	newStacks = stacks
 	splitLink = link
 	splitQuantity = quantity
 	
