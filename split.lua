@@ -12,6 +12,7 @@ function QA:StartSplitting(stacks, link, quantity)
 	splitLink = link
 	splitQuantity = quantity
 	
+	self:Log("Going to be splitting into %d (%d) new stacks, of %s (%s) x %d.", newStacks or -1, stacks or -1, (GetItemInfo(splitLink)), splitLink, splitQuantity)
 	self:ProcessSplitQueue()
 end
 
@@ -52,14 +53,14 @@ function QA:ProcessSplitQueue()
 					return
 				end
 				
-				local freeBag, freeSlot = self:FindEmptyInventorySlot(GetItemFamily(link))
 				-- Bad, ran out of space
+				local freeBag, freeSlot = self:FindEmptyInventorySlot(GetItemFamily(link))
 				if( not freeBag and not freeSlot ) then
 					self:Print("Ran out of free space to keep splitting, not going to finish up splits.")
 					return
 				end
 
-				self:Log("Splitting item [%s] from bag %d/slot %d, moving it into bag %d/slot %d.", (GetItemInfo(link)), bag, slot, freeBag, freeSlot)
+				self:Log("Splitting item %s x %d from bag %d/slot %d, moving it into bag %d/slot %d.", (GetItemInfo(link)), splitQuantity, bag, slot, freeBag, freeSlot)
 
 				self.frame:RegisterEvent("BAG_UPDATE")
 				SplitContainerItem(bag, slot, splitQuantity)
@@ -81,6 +82,7 @@ end
 function QA:BAG_UPDATE()
 	local self = QA
 	self.frame:UnregisterEvent("BAG_UPDATE")
+	self:Log("BAG_UPDATE")
 
 	-- Check how many stacks we have left
 	for bag=0, 4 do
@@ -96,27 +98,28 @@ function QA:BAG_UPDATE()
 		end
 	end
 
-	-- Check if we are done splitting
-	if( newStacks <= 0 ) then
-		self:FinishedSplitting()
-	else
-		-- Create it if needed
-		if( not timerFrame ) then
-			timerFrame = CreateFrame("Frame")
-			timerFrame:SetScript("OnUpdate", function(self, elapsed)
-				timeElapsed = timeElapsed + elapsed
-				if( timeElapsed >= 0.25 ) then
-					self:Hide()
-					timeElapsed = 0
-					
+	-- Create it if needed
+	if( not timerFrame ) then
+		timerFrame = CreateFrame("Frame")
+		timerFrame:SetScript("OnUpdate", function(self, elapsed)
+			timeElapsed = timeElapsed + elapsed
+			if( timeElapsed >= 0.25 ) then
+				self:Hide()
+				timeElapsed = 0
+
+				if( newStacks <= 0 ) then
+					newStacks = 0
+					splitLink = nil
+
+					QA:FinishedSplitting()
+				else
 					QA:ProcessSplitQueue()
-					
 				end
-			end)
-		end
-		
-		-- Start timer going
-		timeElapsed = 0
-		timerFrame:Show()
+			end
+		end)
 	end
+
+	-- Start timer going
+	timeElapsed = 0
+	timerFrame:Show()
 end

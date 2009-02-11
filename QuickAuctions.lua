@@ -360,10 +360,10 @@ function QA:QueueSet()
 		return
 	end
 	
-	self:Log("Going to be splitting %s into %d stacks of %d each, we already have %d valid stacks, %d of the item in our inventory, will cap in %d posts, and have %d actives.", name, (canPost - validStacks), quantity, validStacks, GetItemCount(link), leftToCap, (activeAuctions[name] or 0))
-	
 	-- If we can post 4, we have 1 valid stack, we need to do 3 splits, if we have 4 to post and 0 valid stacks, then we need to do all 4 splits
 	local newStacks = canPost - validStacks
+
+	self:Log("Going to be splitting %s into %d stacks of %d each, we already have %d valid stacks and can post %d, %d of the item in our inventory, will cap in %d posts, and have %d actives.", name, newStacks, quantity, validStacks, canPost, GetItemCount(link), leftToCap, (activeAuctions[name] or 0))
 		
 	-- Nothing queued, meaning we have nothing to post for this item
 	if( newStacks == 0 ) then
