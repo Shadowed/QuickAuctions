@@ -78,45 +78,50 @@ function QA:ProcessSplitQueue()
 	self:FinishedSplitting()
 end
 
--- Player bags changed, will have to be ready to do a split again soon
-function QA:BAG_UPDATE()
-	local self = QA
-	self.frame:UnregisterEvent("BAG_UPDATE")
-	self:Log("BAG_UPDATE")
+-- Check bags now that everythings settled down
+local function checkBags(self, elapsed)
+	timeElapsed = timeElapsed + elapsed
+	if( timeElapsed < 0.25 ) then
+		return
+	end
+	
+	timeElapsed = 0
+	self:Hide()
 
 	-- Check how many stacks we have left
 	for bag=0, 4 do
 		for slot=1, GetContainerNumSlots(bag) do
-			local link = self:GetSafeLink(GetContainerItemLink(bag, slot))
+			local link = QA:GetSafeLink(GetContainerItemLink(bag, slot))
 			local itemCount = select(2, GetContainerItemInfo(bag, slot))
 			if( not foundSlots[bag .. slot] and link == splitLink and itemCount == splitQuantity ) then
 				foundSlots[bag .. slot] = true
 				newStacks = newStacks - 1
-				
-				self:Log("Found valid stack, %s in bag %d/slot %d, quantity %d.", (GetItemInfo(link)), bag, slot, itemCount)
+
+				QA:Log("Found valid stack, %s in bag %d/slot %d, quantity %d.", (GetItemInfo(link)), bag, slot, itemCount)
 			end
 		end
 	end
+	
+	-- No more splitting needed
+	if( newStacks <= 0 ) then
+		newStacks = 0
+		splitLink = nil
+
+		QA:FinishedSplitting()
+	else
+		QA:ProcessSplitQueue()
+	end
+end
+
+-- Player bags changed, start a timer before scanning them
+function QA:BAG_UPDATE()
+	self.frame:UnregisterEvent("BAG_UPDATE")
+	self:Log("BAG_UPDATE")
 
 	-- Create it if needed
 	if( not timerFrame ) then
 		timerFrame = CreateFrame("Frame")
-		timerFrame:SetScript("OnUpdate", function(self, elapsed)
-			timeElapsed = timeElapsed + elapsed
-			if( timeElapsed >= 0.25 ) then
-				self:Hide()
-				timeElapsed = 0
-
-				if( newStacks <= 0 ) then
-					newStacks = 0
-					splitLink = nil
-
-					QA:FinishedSplitting()
-				else
-					QA:ProcessSplitQueue()
-				end
-			end
-		end)
+		timerFrame:SetScript("OnUpdate", checkBags)
 	end
 
 	-- Start timer going

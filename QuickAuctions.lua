@@ -1,9 +1,9 @@
--- Ugly code, need to clean it up later
 QA = {}
 
-local scanType, scanTotal, scanIndex, money, defaults
-local badRetries, totalCancels, totalPosts, totalPostsSet = 0, 0, 0, 0
-local activeAuctions, scanList, auctionData, queryQueue, postList, auctionPostQueue, tempList, currentQuery = {}, {}, {}, {}, {}, {}, {}, {}
+local money, defaults
+local totalPostsSet = 0
+local activeAuctions, auctionData, postList, auctionPostQueue, tempList = {}, {}, {}, {}, {}, {}
+local currentQuery = {list = {}, total = 0}
 local validTypes = {["uncut"] = "uncut gems", ["gems"] = "cut gems", ["glyphs"] = "glyphs", ["enchants"] = "enchanting materials"}
 local typeInfo = {["Gem1"] = "gems", ["Gem20"] = "uncut", ["Glyph20"] = "glyphs", ["Enchanting20"] = "enchants"}
 local AHTime = 12 * 60
@@ -60,125 +60,57 @@ function QA:AHInitialize()
 	-- Hook the query function so we know what we last sent a search on
 	local orig_QueryAuctionItems = QueryAuctionItems
 	QueryAuctionItems = function(name, minLevel, maxLevel, invTypeIndex, classIndex, subClassIndex, page, isUsable, qualityIndex, getAll, ...)
-		if( CanSendAuctionQuery() ) then
-			currentQuery.name = name
-			--currentQuery.page = page or 0
-			currentQuery.classIndex = classIndex
-			currentQuery.subClassIndex = subClassIndex
-			
-			-- So AH browsing mods will show the status correctly on longer scans
-			if( currentQuery.scanning ) then
-				AuctionFrameBrowse.page = page
-			end
+		-- So AH browsing mods will show the status correctly on longer scans
+		if( CanSendAuctionQuery() and currentQuery.running ) then
+			AuctionFrameBrowse.page = page
 		end
 		
 		return orig_QueryAuctionItems(name, minLevel, maxLevel, invTypeIndex, classIndex, subClassIndex, page, isUsable, qualityIndex, getAll, ...)
 	end
 	
-	-- Tooltips!
-	local function showTooltip(self)
-		GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
-		GameTooltip:SetText(self.tooltip)
-		GameTooltip:Show()
-	end
+	-- Little hooky buttons
+	self:CreateButtons()
 	
-	local function hideTooltip(self)
-		GameTooltip:Hide()
-	end
-	
-	-- Scan our posted items
-	local button = CreateFrame("Button", nil, AuctionFrameAuctions, "UIPanelButtonTemplate")
-	button.tooltip = L["Scan posted auctions to see if any were undercut."]
-	button:SetPoint("TOPRIGHT", AuctionFrameAuctions, "TOPRIGHT", 51, -15)
-	button:SetText(L["Scan Items"])
-	button:SetWidth(110)
-	button:SetHeight(18)
-	button:SetScript("OnEnter", showTooltip)
-	button:SetScript("OnLeave", hideTooltip)
-	button:SetScript("OnClick", function(self)
-		QA:ScanAuctions()
-	end)
-		
-	self.scanButton = button
-
-	-- Post inventory items
-	local button = CreateFrame("Button", nil, AuctionFrameAuctions, "UIPanelButtonTemplate")
-	button.tooltip = L["Post items from your inventory into the auction house."]
-	button:SetPoint("TOPRIGHT", self.scanButton, "TOPLEFT", 0, 0)
-	button:SetText(L["Post Items"])
-	button:SetWidth(110)
-	button:SetHeight(18)
-	button:SetScript("OnEnter", showTooltip)
-	button:SetScript("OnLeave", hideTooltip)
-	button:SetScript("OnClick", function(self)
-		QA:PostAuctions()
-	end)
-	
-	self.postButton = button
-	
-	-- Scan our posted items
-	local button = CreateFrame("Button", nil, AuctionFrameAuctions, "UIPanelButtonTemplate")
-	button.tooltip = L["View a summary of what the highest selling of certain items is."]
-	button:SetPoint("TOPRIGHT", self.postButton, "TOPLEFT", 0, 0)
-	button:SetText(L["Summarize"])
-	button:SetWidth(110)
-	button:SetHeight(18)
-	button:SetScript("OnEnter", showTooltip)
-	button:SetScript("OnLeave", hideTooltip)
-	button:SetScript("OnClick", function(self)
-		if( QA.Summary.frame and QA.Summary.frame:IsVisible() ) then
-			QA.Summary.frame:Hide()
-			return
-		end
-		
-		QA.Summary:CreateGUI()
-		QA.Summary.frame:Show()
-	end)
-		
-	self.summaryButton = button
-
 	-- Hook chat to block auction post/cancels, and also let us know when we're done posting
 	local orig_ChatFrame_SystemEventHandler = ChatFrame_SystemEventHandler
 	ChatFrame_SystemEventHandler = function(self, event, msg)
-		if( msg == ERR_AUCTION_REMOVED and totalCancels > 0 ) then
-			totalCancels = totalCancels - 1
+		if( msg == ERR_AUCTION_REMOVED and QA.scanButton.totalCancels and QA.scanButton.totalCancels > 0 ) then
+			QA.scanButton.haveCancelled = QA.scanButton.haveCancelled + 1
+			QA.scanButton:SetFormattedText(L["%d/%d items"], QA.scanButton.haveCancelled, QA.scanButton.totalCancels)
 			
-			QA.scanButton:SetFormattedText(L["%d/%d items"], totalCancels, QA.scanButton.totalCancels)
-			QA.scanButton:Disable()
-			
-			if( totalCancels <= 0 ) then
-				totalCancels = 0
+			if( QA.scanButton.haveCancelled >= QA.scanButton.totalCancels ) then
+				QA.scanButton.totalCancels = 0
+				QA.scanButton.haveCanceled = 0
 				
+				QA:Print("Done cancelling auctions.")
 				QA.scanButton:SetText(L["Scan Items"])
 				QA.scanButton:Enable()
-				QA:Print("Done cancelling auctions.")
 			end
 			return true
 
-		elseif( msg == ERR_AUCTION_STARTED and totalPosts > 0 ) then
-			totalPosts = totalPosts - 1
+		elseif( msg == ERR_AUCTION_STARTED and QA.postButton.totalPosts and QA.postButton.totalPosts > 0 ) then
+			QA.postButton.havePosted = QA.postButton.havePosted + 1
 			totalPostsSet = totalPostsSet - 1
 			
 			if( totalPostsSet <= 0 ) then
-				QA:Log("Done posting current set.")
 				QA:QueueSet()
 			end
 			
-			if( totalPosts <= 0 ) then
-				totalPosts = 0
+			if( QA.postButton.havePosted >= QA.postButton.totalPosts ) then
+				QA.postButton.totalPosts = 0
+				QA.postButton.havePosted = 0
+				
 				QA:Print("Done posting auctions.")
 
 				QA.postButton:SetText(L["Post Items"])
 				QA.postButton:Enable()
-				
-				QA:Log("Done posting auctions.")
 			else
 				-- This one went throughdo next
 				if( totalPostsSet > 0 ) then
 					QA:PostQueuedAuction()
 				end
 				
-				QA.postButton:SetFormattedText(L["%d/%d items"], totalPosts, QA.postButton.totalPosts)
+				QA.postButton:SetFormattedText(L["%d/%d items"], QA.postButton.havePosted, QA.postButton.totalPosts)
 				QA.postButton:Disable()
 			end
 			
@@ -199,61 +131,69 @@ function QA:Log(msg, ...)
 	table.insert(QuickAuctionsDB.logs, msg)
 end
 
--- Query queue
+-- AUCTION QUERYING
 local timeElapsed = 0
-local function checkSend(self, elapsed)
+local function checkQueryStatus(self, elapsed)
 	timeElapsed = timeElapsed + elapsed
 	
-	if( timeElapsed >= 0.25 ) then
+	if( timeElapsed >= 0.15 ) then
 		timeElapsed = 0
 		
-		-- Can we send it yet?
+		-- We have a query queued, and we can send it
 		if( CanSendAuctionQuery() ) then
-			local filter = table.remove(queryQueue, 1)
-			local page = table.remove(queryQueue, 1)
-			local classIndex = table.remove(queryQueue, 1)
-			local subClassIndex = table.remove(queryQueue, 1)
-			local type = table.remove(queryQueue, 1)
-			
-			QueryAuctionItems(filter, nil, nil, 0, (classIndex == "nil" and 0 or classIndex), (subClassIndex == "nil" and 0 or subClassIndex), page, 0, 0)
-			
-			-- It's a new request, meaning increment the item counter
-			if( currentQuery.showProgress and type == "new" ) then
-				QA.scanButton:SetFormattedText(L["%d/%d items"], scanIndex, scanTotal)
-				scanIndex = scanIndex + 1
-			end
-			
-			-- Done with our queries
-			if( #(queryQueue) == 0 ) then
-				QA.isQuerying = nil
-				self:SetScript("OnUpdate", nil)
-			end
+			self:SetScript("OnUpdate", nil)
+			QA:SendQuery(true)
 		end
 	end
-
 end
 
+-- Simply stops it from scanning when it sees this
+function QA:ForceQueryStop()
+	if( currentQuery.running ) then
+		currentQuery.forceStop = true
+	end
+end
 
-function QA:SendQuery(filter, page, type, classIndex, subClassIndex)
-	if( CanSendAuctionQuery() ) then
-		QueryAuctionItems(filter, nil, nil, 0, classIndex or 0, subClassIndex or 0, page, 0, 0)
-
-		-- It's a new request, meaning increment the item counter
-		if( currentQuery.showProgress and type == "new" ) then
-			self.scanButton:SetFormattedText(L["%d/%d items"], scanIndex, scanTotal)
-			scanIndex = scanIndex + 1
-		end
+-- Send the actual query
+function QA:SendQuery(skipCheck)
+	-- We can't send it yet, 
+	if( not skipCheck and not CanSendAuctionQuery() ) then
+		self.frame:SetScript("OnUpdate", checkQueryStatus)
 		return
 	end
 	
-	table.insert(queryQueue, filter)
-	table.insert(queryQueue, page)
-	table.insert(queryQueue, classIndex or "nil")
-	table.insert(queryQueue, subClassIndex or "nil")
-	table.insert(queryQueue, type)
+	currentQuery.queued = nil
+	QueryAuctionItems(currentQuery.filter, nil, nil, 0, currentQuery.classIndex, currentQuery.subClassIndex, currentQuery.page, 0, 0)
+end
+
+-- Add an item that we will be looking for
+function QA:AddQueryFilter(name)
+	if( not currentQuery.list[name] ) then
+		currentQuery.total = currentQuery.total + 1
+		currentQuery.list[name] = true
+	end
+end
+
+-- Sets up QA to start querying for this filter/indexes
+function QA:SetupAuctionQuery(scanType, showProgress, filter, page, classIndex, subClassIndex)
+	-- Find the entry in our filter list
+	if( type(filter) == "boolean" ) then
+		for k in pairs(currentQuery.list) do
+			filter = k
+			break
+		end
+	end
 	
-	self.frame:SetScript("OnUpdate", checkSend)
-	self.isQuerying = true
+	currentQuery.running = true
+	currentQuery.page = page
+	currentQuery.filter = filter
+	currentQuery.scanType = scanType
+	currentQuery.classIndex = classIndex
+	currentQuery.subClassIndex = subClassIndex
+	currentQuery.showProgress = showProgress
+	currentQuery.retries = 0
+	
+	self:SendQuery()
 end
 
 function QA:IsValidItem(link)
@@ -274,26 +214,21 @@ function QA:GetSafeLink(link)
 	return (string.match(link, "|H(.-):([-0-9]+):([0-9]+)|h"))
 end
 
-local tempList = {}
 function QA:ScanAuctions()
 	-- Reset data
-	for i=#(scanList), 1, -1 do table.remove(scanList, i) end
-	for k in pairs(tempList) do tempList[k] = nil end
 	for _, data in pairs(auctionData) do data.owner = nil data.totalFound = 0 end
 	
-	local hasItems
 	for i=1, (GetNumAuctionItems("owner")) do
 		local name = GetAuctionItemInfo("owner", i)
 		local itemLink = GetAuctionItemLink("owner", i)
 		
 		if( itemLink and self:IsValidItem(itemLink) and select(13, GetAuctionItemInfo("owner", i)) == 0 ) then
-			hasItems = true
-			tempList[name] = true
+			self:AddQueryFilter(name)
 		end
 	end
 	
-	if( hasItems ) then
-		self:StartScan(tempList, "scan")
+	if( currentQuery.total > 0 ) then
+		self:StartScan("scan")
 	end
 end
 
@@ -383,7 +318,6 @@ end
 -- Prepare to post auctions
 function QA:PostAuctions()
 	-- Reset data
-	for k in pairs(tempList) do tempList[k] = nil end
 	for i=#(postList), 1, -1 do table.remove(postList, i) end
 	for _, data in pairs(auctionData) do data.owner = nil data.totalFound = 0 end
 	
@@ -406,77 +340,36 @@ function QA:PostAuctions()
 				local postCap = QuickAuctionsDB.postCap[name] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default
 				
 				-- Make sure we aren't already at the post cap, to reduce the item scans needed
-				if( not tempList[name] and self:IsValidItem(link) and ( not activeAuctions[name] or activeAuctions[name] < postCap ) ) then
-					table.insert(postList, link)
-					tempList[name] = true
+				if( self:IsValidItem(link) and ( not activeAuctions[name] or activeAuctions[name] < postCap ) ) then
+					if( not currentQuery.list[name] ) then
+						table.insert(postList, link)
+					end
+					
+					self:AddQueryFilter(name)
 				end
 			end
 		end
 	end
 		
-	self:StartScan(tempList, "post")
+	-- Start us up!
+	self:StartScan("post")
 end
 
 -- Start scanning the items we will be posting
-function QA:StartScan(list, type)
-	for i=#(scanList), 1, -1 do table.remove(scanList, i) end
-	
-	-- Prevents duplicate entries
-	for name in pairs(list) do
-		table.insert(scanList, name)
-	end
-	
-	self:Log("Starting scan type %s, we will be scanning a total of %d items.", type, #(scanList))
-
-	local filter = table.remove(scanList, 1)
-	if( not filter ) then
-		return
-	end
-		
-	self.scanButton:Disable()
-	self.scanButton:SetFormattedText(L["%d/%d items"], 0, #(scanList) + 1)
-	
+function QA:StartScan(type)
 	-- Setup scan info blah blah
-	scanType = type
-	scanTotal = #(scanList) + 1
-	scanIndex = 1
-
-	currentQuery.scanning = true
-	currentQuery.showProgress = true
-	currentQuery.classIndex = nil
-	currentQuery.subClassIndex = nil
-	currentQuery.page = 0
+	self.scanButton.totalScanned = 0
+	self.scanButton.totalItems = currentQuery.total
+	self.scanButton:SetFormattedText(L["%d/%d items"], 0, self.scanButton.totalItems)
+	self.scanButton:Disable()
 	
-	self:SendQuery(filter, currentQuery.page, "new")
+	-- Set it up to start scanning this item
+	self:SetupAuctionQuery(type, true, true, 0, 0, 0)
 end
 
 function QA:StartCategoryScan(classIndex, subClassIndex, type)
-	self:Log("Starting category scan type %s, we will be scanning main category %d and sub category %d.", type, classIndex or -1, subClassIndex or -1)
-	
 	self.scanButton:Disable()
-	
-	-- Setup scan info blah blah
-	scanType = type
-	scanTotal = 0
-	scanIndex = 0
-
-	currentQuery.scanning = true
-	currentQuery.showProgress = nil
-	currentQuery.classIndex = nil
-	currentQuery.subClassIndex = nil
-	currentQuery.page = 0
-		
-	self:SendQuery("", currentQuery.page, "new", classIndex, subClassIndex)
-end
-
-function QA:ForceQueryStop()
-	if( currentQuery.scanning ) then
-		currentQuery.forceStop = true
-		
-		for i=#(queryQueue), 1, -1 do
-			table.remove(queryQueue, i)
-		end
-	end
+	self:SetupAuctionQuery(type, nil, "", 0, classIndex, subClassIndex)
 end
 
 function QA:PostQueuedAuction()
@@ -489,19 +382,12 @@ function QA:PostQueuedAuction()
 	local minBid = table.remove(auctionPostQueue, 1)
 	local buyout = table.remove(auctionPostQueue, 1)
 
-	self:Log("Posted item from bag %d/slot %d in the AH for %d at %s buyout and %s bid.", bag, slot, AHTime / 60, self:FormatTextMoney(buyout), self:FormatTextMoney(minBid))
-
 	PickupContainerItem(bag, slot)
 	ClickAuctionSellItemButton()
 	StartAuction(minBid, buyout, AHTime)
 end
 
 function QA:PostItem(link)
-	if( not link ) then
-		self:Log("No link provided to post item, exited.")
-		return
-	end
-		
 	local name = GetItemInfo(link)
 	local priceData = auctionData[name]
 	local totalPosted = activeAuctions[name] or 0
@@ -576,9 +462,7 @@ function QA:PostItem(link)
 					totalPostsSet = totalPostsSet + 1
 				else
 					for i=#(auctionPostQueue), 1, -1 do table.remove(auctionPostQueue, i) end
-					totalPosts = 0
 					
-					self:Log("Ran out of money to post.")
 					self.postButton:SetText(L["Post Items"])
 					self.postButton:Enable()
 					self:Print(L["Cannot post remaining auctions, you do not have enough money."])
@@ -593,7 +477,7 @@ function QA:PostItem(link)
 	end
 			
 	-- And now update post totals
-	self.postButton:SetFormattedText(L["%d/%d items"], totalPosts, self.postButton.totalPosts)
+	self.postButton:SetFormattedText(L["%d/%d items"], self.postButton.havePosted, self.postButton.totalPosts)
 	self.postButton:Disable()
 
 	-- Now actually post everything
@@ -604,6 +488,7 @@ function QA:PostItems()
 	self.scanButton:Enable()
 	self.scanButton:SetText(L["Scan Items"])
 	self.postButton.totalPosts = 0
+	self.postButton.havePosted = 0
 
 	-- Quick check for threshold info
 	for i=#(postList), 1, -1 do
@@ -633,12 +518,11 @@ function QA:PostItems()
 		return
 	end
 	
-	self.postButton:SetFormattedText(L["%d/%d items"], self.postButton.totalPosts, self.postButton.totalPosts)
+	self.postButton:SetFormattedText(L["%d/%d items"], self.postButton.havePosted, self.postButton.totalPosts)
 	self.postButton:Disable()
 
 	-- Save money so we can check if we have enough to post
 	money = GetMoney()
-	totalPosts = self.postButton.totalPosts
 	
 	-- Post a group of items
 	self:QueueSet()
@@ -651,7 +535,7 @@ function QA:CheckItems()
 	self.scanButton:Disable()
 	self.scanButton:SetText(L["Scan Items"])
 	
-	totalCancels = 0
+	self.scanButton.haveCancelled = 0
 	self.scanButton.totalCancels = 0
 	
 	for i=1, (GetNumAuctionItems("owner")) do
@@ -686,9 +570,7 @@ function QA:CheckItems()
 					end
 
 					if( not belowThresh ) then
-						totalCancels = totalCancels + 1
-						self.scanButton.totalCancels = self.scanButton.totalCancels + 1
-						self.scanButton:SetFormattedText(L["%d/%d items"], totalCancels, QA.scanButton.totalCancels)
+						self.scanButton:SetFormattedText(L["%d/%d items"], self.scanButton.haveCancelled, QA.scanButton.totalCancels)
 
 						tempList[name] = true
 						CancelAuction(i)
@@ -727,100 +609,107 @@ end
 
 -- Time to scan auctions!
 function QA:ScanAuctionList()
-	-- Not scanning, done here
-	if( not currentQuery.scanning or not currentQuery.name ) then
+	-- This isn't a scan we need data for
+	if( not currentQuery.running ) then
 		return
 	end
 	
 	local shown, total = GetNumAuctionItems("list")
-	
+	local hasBadData
+
 	-- Scan the list of auctions and find the one with the lowest bidder, using the data we have.
-	local hasBadOwners
 	for i=1, shown do
 		local name, texture, quantity, _, _, _, minBid, _, buyoutPrice, _, _, owner = GetAuctionItemInfo("list", i)     
-		if( name and not auctionData[name] ) then
-			auctionData[name] = {buyout = 0, totalFound = 0, minBid = 0, link = self:GetSafeLink(GetAuctionItemLink("list", i))}
-		end
-		
-		-- Turn it into price per an item
-		buyoutPrice = buyoutPrice / quantity
-		minBid = minBid / quantity
-		
-		-- Only pull good owner data, if they are the lowest
-		if( name ) then
-			auctionData[name].totalFound = auctionData[name].totalFound + quantity
-		end
-		
-		if( name and owner ~= UnitName("player") and ( buyoutPrice < auctionData[name].buyout or not auctionData[name].owner ) and buyoutPrice > 0 ) then
-			if( owner ) then
+		if( name and owner ) then
+			if( not auctionData[name] ) then
+				auctionData[name] = {buyout = 0, totalFound = 0, minBid = 0, link = self:GetSafeLink(GetAuctionItemLink("list", i))}
+			end
+
+			-- Don't increment total on a retry
+			if( not currentQuery.isRetry ) then
+				auctionData[name].totalFound = auctionData[name].totalFound + quantity
+			end
+
+			-- Turn it into price per an item
+			buyoutPrice = buyoutPrice / quantity
+			minBid = minBid / quantity
+
+			-- Only pull good owner data, if they are the lowest
+			if( owner ~= UnitName("player") and ( buyoutPrice < auctionData[name].buyout or not auctionData[name].owner ) and buyoutPrice > 0 ) then
 				auctionData[name].minBid = minBid
 				auctionData[name].buyout = buyoutPrice
 				auctionData[name].owner = owner
-			else
-				hasBadOwners = true
 			end
+		else
+			hasBadData = true
 		end
 	end
 	
-	-- Found a query with bad owners
-	if( hasBadOwners and not currentQuery.forceStop ) then
-		badRetries = badRetries + 1
-		if( badRetries <= 3 ) then
+	-- Found a query with bad data
+	if( hasBadData and not currentQuery.forceStop ) then
+		currentQuery.retries = currentQuery.retries + 1
+		if( currentQuery.retries <= 5 ) then
 			-- :( Increase it slightly
 			scanDelay = scanDelay + 0.10
 			
-			badRetries = 0
-			self:SendQuery(currentQuery.name, currentQuery.page, "retry", currentQuery.classIndex, currentQuery.subClassIndex)
+			self:SendQuery()
 			return
 		end
 			
 	-- Reset the counter since we got good owners
-	elseif( badRetries > 0 ) then
-		badRetries = 0
-	end	
-	
-	-- Good request, so reset it
-	if( not hasBadOwners ) then
+	elseif( currentQuery.retries > 0 ) then
 		scanDelay = 0.20
-	end
+		currentQuery.retries = 0
+	end	
 	
 	-- If it's an active scan, and we have shown as much as possible, then scan the next page
 	if( shown == NUM_AUCTION_ITEMS_PER_PAGE and not currentQuery.forceStop ) then
 		currentQuery.page = currentQuery.page + 1
-		self:SendQuery(currentQuery.name, currentQuery.page, "page", currentQuery.classIndex, currentQuery.subClassIndex)
+		self:SendQuery()
+		return
+	end	
 
-	-- Move on to the next in the list
-	else
-		local filter = table.remove(scanList, 1)
-		
-		-- Nothing else to search, done!
-		if( not filter ) then
-			if( self.isQuerying ) then
-				return
-			end
-				
-			self.scanButton:Enable()
-
-			currentQuery.forceStop = nil
-			currentQuery.scanning = nil
-			currentQuery.classIndex = nil
-			currentQuery.subClassIndex = nil
-			
-			if( scanType == "scan" ) then
-				self:CheckItems()
-			elseif( scanType == "summary" ) then
-				self.Summary:Finished()
-			elseif( scanType == "post" ) then
-				self:PostItems()
-			end
-			return
-		end
-		
-		-- New query, reset page
-		currentQuery.page = 0
-		
-		self:SendQuery(filter, 0, "new", currentQuery.clasIndex, currentQuery.subClassIndex)
+	-- Figure out what next to scan (If anything)
+	local filter
+	for k in pairs(currentQuery.list) do
+		filter = k
+		currentQuery.list[k] = nil
+		break
 	end
+
+	-- Nothing else to search, done!
+	if( not filter or currentQuery.forceStop ) then
+		self.scanButton:Enable()
+
+		currentQuery.running = nil
+		currentQuery.forceStop = nil
+		
+		-- Reset item queue
+		currentQuery.total = 0
+		for k in pairs(currentQuery.list) do currentQuery.list[k] = nil end
+
+		-- Call trigger function
+		if( currentQuery.scanType == "scan" ) then
+			self:CheckItems()
+		elseif( currentQuery.scanType == "summary" ) then
+			self.Summary:Finished()
+		elseif( currentQuery.scanType == "post" ) then
+			self:PostItems()
+		end
+		return
+	end
+
+	-- New request, so time to update the counter
+	if( currentQuery.showProgress ) then
+		self.scanButton.totalScanned = self.scanButton.totalScanned + 1
+		self.scanButton:SetFormattedText(L["%d/%d items"], self.scanButton.totalScanned, self.scanButton.totalItems)
+	end
+
+	-- Send off onto the next page
+	currentQuery.filter = filter
+	currentQuery.page = 0
+	
+	self:SendQuery()
 end
 
 -- Event handler/misc
@@ -853,6 +742,72 @@ end
 
 function QA:Echo(msg)
 	DEFAULT_CHAT_FRAME:AddMessage(msg)
+end
+
+-- Create AH buttons, hidden down here so I don't have to scroll through this, given I'll never modify it basically
+function QA:CreateButtons()
+	-- Tooltips!
+	local function showTooltip(self)
+		GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
+		GameTooltip:SetText(self.tooltip)
+		GameTooltip:Show()
+	end
+	
+	local function hideTooltip(self)
+		GameTooltip:Hide()
+	end
+	
+	-- Scan our posted items
+	local button = CreateFrame("Button", nil, AuctionFrameAuctions, "UIPanelButtonTemplate")
+	button.tooltip = L["Scan posted auctions to see if any were undercut."]
+	button:SetPoint("TOPRIGHT", AuctionFrameAuctions, "TOPRIGHT", 51, -15)
+	button:SetText(L["Scan Items"])
+	button:SetWidth(110)
+	button:SetHeight(18)
+	button:SetScript("OnEnter", showTooltip)
+	button:SetScript("OnLeave", hideTooltip)
+	button:SetScript("OnClick", function(self)
+		QA:ScanAuctions()
+	end)
+		
+	self.scanButton = button
+
+	-- Post inventory items
+	local button = CreateFrame("Button", nil, AuctionFrameAuctions, "UIPanelButtonTemplate")
+	button.tooltip = L["Post items from your inventory into the auction house."]
+	button:SetPoint("TOPRIGHT", self.scanButton, "TOPLEFT", 0, 0)
+	button:SetText(L["Post Items"])
+	button:SetWidth(110)
+	button:SetHeight(18)
+	button:SetScript("OnEnter", showTooltip)
+	button:SetScript("OnLeave", hideTooltip)
+	button:SetScript("OnClick", function(self)
+		QA:PostAuctions()
+	end)
+	
+	self.postButton = button
+	
+	-- Scan our posted items
+	local button = CreateFrame("Button", nil, AuctionFrameAuctions, "UIPanelButtonTemplate")
+	button.tooltip = L["View a summary of what the highest selling of certain items is."]
+	button:SetPoint("TOPRIGHT", self.postButton, "TOPLEFT", 0, 0)
+	button:SetText(L["Summarize"])
+	button:SetWidth(110)
+	button:SetHeight(18)
+	button:SetScript("OnEnter", showTooltip)
+	button:SetScript("OnLeave", hideTooltip)
+	button:SetScript("OnClick", function(self)
+		if( QA.Summary.frame and QA.Summary.frame:IsVisible() ) then
+			QA.Summary.frame:Hide()
+			return
+		end
+		
+		QA.Summary:CreateGUI()
+		QA.Summary.frame:Show()
+	end)
+		
+	self.summaryButton = button
+
 end
 
 -- Stolen from Blizzard!
