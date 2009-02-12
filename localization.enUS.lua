@@ -88,6 +88,7 @@ QuickAuctionsLocals = {
 	["/qa removeitem <link> - Removes an item from the managed list."] = "/qa removeitem <link> - Removes an item from the managed list.",
 	["/qa toggle <gems/uncut/glyphs/enchants> - Lets you toggle entire categories of items: All cut gems, all uncut gems, and all glyphs. These will always be put onto the AH as the single item, if you want to override it to post multiple then use the additem command."] = "/qa toggle <gems/uncut/glyphs/enchants> - Lets you toggle entire categories of items: All cut gems, all uncut gems, and all glyphs. These will always be put onto the AH as the single item, if you want to override it to post multiple then use the additem command.",
 	["/qa summary - Toggles the summary frame."] = "/qa summary - Toggles the summary frame.",
+	["/qa cancelall - Cancel all of your auctions. REGARDLESS of if you were undercut or not."] = "/qa cancelall - Cancel all of your auctions. REGARDLESS of if you were undercut or not.",
 	
 	-- Summary
 	["Stop"] = "Stop",

@@ -291,6 +291,9 @@ function Summary:Update()
 		
 	-- Update scroll bar
 	FauxScrollFrame_Update(self.middleFrame.scroll, #(rowDisplay), MAX_SUMMARY_ROWS - 1, ROW_HEIGHT)
+	
+	-- Figure out active auctions of ours
+	QA:CheckActiveAuctions()
 
 	-- Now display
 	local summaryData = summaryCats[selectedSummary]
@@ -303,7 +306,10 @@ function Summary:Update()
 			
 			local row = self.rows[displayIndex]
 			local data = displayData[dataID]
-			local link = data.link and select(2, GetItemInfo(data.link)) or nil
+			local itemName, link
+			if( data.link ) then
+				itemName, link = GetItemInfo(data.link)
+			end
 
 			row.link = data.link
 			
@@ -318,7 +324,14 @@ function Summary:Update()
 				row.buyout:SetText(data.buyout and QA:FormatTextMoney(data.buyout, true) or "")
 				row.buyout:SetPoint("TOPRIGHT", row, "TOPRIGHT", -14, -4)
 				
-				row.quantity:SetText(data.quantity or "")
+				if( data.quantity and QA.activeAuctions[data.name] and QA.activeAuctions[data.name] > 0 ) then
+					row.quantity:SetFormattedText("%d (|cff20ff20%d|r)", data.quantity, QA.activeAuctions[data.name])
+				elseif( data.quantity ) then
+					row.quantity:SetText(data.quantity)
+				else
+					row.quantity:SetText("")
+				end
+				
 				row.quantity:SetPoint("TOPRIGHT", row, "TOPRIGHT", -134, -4)
 
 				row.button:Show()
@@ -341,7 +354,13 @@ function Summary:Update()
 				row.buyout:SetText(data.buyout and QA:FormatTextMoney(data.buyout, true) or "")
 				row.buyout:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, -4)
 
-				row.quantity:SetText(data.quantity or "")
+				if( data.quantity and QA.activeAuctions[data.name] and QA.activeAuctions[data.name] > 0 ) then
+					row.quantity:SetFormattedText("%d (|cff20ff20%d|r)", data.quantity, QA.activeAuctions[data.name])
+				elseif( data.quantity ) then
+					row.quantity:SetText(data.quantity)
+				else
+					row.quantity:SetText("")
+				end
 				row.quantity:SetPoint("TOPRIGHT", row, "TOPRIGHT", -120, -4)
 
 				row:ClearAllPoints()

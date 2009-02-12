@@ -2,11 +2,10 @@ QA = {}
 
 local money, defaults
 local totalPostsSet = 0
-local activeAuctions, auctionData, postList, auctionPostQueue, tempList = {}, {}, {}, {}, {}, {}
+local activeAuctions, auctionData, postList, auctionPostQueue, tempList, itemQuantities = {}, {}, {}, {}, {}, {}, {}
 local currentQuery = {list = {}, total = 0}
 local validTypes = {["uncut"] = "uncut gems", ["gems"] = "cut gems", ["glyphs"] = "glyphs", ["enchants"] = "enchanting materials"}
 local typeInfo = {["Gem1"] = "gems", ["Gem20"] = "uncut", ["Glyph20"] = "glyphs", ["Enchanting20"] = "enchants"}
-local AHTime = 12 * 60
 
 local L = QuickAuctionsLocals
 
@@ -18,15 +17,16 @@ function QA:OnInitialize()
 		smartCancel = true,
 		logging = false,
 		bidpercent = 1.0,
+		auctionTime = 12 * 60,
 		itemTypes = {},
 		itemList = {},
 		whitelist = {},
-		undercut = {},
-		threshold = {},
-		fallback = {},
-		postCap = {},
-		logs = {},
+		undercut = {default = 10000},
+		threshold = {default = 500000},
+		fallback = {default = 200000},
+		postCap = {default = 2},
 		categoryToggle = {},
+		logs = {},
 	}
 	
 	-- Upgrade DB format
@@ -178,15 +178,25 @@ end
 function QA:SetupAuctionQuery(scanType, showProgress, filter, page, classIndex, subClassIndex)
 	-- Find the entry in our filter list
 	if( type(filter) == "boolean" ) then
-		for k in pairs(currentQuery.list) do
-			filter = k
+		currentQuery.filter = nil
+		for name in pairs(currentQuery.list) do
+			currentQuery.filter = name
 			break
 		end
+		
+		-- No items to query
+		if( not currentQuery.filter ) then
+			return
+		end
+	else
+		currentQuery.filter = filter
 	end
+
+	-- Reset auction data
+	for _, data in pairs(auctionData) do data.owner = nil data.totalFound = 0 end
 	
 	currentQuery.running = true
 	currentQuery.page = page
-	currentQuery.filter = filter
 	currentQuery.scanType = scanType
 	currentQuery.classIndex = classIndex
 	currentQuery.subClassIndex = subClassIndex
@@ -215,9 +225,6 @@ function QA:GetSafeLink(link)
 end
 
 function QA:ScanAuctions()
-	-- Reset data
-	for _, data in pairs(auctionData) do data.owner = nil data.totalFound = 0 end
-	
 	for i=1, (GetNumAuctionItems("owner")) do
 		local name = GetAuctionItemInfo("owner", i)
 		local itemLink = GetAuctionItemLink("owner", i)
@@ -227,9 +234,7 @@ function QA:ScanAuctions()
 		end
 	end
 	
-	if( currentQuery.total > 0 ) then
-		self:StartScan("scan")
-	end
+	self:StartScan("scan")
 end
 
 -- Finished splitting this queue
@@ -314,14 +319,7 @@ function QA:QueueSet()
 	self:StartSplitting(newStacks, link, quantity)
 end
 
-
--- Prepare to post auctions
-function QA:PostAuctions()
-	-- Reset data
-	for i=#(postList), 1, -1 do table.remove(postList, i) end
-	for _, data in pairs(auctionData) do data.owner = nil data.totalFound = 0 end
-	
-	-- Figure out how many of this is already posted
+function QA:CheckActiveAuctions()
 	for k in pairs(activeAuctions) do activeAuctions[k] = nil end
 	for i=1, (GetNumAuctionItems("owner")) do
 		local name, _, _, _, _, _, _, _, _, _, _, _, wasSold = GetAuctionItemInfo("owner", i)   
@@ -329,6 +327,15 @@ function QA:PostAuctions()
 			activeAuctions[name] = (activeAuctions[name] or 0) + 1
 		end
 	end
+end
+
+-- Prepare to post auctions
+function QA:PostAuctions()
+	-- Reset data
+	for i=#(postList), 1, -1 do table.remove(postList, i) end
+	
+	-- Figure out how many of this is already posted
+	self:CheckActiveAuctions()
 	
 	-- Scan inventory for posting
 	for bag=0, 4 do
@@ -357,6 +364,10 @@ end
 
 -- Start scanning the items we will be posting
 function QA:StartScan(type)
+	if( currentQuery.total == 0 ) then
+		return
+	end
+	
 	-- Setup scan info blah blah
 	self.scanButton.totalScanned = 0
 	self.scanButton.totalItems = currentQuery.total
@@ -384,7 +395,7 @@ function QA:PostQueuedAuction()
 
 	PickupContainerItem(bag, slot)
 	ClickAuctionSellItemButton()
-	StartAuction(minBid, buyout, AHTime)
+	StartAuction(minBid, buyout, QuickAuctionsDB.auctionTime)
 end
 
 function QA:PostItem(link)
@@ -450,7 +461,7 @@ function QA:PostItem(link)
 
 				-- Make sure we can post this auction, we save the money and subtract it here
 				-- because we chain post before the server gives us the new money
-				money = money - CalculateAuctionDeposit(AHTime)
+				money = money - CalculateAuctionDeposit(QuickAuctionsDB.auctionTime)
 				if( money >= 0 ) then
 					table.insert(auctionPostQueue, bag)
 					table.insert(auctionPostQueue, slot)
@@ -616,7 +627,10 @@ function QA:ScanAuctionList()
 	
 	local shown, total = GetNumAuctionItems("list")
 	local hasBadData
-
+	
+	-- Reset quantity list
+	for k in pairs(itemQuantities) do itemQuantities[k] = 0 end
+	
 	-- Scan the list of auctions and find the one with the lowest bidder, using the data we have.
 	for i=1, shown do
 		local name, texture, quantity, _, _, _, minBid, _, buyoutPrice, _, _, owner = GetAuctionItemInfo("list", i)     
@@ -625,10 +639,8 @@ function QA:ScanAuctionList()
 				auctionData[name] = {buyout = 0, totalFound = 0, minBid = 0, link = self:GetSafeLink(GetAuctionItemLink("list", i))}
 			end
 
-			-- Don't increment total on a retry
-			if( not currentQuery.isRetry ) then
-				auctionData[name].totalFound = auctionData[name].totalFound + quantity
-			end
+			-- Increment total for this loop
+			itemQuantities[name] = (itemQuantities[name] or 0) + quantity
 
 			-- Turn it into price per an item
 			buyoutPrice = buyoutPrice / quantity
@@ -662,6 +674,12 @@ function QA:ScanAuctionList()
 		currentQuery.retries = 0
 	end	
 	
+	-- Scan ran fine, so merge in the item quantities with our data
+	for name, total in pairs(itemQuantities) do
+		if( auctionData[name] ) then
+			auctionData[name].totalFound = auctionData[name].totalFound + total
+		end
+	end
 	-- If it's an active scan, and we have shown as much as possible, then scan the next page
 	if( shown == NUM_AUCTION_ITEMS_PER_PAGE and not currentQuery.forceStop ) then
 		currentQuery.page = currentQuery.page + 1
@@ -677,8 +695,15 @@ function QA:ScanAuctionList()
 		break
 	end
 
+	-- New request, so time to update the counter
+	if( filter and currentQuery.showProgress ) then
+		self.scanButton.totalScanned = self.scanButton.totalScanned + 1
+		self.scanButton:SetFormattedText(L["%d/%d items"], self.scanButton.totalScanned, self.scanButton.totalItems)
+	end
+
 	-- Nothing else to search, done!
 	if( not filter or currentQuery.forceStop ) then
+		self.scanButton:SetText(L["Scan Items"])
 		self.scanButton:Enable()
 
 		currentQuery.running = nil
@@ -697,12 +722,6 @@ function QA:ScanAuctionList()
 			self:PostItems()
 		end
 		return
-	end
-
-	-- New request, so time to update the counter
-	if( currentQuery.showProgress ) then
-		self.scanButton.totalScanned = self.scanButton.totalScanned + 1
-		self.scanButton:SetFormattedText(L["%d/%d items"], self.scanButton.totalScanned, self.scanButton.totalItems)
 	end
 
 	-- Send off onto the next page
@@ -1041,7 +1060,7 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 			return
 		end
 		
-		AHTime = time * 60
+		QuickAuctionsDB.auctionTime = time * 60
 		self:Print(string.format(L["Set auction time to %d hours."], time))
 	
 	-- Add to whitelist
@@ -1062,6 +1081,18 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 			self:Print(L["Only cancelling if the lowest price isn't below the threshold."])
 		else
 			self:Print(L["Always cancelling if someone undercuts us."])
+		end
+	
+	-- Cancel all player auctions
+	elseif( cmd == "cancelall" ) then
+		self.scanButton:Disable()
+		self.scanButton:SetText(L["Scan Items"])
+
+		self.scanButton.haveCancelled = 0
+		self.scanButton.totalCancels = GetNumAuctionItems("owner")
+
+		for i=1, (GetNumAuctionItems("owner")) do
+			CancelAuction(i)
 		end
 	
 	-- Enables asshole mode! Automatically scans every 60 seconds, and posts every 30 seconds
@@ -1120,6 +1151,7 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 		self:Echo(L["/qa additem <link> <quantity> - Adds an item to the list of things that should be managed, *IF* the item can stack you must provide a quantity to post it in."])
 		self:Echo(L["/qa removeitem <link> - Removes an item from the managed list."])
 		self:Echo(L["/qa toggle <gems/uncut/glyphs/enchants> - Lets you toggle entire categories of items: All cut gems, all uncut gems, and all glyphs. These will always be put onto the AH as the single item, if you want to override it to post multiple then use the additem command."])
+		self:Echo(L["/qa cancelall - Cancel all of your auctions. REGARDLESS of if you were undercut or not."])
 		self:Echo(L["/qa summary - Toggles the summary frame."])
 	end
 end

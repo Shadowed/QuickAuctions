@@ -88,6 +88,8 @@ local function checkBags(self, elapsed)
 	timeElapsed = 0
 	self:Hide()
 
+	QA.frame:UnregisterEvent("BAG_UPDATE")
+	
 	-- Check how many stacks we have left
 	for bag=0, 4 do
 		for slot=1, GetContainerNumSlots(bag) do
@@ -115,9 +117,6 @@ end
 
 -- Player bags changed, start a timer before scanning them
 function QA:BAG_UPDATE()
-	self.frame:UnregisterEvent("BAG_UPDATE")
-	self:Log("BAG_UPDATE")
-
 	-- Create it if needed
 	if( not timerFrame ) then
 		timerFrame = CreateFrame("Frame")
