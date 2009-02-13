@@ -385,6 +385,7 @@ end
 
 function QA:PostQueuedAuction()
 	if( #(auctionPostQueue) == 0 ) then
+		self:Log("Nothing else to queue.")
 		return
 	end
 	
@@ -392,9 +393,12 @@ function QA:PostQueuedAuction()
 	local slot = table.remove(auctionPostQueue, 1)
 	local minBid = table.remove(auctionPostQueue, 1)
 	local buyout = table.remove(auctionPostQueue, 1)
-
+	
+	self:Log("Posting queued auction from bag %d/slot %d, buyout %s/min bid %s.", bag, slot, buyout, minBid)
 	PickupContainerItem(bag, slot)
+	self:Log("On cursor is %s.", (select(3, GetCursorInfo())) or "nil")
 	ClickAuctionSellItemButton()
+	self:Log("On cursor is %s.", (select(3, GetCursorInfo())) or "nil")
 	StartAuction(minBid, buyout, QuickAuctionsDB.auctionTime)
 end
 

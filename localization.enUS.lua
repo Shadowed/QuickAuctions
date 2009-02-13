@@ -98,6 +98,20 @@ QuickAuctionsLocals = {
 	["Gems"] = "Gems",
 	["Gem"] = "Gem",
 	
+	["Elemental"] = "Elemental",
+
+	["Herbs"] = "Herbs",
+	["Herb"] = "Herb",
+
+	["Flasks"] = "Flasks",
+	["Flask"] = "Flask",
+	
+	["Elixir"] = "Elixir",
+	["Elixirs"] = "Elixirs",
+
+	["Food & Drink"] = "Food & Drink",
+	["Food"] = "Food",
+	
 	["Bracer"] = "Bracer",
 	["Bracers"] = "Bracers",
 
