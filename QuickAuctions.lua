@@ -592,7 +592,7 @@ function QA:CheckItems()
 end
 
 -- Do a delay before scanning the auctions so it has time to load all of the owner information
-local scanDelay = 0.20
+local scanDelay = 0.50
 local scanElapsed = 0
 local scanFrame = CreateFrame("Frame")
 scanFrame:Hide()
@@ -642,10 +642,7 @@ function QA:ScanAuctionList()
 	elseif( not currentQuery.running ) then
 		return
 	end
-	
-	-- Reset found items
-	for k in pairs(tempList) do tempList[k] = nil end
-	
+		
 	local shown, total = GetNumAuctionItems("list")
 		
 	-- Check for bad data quickly
@@ -653,7 +650,7 @@ function QA:ScanAuctionList()
 		for i=1, shown do
 			if( not GetAuctionItemInfo("list", i) ) then
 				currentQuery.retries = currentQuery.retries + 1
-				scanDelay = scanDelay + 0.10
+				--scanDelay = scanDelay + 0.10
 
 				self:SendQuery()
 				return
@@ -678,9 +675,7 @@ function QA:ScanAuctionList()
 		-- Turn it into price per an item
 		buyoutPrice = buyoutPrice / quantity
 		minBid = minBid / quantity
-		
-		tempList[name] = true
-		
+				
 		-- Only pull good owner data, if they are the lowest
 		if( ( buyoutPrice < auctionData[name].buyout or not auctionData[name].owner ) and buyoutPrice > 0 ) then
 			-- Player owns it, so list that as the lowest in another field for summary
@@ -695,7 +690,7 @@ function QA:ScanAuctionList()
 	end
 
 	-- Reset our retries and scan delay
-	scanDelay = 0.20
+	--scanDelay = 0.50
 	currentQuery.retries = 0
 
 	-- If it's an active scan, and we have shown as much as possible, then scan the next page
@@ -704,11 +699,12 @@ function QA:ScanAuctionList()
 		self:SendQuery()
 		return
 	end
-	
-	-- We finished scanning this, so remove filters we already scanned
+		
+	-- Remove the filter we just looked at
 	for i=#(currentQuery.list), 1, -1 do
-		if( tempList[currentQuery.list[i]] ) then
+		if( currentQuery.list[i] == currentQuery.filter ) then
 			table.remove(currentQuery.list, i)
+			break
 		end
 	end
 	
