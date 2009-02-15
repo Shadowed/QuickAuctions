@@ -1,6 +1,6 @@
 QA = {}
 
-local money, defaults
+local money, defaults, playerName
 local totalPostsSet = 0
 local activeAuctions, auctionData, postList, auctionPostQueue, tempList, itemQuantities = {}, {}, {}, {}, {}, {}, {}
 local currentQuery = {list = {}, total = 0}
@@ -50,9 +50,12 @@ function QA:OnInitialize()
 	-- Got to let the "module" access these
 	QA.auctionData = auctionData
 	QA.activeAuctions = activeAuctions
+	QA.currentQuery = currentQuery
 	
-	-- DB is now up to date
+	-- DB version
 	QuickAuctionsDB.revision = tonumber(string.match("$Revision$", "(%d+)") or 1)
+	
+	playerName = UnitName("player")
 end
 
 -- AH loaded
@@ -140,7 +143,7 @@ local function checkQueryStatus(self, elapsed)
 		timeElapsed = 0
 		
 		-- We have a query queued, and we can send it
-		if( CanSendAuctionQuery() ) then
+		if( currentQuery.queued and CanSendAuctionQuery() ) then
 			self:SetScript("OnUpdate", nil)
 			QA:SendQuery(true)
 		end
@@ -158,42 +161,31 @@ end
 function QA:SendQuery(skipCheck)
 	-- We can't send it yet, 
 	if( not skipCheck and not CanSendAuctionQuery() ) then
+		currentQuery.queued = true
 		self.frame:SetScript("OnUpdate", checkQueryStatus)
 		return
 	end
-	
+			
 	currentQuery.queued = nil
 	QueryAuctionItems(currentQuery.filter, nil, nil, 0, currentQuery.classIndex, currentQuery.subClassIndex, currentQuery.page, 0, 0)
 end
 
 -- Add an item that we will be looking for
 function QA:AddQueryFilter(name)
-	if( not currentQuery.list[name] ) then
-		currentQuery.total = currentQuery.total + 1
-		currentQuery.list[name] = true
+	for _, itemName in pairs(currentQuery.list) do
+		if( itemName == name ) then
+			return false
+		end
 	end
+	
+	table.insert(currentQuery.list, name)
+	return true
 end
 
 -- Sets up QA to start querying for this filter/indexes
 function QA:SetupAuctionQuery(scanType, showProgress, filter, page, classIndex, subClassIndex)
-	-- Find the entry in our filter list
-	if( type(filter) == "boolean" ) then
-		currentQuery.filter = nil
-		for name in pairs(currentQuery.list) do
-			currentQuery.filter = name
-			break
-		end
-		
-		-- No items to query
-		if( not currentQuery.filter ) then
-			return
-		end
-	else
-		currentQuery.filter = filter
-	end
-
 	-- Reset auction data
-	for _, data in pairs(auctionData) do data.owner = nil data.totalFound = 0 end
+	for _, data in pairs(auctionData) do data.owner = nil data.totalFound = 0 data.playerBouyout = nil end
 	
 	currentQuery.running = true
 	currentQuery.page = page
@@ -201,8 +193,9 @@ function QA:SetupAuctionQuery(scanType, showProgress, filter, page, classIndex, 
 	currentQuery.classIndex = classIndex
 	currentQuery.subClassIndex = subClassIndex
 	currentQuery.showProgress = showProgress
+	currentQuery.filter = filter
 	currentQuery.retries = 0
-	
+
 	self:SendQuery()
 end
 
@@ -348,11 +341,10 @@ function QA:PostAuctions()
 				
 				-- Make sure we aren't already at the post cap, to reduce the item scans needed
 				if( self:IsValidItem(link) and ( not activeAuctions[name] or activeAuctions[name] < postCap ) ) then
-					if( not currentQuery.list[name] ) then
+					local added = self:AddQueryFilter(name)
+					if( added ) then
 						table.insert(postList, link)
 					end
-					
-					self:AddQueryFilter(name)
 				end
 			end
 		end
@@ -364,18 +356,18 @@ end
 
 -- Start scanning the items we will be posting
 function QA:StartScan(type)
-	if( currentQuery.total == 0 ) then
+	if( #(currentQuery.list) == 0 ) then
 		return
 	end
 	
 	-- Setup scan info blah blah
 	self.scanButton.totalScanned = 0
-	self.scanButton.totalItems = currentQuery.total
+	self.scanButton.totalItems = #(currentQuery.list)
 	self.scanButton:SetFormattedText(L["%d/%d items"], 0, self.scanButton.totalItems)
 	self.scanButton:Disable()
 	
 	-- Set it up to start scanning this item
-	self:SetupAuctionQuery(type, true, true, 0, 0, 0)
+	self:SetupAuctionQuery(type, true, currentQuery.list[1], 0, 0, 0)
 end
 
 function QA:StartCategoryScan(classIndex, subClassIndex, type)
@@ -394,11 +386,8 @@ function QA:PostQueuedAuction()
 	local minBid = table.remove(auctionPostQueue, 1)
 	local buyout = table.remove(auctionPostQueue, 1)
 	
-	self:Log("Posting queued auction from bag %d/slot %d, buyout %s/min bid %s.", bag, slot, buyout, minBid)
 	PickupContainerItem(bag, slot)
-	self:Log("On cursor is %s.", (select(3, GetCursorInfo())) or "nil")
 	ClickAuctionSellItemButton()
-	self:Log("On cursor is %s.", (select(3, GetCursorInfo())) or "nil")
 	StartAuction(minBid, buyout, QuickAuctionsDB.auctionTime)
 end
 
@@ -585,6 +574,7 @@ function QA:CheckItems()
 					end
 
 					if( not belowThresh ) then
+						self.scanButton.totalCancels = self.scanButton.totalCancels + 1
 						self.scanButton:SetFormattedText(L["%d/%d items"], self.scanButton.haveCancelled, QA.scanButton.totalCancels)
 
 						tempList[name] = true
@@ -622,115 +612,128 @@ function QA:AUCTION_ITEM_LIST_UPDATE()
 	scanFrame:Show()
 end
 
+function QA:FinishedScanning()
+	self.scanButton:SetText(L["Scan Items"])
+	self.scanButton:Enable()
+
+	currentQuery.running = nil
+	currentQuery.forceStop = nil
+	currentQuery.showProgress = nil
+
+	-- Reset item queue
+	for i=#(currentQuery.list), 1, -1 do table.remove(currentQuery.list, i) end
+
+	-- Call trigger function
+	if( currentQuery.scanType == "scan" ) then
+		self:CheckItems()
+	elseif( currentQuery.scanType == "post" ) then
+		self:PostItems()
+	elseif( currentQuery.scanType == "summary" ) then
+		self.Summary:Finished()
+	end
+end
+
 -- Time to scan auctions!
 function QA:ScanAuctionList()
-	-- This isn't a scan we need data for
-	if( not currentQuery.running ) then
+	-- Forced to stop next list, so just finish now
+	if( currentQuery.forceStop ) then
+		self:FinishedScanning()
+		return
+	elseif( not currentQuery.running ) then
 		return
 	end
 	
+	-- Reset found items
+	for k in pairs(tempList) do tempList[k] = nil end
+	
 	local shown, total = GetNumAuctionItems("list")
-	local hasBadData
-	
-	-- Reset quantity list
-	for k in pairs(itemQuantities) do itemQuantities[k] = 0 end
-	
-	-- Scan the list of auctions and find the one with the lowest bidder, using the data we have.
+		
+	-- Check for bad data quickly
+	if( currentQuery.retries <= 5 ) then
+		for i=1, shown do
+			if( not GetAuctionItemInfo("list", i) ) then
+				currentQuery.retries = currentQuery.retries + 1
+				scanDelay = scanDelay + 0.10
+
+				self:SendQuery()
+				return
+			end
+		end
+	end
+
+	-- Find the lowest auction (if any) out of this list
 	for i=1, shown do
 		local name, texture, quantity, _, _, _, minBid, _, buyoutPrice, _, _, owner = GetAuctionItemInfo("list", i)     
-		if( name and owner ) then
-			if( not auctionData[name] ) then
-				auctionData[name] = {buyout = 0, totalFound = 0, minBid = 0, link = self:GetSafeLink(GetAuctionItemLink("list", i))}
-			end
+		
+		-- If we get to this point, we've already hit the retry limit so just set a blank owner
+		owner = owner or ""
+		
+		if( not auctionData[name] ) then
+			auctionData[name] = {buyout = 0, totalFound = 0, minBid = 0, link = self:GetSafeLink(GetAuctionItemLink("list", i))}
+		end
 
-			-- Increment total for this loop
-			itemQuantities[name] = (itemQuantities[name] or 0) + quantity
+		-- Increment total for this loop
+		auctionData[name].totalFound = auctionData[name].totalFound + quantity
 
-			-- Turn it into price per an item
-			buyoutPrice = buyoutPrice / quantity
-			minBid = minBid / quantity
-
-			-- Only pull good owner data, if they are the lowest
-			if( owner ~= UnitName("player") and ( buyoutPrice < auctionData[name].buyout or not auctionData[name].owner ) and buyoutPrice > 0 ) then
+		-- Turn it into price per an item
+		buyoutPrice = buyoutPrice / quantity
+		minBid = minBid / quantity
+		
+		tempList[name] = true
+		
+		-- Only pull good owner data, if they are the lowest
+		if( ( buyoutPrice < auctionData[name].buyout or not auctionData[name].owner ) and buyoutPrice > 0 ) then
+			-- Player owns it, so list that as the lowest in another field for summary
+			if( owner == playerName ) then
+				auctionData[name].playerBuyout = buyoutPrice
+			else
 				auctionData[name].minBid = minBid
 				auctionData[name].buyout = buyoutPrice
 				auctionData[name].owner = owner
 			end
-		else
-			hasBadData = true
 		end
 	end
-	
-	-- Found a query with bad data
-	if( hasBadData and not currentQuery.forceStop ) then
-		currentQuery.retries = currentQuery.retries + 1
-		if( currentQuery.retries <= 5 ) then
-			-- :( Increase it slightly
-			scanDelay = scanDelay + 0.10
-			
-			self:SendQuery()
-			return
-		end
-			
-	-- Reset the counter since we got good owners
-	elseif( currentQuery.retries > 0 ) then
-		scanDelay = 0.20
-		currentQuery.retries = 0
-	end	
-	
-	-- Scan ran fine, so merge in the item quantities with our data
-	for name, total in pairs(itemQuantities) do
-		if( auctionData[name] ) then
-			auctionData[name].totalFound = auctionData[name].totalFound + total
-		end
-	end
+
+	-- Reset our retries and scan delay
+	scanDelay = 0.20
+	currentQuery.retries = 0
+
 	-- If it's an active scan, and we have shown as much as possible, then scan the next page
-	if( shown == NUM_AUCTION_ITEMS_PER_PAGE and not currentQuery.forceStop ) then
+	if( shown == NUM_AUCTION_ITEMS_PER_PAGE ) then
 		currentQuery.page = currentQuery.page + 1
 		self:SendQuery()
 		return
-	end	
-
-	-- Figure out what next to scan (If anything)
-	local filter
-	for k in pairs(currentQuery.list) do
-		filter = k
-		currentQuery.list[k] = nil
-		break
 	end
-
+	
+	-- We finished scanning this, so remove filters we already scanned
+	for i=#(currentQuery.list), 1, -1 do
+		if( tempList[currentQuery.list[i]] ) then
+			table.remove(currentQuery.list, i)
+		end
+	end
+	
+	-- Figure out what next to scan (If anything)
+	local filter = currentQuery.list[1]
+	
 	-- New request, so time to update the counter
 	if( filter and currentQuery.showProgress ) then
 		self.scanButton.totalScanned = self.scanButton.totalScanned + 1
 		self.scanButton:SetFormattedText(L["%d/%d items"], self.scanButton.totalScanned, self.scanButton.totalItems)
 	end
+	
 
+	-- We don't have anything else to search, but we do have something queued so wait for that first
+	if( not filter and currentQuery.queued ) then
+		return
 	-- Nothing else to search, done!
-	if( not filter or currentQuery.forceStop ) then
-		self.scanButton:SetText(L["Scan Items"])
-		self.scanButton:Enable()
-
-		currentQuery.running = nil
-		currentQuery.forceStop = nil
-		
-		-- Reset item queue
-		currentQuery.total = 0
-		for k in pairs(currentQuery.list) do currentQuery.list[k] = nil end
-
-		-- Call trigger function
-		if( currentQuery.scanType == "scan" ) then
-			self:CheckItems()
-		elseif( currentQuery.scanType == "summary" ) then
-			self.Summary:Finished()
-		elseif( currentQuery.scanType == "post" ) then
-			self:PostItems()
-		end
+	elseif( not filter or currentQuery.forceStop ) then
+		self:FinishedScanning()
 		return
 	end
-
+	
 	-- Send off onto the next page
-	currentQuery.filter = filter
 	currentQuery.page = 0
+	currentQuery.filter = filter
 	
 	self:SendQuery()
 end
@@ -1093,10 +1096,14 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 		self.scanButton:SetText(L["Scan Items"])
 
 		self.scanButton.haveCancelled = 0
-		self.scanButton.totalCancels = GetNumAuctionItems("owner")
+		self.scanButton.totalCancels = 0
 
 		for i=1, (GetNumAuctionItems("owner")) do
-			CancelAuction(i)
+			local name, _, _, _, _, _, _, _, _, _, _, _, wasSold = GetAuctionItemInfo("owner", i)   
+			if( wasSold == 0 ) then
+				self.scanButton.totalCancels = self.scanButton.totalCancels + 1
+				CancelAuction(i)
+			end
 		end
 	
 	-- Enables asshole mode! Automatically scans every 60 seconds, and posts every 30 seconds

@@ -229,7 +229,7 @@ function Summary:CompileData()
 				row.enabled = true
 				row.name = name
 				row.bid = data.minBid
-				row.buyout = data.buyout
+				row.buyout = data.playerBuyout or data.buyout
 				row.owner = data.owner
 				row.link = data.link
 				row.isParent = isParent
@@ -237,6 +237,7 @@ function Summary:CompileData()
 				row.subType = subType
 				row.quantity = data.totalFound
 				row.itemLevel = itemLevel
+				
 				
 				-- Create the category row now
 				if( row.parent and not createdCats[row.parent] ) then
@@ -384,7 +385,7 @@ function Summary:Update()
 				end
 			-- Orrr a child
 			else
-				row:SetText(summaryData.filter and summaryData.filter(data.name) or link or data.name)
+				row:SetText(" " .. (summaryData.filter and summaryData.filter(data.name) or data.name))
 
 				row.buyout:SetText(data.buyout and QA:FormatTextMoney(data.buyout, true) or "")
 				row.buyout:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, -4)
