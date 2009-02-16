@@ -189,7 +189,7 @@ function Summary:CompileData()
 		local name, _, _, itemLevel, _, itemType, subType, stackCount = GetItemInfo(data.link)
 		
 		-- Is this data we want?
-		if( name and ( not summaryData.itemType or summaryData.itemType == itemType ) and ( not summaryData.notSubType or summaryData.notSubType ~= subType ) and ( not summaryData.subType or summaryData.subType == subType ) ) then
+		if( name and data.quantity > 0 and ( not summaryData.itemType or summaryData.itemType == itemType ) and ( not summaryData.notSubType or summaryData.notSubType ~= subType ) and ( not summaryData.subType or summaryData.subType == subType ) ) then
 			local parent, isParent, parentSort, isValid
 			
 			-- Cut gems, "Runed Scarlet Ruby" will be parented to "Scarlet Ruby"
@@ -226,19 +226,20 @@ function Summary:CompileData()
 				if( not displayData[index] ) then displayData[index] = {} end
 
 				local row = displayData[index]
+				local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = QA:GetLowestAuction(name)
+				
 				row.enabled = true
 				row.name = name
-				row.bid = data.minBid
-				row.buyout = data.playerBuyout or data.buyout
-				row.owner = data.owner
+				row.quantity = data.quantity
 				row.link = data.link
+				row.buyout = lowestBuyout
+				row.bid = lowestBid
+				row.isLowest = isWhitelist or isPlayer
 				row.isParent = isParent
 				row.parent = parent
 				row.subType = subType
-				row.quantity = data.totalFound
 				row.itemLevel = itemLevel
-				
-				
+
 				-- Create the category row now
 				if( row.parent and not createdCats[row.parent] ) then
 					createdCats[row.parent] = true
@@ -311,7 +312,7 @@ function Summary:Update()
 	-- Add the index we will want in the correct order, so we can do offsets easily
 	for index, data in pairs(displayData) do
 		-- Build parent
-		if( data.enabled and data.isParent ) then
+		if( data.enabled and data.isParent and ( not QuickAuctionsDB.hideCategories[data.name] or self.hideButton.showing ) ) then
 			table.insert(rowDisplay, index)
 			
 			-- Is the button supposed to be + or -?
@@ -347,32 +348,44 @@ function Summary:Update()
 				itemName, link = GetItemInfo(data.link)
 			end
 
-			row.link = data.link
+			-- And we the lowest?!
+			local color = data.isLowest and GREEN_FONT_COLOR_CODE or RED_FONT_COLOR_CODE
 			
 			-- Displaying a parent
 			if( data.isParent ) then
-				row:SetText(link or data.name)
-				row.parent = data.name
-				row.queryFor = itemName
 				row.button.parent = data.name
-				row:ClearAllPoints()
-				row:SetPoint("TOPLEFT", self.middleFrame.scroll, "TOPLEFT", row.offsetY + 14, row.offsetX)
+				row.queryFor = itemName
+				row.parent = data.name
+				row.link = link
 
-				row.buyout:SetText(data.buyout and QA:FormatTextMoney(data.buyout, true) or "")
-				row.buyout:SetPoint("TOPRIGHT", row, "TOPRIGHT", -14, -4)
-				
 				if( data.quantity and QA.activeAuctions[data.name] and QA.activeAuctions[data.name] > 0 ) then
-					row.quantity:SetFormattedText("%d (|cff20ff20%d|r)", data.quantity, QA.activeAuctions[data.name])
+					row.quantity:SetFormattedText("%d (%s%d|r)", data.quantity, color, QA.activeAuctions[data.name])
 				elseif( data.quantity ) then
 					row.quantity:SetText(data.quantity)
 				else
 					row.quantity:SetText("")
 				end
 				
-				row.quantity:SetPoint("TOPRIGHT", row, "TOPRIGHT", -134, -4)
+				-- If it's hidden, label it as red
+				if( QuickAuctionsDB.hideCategories[data.name] ) then
+					row:SetFormattedText("%s%s|r", RED_FONT_COLOR_CODE, data.name)
+				else
+					row:SetText(link or data.name)
+				end
 
-				row.button:Show()
 				row:Show()
+
+				row.buyout:SetText(data.buyout and QA:FormatTextMoney(data.buyout, true) or "")
+				row.button:Show()
+
+				row:ClearAllPoints()
+				row:SetPoint("TOPLEFT", self.middleFrame.scroll, "TOPLEFT", row.offsetY + 14, row.offsetX)
+
+				row.buyout:ClearAllPoints()
+				row.buyout:SetPoint("TOPRIGHT", row, "TOPRIGHT", -14, -4)
+				
+				row.quantity:ClearAllPoints()
+				row.quantity:SetPoint("TOPRIGHT", row, "TOPRIGHT", -134, -4)
 
 				-- Is the button supposed to be + or -?
 				if( QuickAuctionsDB.categoryToggle[data.name] ) then
@@ -384,31 +397,42 @@ function Summary:Update()
 					row.button:SetPushedTexture("Interface\\Buttons\\UI-PlusButton-DOWN")
 					row.button:SetHighlightTexture("Interface\\Buttons\\UI-PlusButton-Hilight", "ADD")
 				end
+				
 			-- Orrr a child
 			else
 				row.queryFor = itemName
-				row:SetText(" " .. (summaryData.filter and summaryData.filter(data.name) or data.name))
-
-				row.buyout:SetText(data.buyout and QA:FormatTextMoney(data.buyout, true) or "")
-				row.buyout:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, -4)
+				row.link = link
 
 				if( data.quantity and QA.activeAuctions[data.name] and QA.activeAuctions[data.name] > 0 ) then
-					row.quantity:SetFormattedText("%d (|cff20ff20%d|r)", data.quantity, QA.activeAuctions[data.name])
+					row.quantity:SetFormattedText("%d (%s%d|r)", data.quantity, color, QA.activeAuctions[data.name])
 				elseif( data.quantity ) then
 					row.quantity:SetText(data.quantity)
 				else
 					row.quantity:SetText("")
 				end
+
+				row.buyout:SetText(data.buyout and QA:FormatTextMoney(data.buyout, true) or "")
+
+				row:SetText(" " .. (summaryData.filter and summaryData.filter(data.name) or data.name))
+				row:Show()
+
+				row.button:Hide()
+				
+				row.buyout:ClearAllPoints()
+				row.buyout:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, -4)
+
+				row.quantity:ClearAllPoints()
 				row.quantity:SetPoint("TOPRIGHT", row, "TOPRIGHT", -120, -4)
 
 				row:ClearAllPoints()
 				row:SetPoint("TOPLEFT", self.middleFrame.scroll, "TOPLEFT", row.offsetY, row.offsetX)
-
-				row.button:Hide()
-				row:Show()
 			end
 		end
 	end
+end
+
+function Summary:UpdateFilters()
+
 end
 
 function Summary:CreateGUI()
@@ -535,6 +559,26 @@ function Summary:CreateGUI()
 	-- Create the select category buttons
 	self.catButtons = {}
 	
+	local function showTooltip(self)
+		if( self.tooltip ) then
+			GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
+			GameTooltip:SetText(self.tooltip)
+			GameTooltip:Show()
+		elseif( self.link ) then
+			if( self.button:IsVisible() ) then
+				GameTooltip:SetOwner(self.button, "ANCHOR_LEFT")
+			else
+				GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+			end
+			
+			GameTooltip:SetHyperlink(self.link)
+		end
+	end
+	
+	local function hideTooltip(self)
+		GameTooltip:Hide()
+	end
+	
 	local function selectType(self)
 		for _, button in pairs(Summary.catButtons) do
 			button:UnlockHighlight()
@@ -608,6 +652,32 @@ function Summary:CreateGUI()
 	row:Disable()
 	
 	self.stopButton = row
+
+	-- Toggle for showing hidden items
+	local row = CreateFrame("Button", nil, self.leftFrame, "UIPanelButtonTemplate")
+	row:SetHeight(16)
+	row:SetWidth(130)
+	row:SetNormalFontObject(GameFontNormalSmall)
+	row:SetHighlightFontObject(GameFontHighlightSmall)
+	row:SetDisabledFontObject(GameFontDisableSmall)
+	row:SetText(L["Show hidden"])
+	row:SetScript("OnEnter", showTooltip)
+	row:SetScript("OnLeave", hideTooltip)
+	row:SetScript("OnClick", function()
+		if( row.showing ) then
+			row.showing = nil
+			row:SetText(L["Show hidden"])
+		else
+			row.showing = true
+			row:SetText(L["Hide hidden"])
+		end
+				
+		Summary:Update()
+	end)
+	row:SetPoint("TOPLEFT", self.getDataButton, "BOTTOMLEFT", 0, -8)
+	row.tooltip = L["CTRL click item categories to remove them from the list completely, CTRL clicking again will show them."]
+	
+	self.hideButton = row
 	
 	-- Rows
 	local function toggleCategory(self)
@@ -617,28 +687,17 @@ function Summary:CreateGUI()
 		end
 	end
 	
-	local function showTooltip(self)
-		if( self.link ) then
-			if( self.button:IsVisible() ) then
-				GameTooltip:SetOwner(self.button, "ANCHOR_LEFT")
-			else
-				GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-			end
-			
-			GameTooltip:SetHyperlink(self.link)
-		end
-	end
-	
-	local function hideTooltip(self)
-		GameTooltip:Hide()
-	end
-	
-	local function sendQuery(self)
-		if( IsAltKeyDown() and CanSendAuctionQuery() and self.queryFor ) then
+	local function rowClicked(self)
+		if( IsControlKeyDown() and self.parent ) then
+			QuickAuctionsDB.hideCategories[self.parent] = not QuickAuctionsDB.hideCategories[self.parent]
+			Summary:Update()
+		elseif( IsAltKeyDown() and CanSendAuctionQuery() and self.queryFor ) then
 			AuctionFrameBrowse.page = 0
 			BrowseName:SetText(self.queryFor)
 			
 			QueryAuctionItems(self.queryFor, nil, nil, 0, 0, 0, 0, 0, 0)
+		else
+			toggleCategory(self)
 		end
 	end
 	
@@ -652,12 +711,11 @@ function Summary:CreateGUI()
 		row:SetNormalFontObject(GameFontHighlightSmall)
 		row:SetText("*")
 		row:GetFontString():SetPoint("LEFT", row, "LEFT", 0, 0)
-		row:SetScript("OnClick", toggleCategory)
 		row:SetPushedTextOffset(0, 0)
 		--row:SetScript("OnClick", toggleParent)
 		row:SetScript("OnEnter", showTooltip)
 		row:SetScript("OnLeave", hideTooltip)
-		row:SetScript("OnClick", sendQuery)
+		row:SetScript("OnClick", rowClicked)
 		row.offsetY = 6
 		
 		row.buyout = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
