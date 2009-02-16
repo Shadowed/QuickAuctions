@@ -592,7 +592,7 @@ function QA:CheckItems()
 end
 
 -- Do a delay before scanning the auctions so it has time to load all of the owner information
-local scanDelay = 0.50
+local scanDelay = 1.0
 local scanElapsed = 0
 local scanFrame = CreateFrame("Frame")
 scanFrame:Hide()

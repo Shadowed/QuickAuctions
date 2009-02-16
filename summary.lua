@@ -353,6 +353,7 @@ function Summary:Update()
 			if( data.isParent ) then
 				row:SetText(link or data.name)
 				row.parent = data.name
+				row.queryFor = itemName
 				row.button.parent = data.name
 				row:ClearAllPoints()
 				row:SetPoint("TOPLEFT", self.middleFrame.scroll, "TOPLEFT", row.offsetY + 14, row.offsetX)
@@ -385,6 +386,7 @@ function Summary:Update()
 				end
 			-- Orrr a child
 			else
+				row.queryFor = itemName
 				row:SetText(" " .. (summaryData.filter and summaryData.filter(data.name) or data.name))
 
 				row.buyout:SetText(data.buyout and QA:FormatTextMoney(data.buyout, true) or "")
@@ -630,7 +632,16 @@ function Summary:CreateGUI()
 	local function hideTooltip(self)
 		GameTooltip:Hide()
 	end
-		
+	
+	local function sendQuery(self)
+		if( IsAltKeyDown() and CanSendAuctionQuery() and self.queryFor ) then
+			AuctionFrameBrowse.page = 0
+			BrowseName:SetText(self.queryFor)
+			
+			QueryAuctionItems(self.queryFor, nil, nil, 0, 0, 0, 0, 0, 0)
+		end
+	end
+	
 	self.rows = {}
 		
 	local offset = 0
@@ -646,6 +657,7 @@ function Summary:CreateGUI()
 		--row:SetScript("OnClick", toggleParent)
 		row:SetScript("OnEnter", showTooltip)
 		row:SetScript("OnLeave", hideTooltip)
+		row:SetScript("OnClick", sendQuery)
 		row.offsetY = 6
 		
 		row.buyout = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
