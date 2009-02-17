@@ -665,6 +665,11 @@ function QA:AddAuctionRecord(name, link, owner, quantity, bid, buyout)
 	
 	-- Update total of this item
 	auctionData[name].quantity = auctionData[name].quantity + quantity
+	
+	-- Don't add this data, just add the quantity if it has no buyout
+	if( buyout <= 0 ) then
+		return
+	end
 
 	-- Not only the player has posted this anymore :(
 	local isPlayer = owner == playerName
@@ -1051,7 +1056,7 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 
 	-- Post cap
 	elseif( cmd == "cap" and arg ) then
-		parseVariableOption(arg, "postCap", function(val) return tonumber(val) end, L["Default post cap for auctions set to %s."], L["Set post cap for %s to %s."], L["Removed post cap on %s."])
+		parseVariableOption(arg, "postCap", false, L["Default post cap for auctions set to %s."], L["Set post cap for %s to %s."], L["Removed post cap on %s."])
 	
 	-- Post time
 	elseif( cmd == "time" and arg ) then
