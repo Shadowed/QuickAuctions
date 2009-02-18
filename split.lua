@@ -12,7 +12,6 @@ function QA:StartSplitting(stacks, link, quantity)
 	splitLink = link
 	splitQuantity = quantity
 	
-	self:Log("Going to be splitting into %d (%d) new stacks, of %s (%s) x %d.", newStacks or -1, stacks or -1, (GetItemInfo(splitLink)), splitLink, splitQuantity)
 	self:ProcessSplitQueue()
 end
 
@@ -60,7 +59,6 @@ function QA:ProcessSplitQueue()
 					return
 				end
 
-				self:Log("Splitting item %s x %d from bag %d/slot %d, moving it into bag %d/slot %d.", (GetItemInfo(link)), splitQuantity, bag, slot, freeBag, freeSlot)
 
 				self.frame:RegisterEvent("BAG_UPDATE")
 				SplitContainerItem(bag, slot, splitQuantity)
@@ -69,9 +67,7 @@ function QA:ProcessSplitQueue()
 			end
 		end
 	end
-		
-	self:Log("Bad stack size found. We still need to split %s into %d new stacks of %d.", (GetItemInfo(splitLink)), newStacks, splitQuantity)
-	
+			
 	newStacks = 0
 	splitLink = nil
 
@@ -98,8 +94,6 @@ local function checkBags(self, elapsed)
 			if( not foundSlots[bag .. slot] and link == splitLink and itemCount == splitQuantity ) then
 				foundSlots[bag .. slot] = true
 				newStacks = newStacks - 1
-
-				QA:Log("Found valid stack, %s in bag %d/slot %d, quantity %d.", (GetItemInfo(link)), bag, slot, itemCount)
 			end
 		end
 	end

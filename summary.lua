@@ -3,7 +3,7 @@ QA.Summary = {}
 local Summary = QA.Summary
 local L = QuickAuctionsLocals
 local gettingData, selectedSummary
-local displayData, createdCats, rowDisplay = {}, {}, {}
+local displayData, createdCats, rowDisplay, usedLinks = {}, {}, {}, {}
 local MAX_SUMMARY_ROWS = 24
 local ROW_HEIGHT = 20
 
@@ -171,88 +171,118 @@ function Summary:Finished()
 	self.stopButton:Disable()
 end
 
+-- Update specific item data
+local index = 0
+function Summary:UpdateItemData(summaryData, name, quantity, link, itemLevel, itemType, subType, stackCount)
+	local parent, isParent, parentSort, isValid
+
+	-- Cut gems, "Runed Scarlet Ruby" will be parented to "Scarlet Ruby"
+	if( summaryData.groupedBy == "parent" ) then
+		isValid = true
+		parent = nil
+
+		-- Stacks beyond 1, so it has to be a parent
+		if( stackCount > 1 ) then
+			isParent = true
+		end
+
+	-- Scroll of Enchant Cloak - Speed, will set the parent to "Cloak"
+	elseif( summaryData.groupedBy == "match" ) then
+		parent = summaryData.match(name, itemType, subType)
+		isValid = parent
+
+	-- Sub type, like Glyphs so grouped by class
+	elseif( summaryData.groupedBy == "subType" ) then
+		parent = subType
+		isValid = true
+
+	-- Grouped by item level
+	elseif( summaryData.groupedBy == "itemLevel" ) then
+		parent = tostring(itemLevel)
+		parentSort = itemLevel
+		isValid = true
+	end
+	
+	-- Make sure it's the item we care about, for example Scrolls of Enchant category includes spell threads and such when we JUST want the scrolls
+	if( not isValid ) then
+		return
+	end
+
+	index = index + 1
+	if( not displayData[index] ) then displayData[index] = {} end
+
+	local row = displayData[index]
+	local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = QA:GetLowestAuction(name)
+
+	row.enabled = true
+	row.name = name
+	row.quantity = quantity
+	row.link = link
+	row.buyout = lowestBuyout or 0
+	row.bid = lowestBid or 0
+	row.isLowest = isWhitelist or isPlayer
+	row.isParent = isParent
+	row.parent = parent
+	row.subType = subType
+	row.itemLevel = itemLevel
+
+	-- Create the category row now
+	if( row.parent and not createdCats[row.parent] ) then
+		createdCats[row.parent] = true
+
+		index = index + 1
+		if( not displayData[index] ) then displayData[index] = {} end
+		local parentRow = displayData[index]
+		parentRow.enabled = true
+		parentRow.isParent = true
+		parentRow.itemLevel = itemLevel
+		parentRow.name = row.parent
+		parentRow.sortID = parentSort
+	end
+end
+
 -- Parse it out into what we need
 function Summary:CompileData()
 	if( not selectedSummary ) then
 		return
 	end
-		
+	
+	-- Create our item list if it's not been
+	if( not QuickAuctionsDB.summaryItems[selectedSummary] ) then
+		QuickAuctionsDB.summaryItems[selectedSummary] = {}
+	end
+	
 	local summaryData = summaryCats[selectedSummary]
-	local index = 0
-
+	index = 0
+	
 	-- Reset
 	for _, v in pairs(displayData) do v.enabled = nil; v.isParent = nil; v.parent = nil; v.bid = nil; v.buyout = nil; v.owner = nil; v.link = nil; v.sortID = nil; v.quantity = nil; end
 	for k in pairs(createdCats) do createdCats[k] = nil end
-	
+	for k in pairs(usedLinks) do usedLinks[k] = nil end
+			
 	-- Make sure we got data we want
 	for name, data in pairs(QA.auctionData) do
 		local name, _, _, itemLevel, _, itemType, subType, stackCount = GetItemInfo(data.link)
 		
 		-- Is this data we want?
 		if( name and data.quantity > 0 and ( not summaryData.itemType or summaryData.itemType == itemType ) and ( not summaryData.notSubType or summaryData.notSubType ~= subType ) and ( not summaryData.subType or summaryData.subType == subType ) ) then
-			local parent, isParent, parentSort, isValid
+			usedLinks[data.link] = true
+			QuickAuctionsDB.summaryItems[selectedSummary][data.link] = true
 			
-			-- Cut gems, "Runed Scarlet Ruby" will be parented to "Scarlet Ruby"
-			if( summaryData.groupedBy == "parent" ) then
-				isValid = true
-				parent = nil
-				
-				-- Stacks beyond 1, so it has to be a parent
-				if( stackCount > 1 ) then
-					isParent = true
-				end
-			
-			-- Scroll of Enchant Cloak - Speed, will set the parent to "Cloak"
-			elseif( summaryData.groupedBy == "match" ) then
-				parent = summaryData.match(name, itemType, subType)
-				isValid = parent
-				
-			-- Sub type, like Glyphs so grouped by class
-			elseif( summaryData.groupedBy == "subType" ) then
-				parent = subType
-				isValid = true
-			
-			-- Grouped by item level
-			elseif( summaryData.groupedBy == "itemLevel" ) then
-				parent = tostring(itemLevel)
-				parentSort = itemLevel
-				isValid = true
-			end
-						
-			-- Make sure it's the item we care about, for example Scrolls of Enchant category includes spell threads and such
-			-- when we JUST want the scrolls
-			if( isValid ) then
-				index = index + 1
-				if( not displayData[index] ) then displayData[index] = {} end
+			self:UpdateItemData(summaryData, name, data.quantity, data.link, itemLevel, itemType, subType, stackCount)
+		end
+	end
+		
+	-- Add our recorded list of items to it now in case it's not in the auction house
+	for link in pairs(QuickAuctionsDB.summaryItems[selectedSummary]) do
+		if( not usedLinks[link] ) then
+			local name, _, _, itemLevel, _, itemType, subType, stackCount = GetItemInfo(link)
 
-				local row = displayData[index]
-				local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = QA:GetLowestAuction(name)
-				
-				row.enabled = true
-				row.name = name
-				row.quantity = data.quantity
-				row.link = data.link
-				row.buyout = lowestBuyout
-				row.bid = lowestBid
-				row.isLowest = isWhitelist or isPlayer
-				row.isParent = isParent
-				row.parent = parent
-				row.subType = subType
-				row.itemLevel = itemLevel
-
-				-- Create the category row now
-				if( row.parent and not createdCats[row.parent] ) then
-					createdCats[row.parent] = true
-
-					index = index + 1
-					if( not displayData[index] ) then displayData[index] = {} end
-					local parentRow = displayData[index]
-					parentRow.enabled = true
-					parentRow.isParent = true
-					parentRow.itemLevel = itemLevel
-					parentRow.name = row.parent
-					parentRow.sortID = parentSort
-				end
+			-- Make sure it's data we want, if it's not something changed and we should remove it from our summary
+			if( name and ( not summaryData.itemType or summaryData.itemType == itemType ) and ( not summaryData.notSubType or summaryData.notSubType ~= subType ) and ( not summaryData.subType or summaryData.subType == subType ) ) then
+				self:UpdateItemData(summaryData, name, 0, link, itemLevel, itemType, subType, stackCount)
+			else
+				QuickAuctionsDB.summaryItems[selectedSummary][link] = nil
 			end
 		end
 	end
