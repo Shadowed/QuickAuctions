@@ -186,8 +186,13 @@ function QA:SetupAuctionQuery(scanType, showProgress, filter, page, classIndex, 
 	currentQuery.showProgress = showProgress
 	currentQuery.filter = filter
 	currentQuery.retries = 0
-
-	self:FlagDataReset()
+	
+	if( scanType == "summary" ) then
+		self:FlagDataReset()
+	else
+		self:ResetAuctionData()
+	end
+	
 	self:SendQuery()
 end
 
@@ -621,6 +626,22 @@ function QA:FinishedScanning()
 end
 
 -- Auction data management
+function QA:ResetAuctionData()
+	for name, data in pairs(auctionData) do
+		data.quantity = 0
+		data.onlyPlayer = true
+		data.reset = nil
+		
+		for _, record in pairs(data.records) do
+			record.owner = nil
+			record.used = nil
+			record.quantity = 0
+			record.buyout = 0
+			record.bid = 0
+		end
+	end
+end
+
 function QA:FlagDataReset()
 	for name, data in pairs(auctionData) do
 		data.reset = true
