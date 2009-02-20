@@ -15,7 +15,7 @@ function QA:OnInitialize()
 	defaults = {
 		smartUndercut = true,
 		smartCancel = true,
-		logging = false,
+		saveCraft = false,
 		bidpercent = 1.0,
 		itemTypes = {},
 		itemList = {},
@@ -28,6 +28,7 @@ function QA:OnInitialize()
 		summaryItems = {},
 		categoryToggle = {},
 		hideCategories = {},
+		crafts = {},
 	}
 	
 	-- Upgrade DB format
@@ -186,7 +187,7 @@ function QA:SetupAuctionQuery(scanType, showProgress, filter, page, classIndex, 
 	currentQuery.filter = filter
 	currentQuery.retries = 0
 
-	self:ResetAuctionData()
+	self:FlagDataReset()
 	self:SendQuery()
 end
 
@@ -574,7 +575,6 @@ function QA:CheckItems()
 	
 	if( self.scanButton.totalCancels == 0 ) then
 		self:Print(L["Nothing to cancel."])
-		self.scanButton:Enable()
 	end
 end
 
@@ -621,25 +621,30 @@ function QA:FinishedScanning()
 end
 
 -- Auction data management
-function QA:ResetAuctionData()
+function QA:FlagDataReset()
 	for name, data in pairs(auctionData) do
-		data.quantity = 0
-		data.onlyPlayer = true
+		data.reset = true
+	end
+end
+
+-- Add a new record
+function QA:AddAuctionRecord(name, link, owner, quantity, bid, buyout)
+	-- No data yet, create it
+	if( not auctionData[name] ) then
+		auctionData[name] = {quantity = 0, link = link, onlyPlayer = true, records = {}}
+	-- Flagged for reset once we see it
+	elseif( auctionData[name].reset ) then
+		auctionData[name].quantity = 0
+		auctionData[name].onlyPlayer = true
+		auctionData[name].reset = nil
 		
-		for _, record in pairs(data.records) do
+		for _, record in pairs(auctionData[name].records) do
 			record.owner = nil
 			record.used = nil
 			record.quantity = 0
 			record.buyout = 0
 			record.bid = 0
 		end
-	end
-end
-
--- Add a new record
-function QA:AddAuctionRecord(name, link, owner, quantity, bid, buyout)
-	if( not auctionData[name] ) then
-		auctionData[name] = {quantity = 0, link = link, onlyPlayer = true, records = {}}
 	end
 	
 	-- Update total of this item
@@ -717,7 +722,7 @@ function QA:GetLowestAuction(name)
 			owner = record.owner
 		end
 	end
-	
+
 	-- Now that we know the lowest, find out if this price "level" is a friendly person
 	-- the reason we do it like this, is so if Apple posts an item at 50g, Orange posts one at 50g
 	-- but you only have Apple on your white list, it'll undercut it because Orange posted it as well
@@ -727,6 +732,14 @@ function QA:GetLowestAuction(name)
 			if( not record.isPlayer ) then
 				if( not QuickAuctionsDB.whitelist[record.owner] ) then
 					isWhitelist = nil
+				end
+				
+				-- If the lowest we found was from the player, but someone else is matching it (and they aren't on our white list)
+				-- then we swap the owner to that person
+				if( owner == playerName ) then
+					buyout = record.buyout
+					bid = record.bid
+					owner = record.owner
 				end
 
 				isPlayer = nil
@@ -1179,6 +1192,17 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 			end
 		end
 	
+	-- Trade skill saving
+	elseif( cmd == "tradeskill" ) then
+		QuickAuctionsDB.saveCraft = not QuickAuctionsDB.saveCraft
+		
+		if( QuickAuctionsDB.saveCraft ) then
+			self:Print(L["Trade skill saving is now enabled."])
+		else
+			self:Print(L["Trade skill saving is now disabled."])
+			QuickAuctionsDB.crafts = {}
+		end
+	
 	-- Enables asshole mode! Automatically scans every 60 seconds, and posts every 30 seconds
 	elseif( cmd == "super" ) then
 		if( self.superFrame ) then
@@ -1222,6 +1246,7 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 		self:Print(L["Enabled super auctioning!"])
 	else
 		self:Print(L["Slash commands"])
+		self:Echo(L["/qa tradeskill - Saves what items you can create from various trade skills and displays them in the summary."])
 		self:Echo(L["/qa smartcut - Toggles smart undercutting (Going from 1.9g -> 1g first instead of 1.9g - undercut amount."])
 		self:Echo(L["/qa smartcancel - Toggles smart canceling, will not cancel if the item is below the threshold, or will cancel if you can make more relisting it."])
 		self:Echo(L["/qa bidpercent <0-100> - Percentage of the buyout that the bid should be, 200g buyout and this set at 90 will put the bid at 180g."])

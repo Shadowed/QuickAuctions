@@ -2,80 +2,13 @@ QA.Summary = {}
 
 local Summary = QA.Summary
 local L = QuickAuctionsLocals
-local gettingData, selectedSummary
+local gettingData, selectedSummary, summaryCats
 local displayData, createdCats, rowDisplay, usedLinks = {}, {}, {}, {}
 local MAX_SUMMARY_ROWS = 24
 local ROW_HEIGHT = 20
 
 Summary.displayData = displayData
 
-local summaryCats = {
-	["Gems"] = {
-		text = L["Gems"],
-		itemType = "Gem",
-		notSubType = "Simple",
-		groupedBy = "parent",
-		showCatPrice = true,
-		auctionClass = L["Gem"],
-	}, -- Oh Blizzard, I love you and your fucking stupid inconsistency like "Bracer" vs "Bracers" for scrolls
-	["Scrolls"] = {
-		text = L["Enchant scrolls"],
-		subType = "Item Enhancement",
-		groupedBy = "match",
-		filter = function(name) return string.match(name, L["Scroll of Enchant (.+)"]) end,
-		match = function(name, itemType, subType) local type = string.match(name, L["Scroll of Enchant (.+) %- .+"]) if( type == L["Bracer"] ) then return L["Bracers"] end return type end,
-		auctionClass = L["Consumable"],
-		auctionSubClass = L["Item Enhancement"],
-	},
-	["Flasks"] = {
-		text = L["Flasks"],
-		subType = "Flask",
-		groupedBy = "itemLevel",
-		auctionClass = L["Consumable"],
-		auctionSubClass = L["Flask"],
-	},
-	["Food"] = {
-		text = L["Food"],
-		subType = "Food & Drink",
-		groupedBy = "itemLevel",
-		auctionClass = L["Consumable"],
-		auctionSubClass = L["Food & Drink"],
-	},
-	["Elixirs"] = {
-		text = L["Elixirs"],
-		subType = "Elixir",
-		groupedBy = "itemLevel",
-		auctionClass = L["Consumable"],
-		auctionSubClass = L["Elixir"],
-	},
-	["Elemental"] = {
-		text = L["Elemental"],
-		subType = "Elemental",
-		groupedBy = "itemLevel",
-		auctionClass = L["Trade Goods"],
-		auctionSubClass = L["Elemental"],
-	},
-	["Herbs"] = {
-		text = L["Herbs"],
-		subType = "Herb",
-		groupedBy = "itemLevel",
-		auctionClass = L["Trade Goods"],
-		auctionSubClass = L["Herb"],
-	},
-	["Enchanting"] = {
-		text = L["Enchant materials"],
-		itemType = L["Trade Goods"],
-		groupedBy = "itemLevel",
-		auctionClass = L["Trade Goods"],
-		auctionSubClass = L["Enchanting"],
-	},
-	["Glyphs"] = {
-		text = L["Glyphs"],
-		itemType = "Glyph",
-		groupedBy = "subType",
-		auctionClass = L["Glyph"],
-	},
-}
 
 -- Find the ID of the auction categories
 function Summary:GetCategoryIndex(searchFor)
@@ -378,23 +311,44 @@ function Summary:Update()
 				itemName, link = GetItemInfo(data.link)
 			end
 
-			-- And we the lowest?!
-			local color = data.isLowest and GREEN_FONT_COLOR_CODE or RED_FONT_COLOR_CODE
-			
+			if( data.quantity and data.quantity == 0 ) then
+				row.quantity:SetText(data.quantity)
+			elseif( data.quantity ) then
+				local inventory = GetItemCount(data.link) > 0 and string.format("(%d)", GetItemCount(data.link)) or ""
+				local active = ""
+				if( QA.activeAuctions[data.name] and QA.activeAuctions[data.name] > 0 ) then
+					local itemCategory = QA:GetItemCategory(link)
+					local postCap = QuickAuctionsDB.postCap[itemName] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default
+					local color = data.isLowest and GREEN_FONT_COLOR_CODE or RED_FONT_COLOR_CODE
+					
+					active = string.format("[%s%d/%d|r]", color, QA.activeAuctions[data.name], postCap)
+				end
+				
+				if( active ~= "" or inventory ~= "" ) then
+					row.quantity:SetFormattedText("%s %d %s", active, inventory, data.quantity)
+				elseif( data.quantity > 0 ) then
+					row.quantity:SetText(data.quantity)
+				else
+					row.quantity:SetText("")				
+				end
+			else
+				row.quantity:SetText("")
+			end
+
+			if( data.buyout and data.buyout > 0 ) then
+				row.buyout:SetText(data.buyout and QA:FormatTextMoney(data.buyout, true) or "")
+			elseif( data.buyout and data.buyout == 0 ) then
+				row.buyout:SetText("----")
+			else
+				row.buyout:SetText("")
+			end
+						
 			-- Displaying a parent
 			if( data.isParent ) then
 				row.button.parent = data.name
 				row.queryFor = itemName
 				row.parent = data.name
 				row.link = link
-
-				if( data.quantity and QA.activeAuctions[data.name] and QA.activeAuctions[data.name] > 0 ) then
-					row.quantity:SetFormattedText("%d (%s%d|r)", data.quantity, color, QA.activeAuctions[data.name])
-				elseif( data.quantity ) then
-					row.quantity:SetText(data.quantity)
-				else
-					row.quantity:SetText("")
-				end
 				
 				-- If it's hidden, label it as red
 				if( QuickAuctionsDB.hideCategories[data.name] ) then
@@ -404,8 +358,6 @@ function Summary:Update()
 				end
 
 				row:Show()
-
-				row.buyout:SetText(data.buyout and QA:FormatTextMoney(data.buyout, true) or "")
 				row.button:Show()
 
 				row:ClearAllPoints()
@@ -433,19 +385,13 @@ function Summary:Update()
 				row.queryFor = itemName
 				row.link = link
 
-				if( data.quantity and QA.activeAuctions[data.name] and QA.activeAuctions[data.name] > 0 ) then
-					row.quantity:SetFormattedText("%d (%s%d|r)", data.quantity, color, QA.activeAuctions[data.name])
-				elseif( data.quantity ) then
-					row.quantity:SetText(data.quantity)
-				else
-					row.quantity:SetText("")
+				local createTag = ""
+				if( summaryData.canCraft and not summaryData.canCraft(data.link, itemName) ) then
+					createTag = string.format("|T%s:18:18:-1:0|t", READY_CHECK_NOT_READY_TEXTURE)
 				end
 
-				row.buyout:SetText(data.buyout and QA:FormatTextMoney(data.buyout, true) or "")
-
-				row:SetText(" " .. (summaryData.filter and summaryData.filter(data.name) or data.name))
+				row:SetFormattedText("%s%s", createTag, (summaryData.filter and summaryData.filter(data.name) or data.name))
 				row:Show()
-
 				row.button:Hide()
 				
 				row.buyout:ClearAllPoints()
@@ -461,14 +407,13 @@ function Summary:Update()
 	end
 end
 
-function Summary:UpdateFilters()
-
-end
-
 function Summary:CreateGUI()
 	if( self.frame ) then
 		return
 	end
+	
+	-- Create our category info quickly
+	self:CreateCategoryData()
 	
 	self.frame = CreateFrame("Frame", "QASummaryGUI", UIParent)
 	self.frame:SetWidth(550)
@@ -777,3 +722,89 @@ function Summary:CreateGUI()
 	-- Positioning
 	self.frame:SetPoint("CENTER")
 end	
+
+function Summary:CreateCategoryData()
+	if( summaryCats ) then
+		return
+	end
+	
+	summaryCats = {
+		["Gems"] = {
+			text = L["Gems"],
+			itemType = "Gem",
+			canCraft = function(link, name) 
+				if( not QuickAuctionsDB.crafts.Jewelcrafter ) then return true end
+				if( string.match(name, L["Perfect (.+)"]) ) then 
+					return true
+				else 
+					return QuickAuctionsDB.crafts[link]
+				end
+			end,
+			notSubType = "Simple",
+			groupedBy = "parent",
+			showCatPrice = true,
+			auctionClass = L["Gem"],
+		}, -- Oh Blizzard, I love you and your fucking stupid inconsistency like "Bracer" vs "Bracers" for scrolls
+		["Scrolls"] = {
+			text = L["Enchant scrolls"],
+			subType = "Item Enhancement",
+			groupedBy = "match",
+			filter = function(name) return string.match(name, L["Scroll of Enchant (.+)"]) end,
+			match = function(name, itemType, subType) local type = string.match(name, L["Scroll of Enchant (.+) %- .+"]) if( type == L["Bracer"] ) then return L["Bracers"] end return type end,
+			auctionClass = L["Consumable"],
+			auctionSubClass = L["Item Enhancement"],
+		},
+		["Flasks"] = {
+			text = L["Flasks"],
+			subType = "Flask",
+			canCraft = function(link, name) if( not QuickAuctionsDB.crafts.Alchemy ) then return true else return QuickAuctionsDB.crafts[link] end end,
+			groupedBy = "itemLevel",
+			auctionClass = L["Consumable"],
+			auctionSubClass = L["Flask"],
+		},
+		["Elixirs"] = {
+			text = L["Elixirs"],
+			canCraft = function(link, name) if( not QuickAuctionsDB.crafts.Alchemy ) then return true else return QuickAuctionsDB.crafts[link] end end,
+			subType = "Elixir",
+			groupedBy = "itemLevel",
+			auctionClass = L["Consumable"],
+			auctionSubClass = L["Elixir"],
+		},
+		["Food"] = {
+			text = L["Food"],
+			canCraft = function(link, name) if( not QuickAuctionsDB.crafts.Cook ) then return true else return QuickAuctionsDB.crafts[link] end end,
+			subType = "Food & Drink",
+			groupedBy = "itemLevel",
+			auctionClass = L["Consumable"],
+			auctionSubClass = L["Food & Drink"],
+		},
+		["Elemental"] = {
+			text = L["Elemental"],
+			subType = "Elemental",
+			groupedBy = "itemLevel",
+			auctionClass = L["Trade Goods"],
+			auctionSubClass = L["Elemental"],
+		},
+		["Herbs"] = {
+			text = L["Herbs"],
+			subType = "Herb",
+			groupedBy = "itemLevel",
+			auctionClass = L["Trade Goods"],
+			auctionSubClass = L["Herb"],
+		},
+		["Enchanting"] = {
+			text = L["Enchant materials"],
+			itemType = L["Trade Goods"],
+			groupedBy = "itemLevel",
+			auctionClass = L["Trade Goods"],
+			auctionSubClass = L["Enchanting"],
+		},
+		["Glyphs"] = {
+			text = L["Glyphs"],
+			itemType = "Glyph",
+			canCraft = function(link, name) if( not QuickAuctionsDB.crafts.Scribe ) then return true else return QuickAuctionsDB.crafts[link] end end,
+			groupedBy = "subType",
+			auctionClass = L["Glyph"],
+		},
+	}
+end

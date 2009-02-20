@@ -46,6 +46,9 @@ QuickAuctionsLocals = {
 
 	["Smart undercutting is now disabled."] = "Smart undercutting is now disabled.",
 	["Smart undercutting is now enabled."] = "Smart undercutting is now enabled.",
+	
+	["Trade skill saving is now disabled."] = "Trade skill saving is now disabled.",
+	["Trade skill saving is now enabled."] = "Trade skill saving is now enabled.",
 
 	["Bids will now be %d%% of the buyout price for all items."] = "Bids will now be %d%% of the buyout price for all items.",
 	
@@ -78,6 +81,7 @@ QuickAuctionsLocals = {
 	["Removed post time for %s."] = "Removed post time for %s.",
 	
 	["Slash commands"] = "Slash commands",
+	["/qa tradeskill - Saves what items you can create from various trade skills and displays them in the summary."] = "/qa tradeskill - Saves what items you can create from various trade skills and displays them in the summary.",
 	["/qa smartcut - Toggles smart undercutting (Going from 1.9g -> 1g first instead of 1.9g - undercut amount."] = "/qa smartcut - Toggles smart undercutting (Going from 1.9g -> 1g first instead of 1.9g - undercut amount.",
 	["/qa smartcancel - Toggles smart canceling, will not cancel if the item is below the threshold, or will cancel if you can make more relisting it."] = "/qa smartcancel - Toggles smart canceling, will not cancel if the item is below the threshold, or will cancel if you can make more relisting it.",
 	["/qa bidpercent <0-100> - Percentage of the buyout that the bid should be, 200g buyout and this set at 90 will put the bid at 180g."] = "/qa bidpercent <0-100> - Percentage of the buyout that the bid should be, 200g buyout and this set at 90 will put the bid at 180g.",
@@ -137,6 +141,7 @@ QuickAuctionsLocals = {
 	
 	["Scroll of Enchant (.+) %- .+"] = "Scroll of Enchant (.+) %- .+",
 	["Scroll of Enchant (.+)"] = "Scroll of Enchant (.+)",
+	["Perfect (.+)"] = "Perfect (.+)",
 
 	["Cannot find class or sub class index, localization issue perhaps?"] = "Cannot find class or sub class index, localization issue perhaps?",
 }

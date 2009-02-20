@@ -9,4 +9,5 @@ localization.enUS.lua
 
 QuickAuctions.lua
 split.lua
+tradeskills.lua
 summary.lua
