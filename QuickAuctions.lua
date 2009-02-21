@@ -31,16 +31,6 @@ function QA:OnInitialize()
 		crafts = {},
 	}
 	
-	-- Upgrade DB format
-	if( QuickAuctionsDB and not QuickAuctionsDB.revision ) then
-		QuickAuctionsDB = nil
-		self:Print(L["DB format upgraded, reset configuration."])
-	elseif( QuickAuctionsDB.auctionTime ) then
-		QuickAuctionsDB.auctionTime = nil
-	elseif( QuickAuctionsDB.logs ) then
-		QuickAuctionsDB.logs =  nil
-	end
-	
 	-- Load defaults in
 	QuickAuctionsDB = QuickAuctionsDB or {}
 	for key, value in pairs(defaults) do
