@@ -78,12 +78,12 @@ function QA:AHInitialize()
 			QA.scanButton:SetFormattedText(L["%d/%d items"], QA.scanButton.haveCancelled, QA.scanButton.totalCancels)
 			
 			if( QA.scanButton.haveCancelled >= QA.scanButton.totalCancels ) then
-				QA.scanButton.totalCancels = 0
-				QA.scanButton.haveCanceled = 0
-				
-				QA:Print("Done cancelling auctions.")
+				QA:Print(string.format(L["Done cancelling %d auctions.", QA.scanButton.totalCancels))
 				QA.scanButton:SetText(L["Scan Items"])
 				QA.scanButton:Enable()
+
+				QA.scanButton.totalCancels = 0
+				QA.scanButton.haveCanceled = 0
 			end
 			return true
 
@@ -96,13 +96,13 @@ function QA:AHInitialize()
 			end
 			
 			if( QA.postButton.havePosted >= QA.postButton.totalPosts ) then
-				QA.postButton.totalPosts = 0
-				QA.postButton.havePosted = 0
-				
-				QA:Print("Done posting auctions.")
+				QA:Print(string.format(L["Done posting %d auctions."]))
 
 				QA.postButton:SetText(L["Post Items"])
 				QA.postButton:Enable()
+
+				QA.postButton.totalPosts = 0
+				QA.postButton.havePosted = 0
 			else
 				-- This one went throughdo next
 				if( totalPostsSet > 0 ) then

@@ -9,8 +9,8 @@ QuickAuctionsLocals = {
 	["Scan posted auctions to see if any were undercut."] = "Scan posted auctions to see if any were undercut.",
 	["Post items from your inventory into the auction house."] = "Post items from your inventory into the auction house.",
 
-	["Done cancelling auctions."] = "Done cancelling auctions.",
-	["Done posting auctions."] = "Done posting auctions.",
+	["Done cancelling %d auctions."] = "Done cancelling %d auctions.",
+	["Done posting %d auctions."] = "Done posting %d auctions.",
 
 	["Scan Items"] = "Scan Items",
 	["Post Items"] = "Post Items",
