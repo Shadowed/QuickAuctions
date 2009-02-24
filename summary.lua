@@ -315,13 +315,15 @@ function Summary:Update()
 				row.quantity:SetText(data.quantity)
 			elseif( data.quantity ) then
 				local inventory = GetItemCount(data.link) > 0 and string.format("(%d) ", GetItemCount(data.link)) or ""
+				local activeNumber = (QA.activeAuctions[data.name] or 0) + QA:GetAltAuctionTotals(data.name)
 				local active = ""
-				if( QA.activeAuctions[data.name] and QA.activeAuctions[data.name] > 0 ) then
+				
+				if( activeNumber > 0 ) then
 					local itemCategory = QA:GetItemCategory(link)
 					local postCap = QuickAuctionsDB.postCap[itemName] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default
 					local color = data.isLowest and GREEN_FONT_COLOR_CODE or RED_FONT_COLOR_CODE
 					
-					active = string.format("[%s%d/%d|r] ", color, QA.activeAuctions[data.name], postCap)
+					active = string.format("[%s%d/%d|r] ", color, activeNumber, postCap)
 				end
 				
 				if( active ~= "" or inventory ~= "" ) then

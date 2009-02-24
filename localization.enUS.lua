@@ -35,6 +35,8 @@ QuickAuctionsLocals = {
 	["Invalid item type toggle entered."] = "Invalid item type toggle entered.",
 
 	["Added %s to the whitelist."] = "Added %s to the whitelist.",
+	["Added %s to the alt list."] = "Added %s to the alt list.",
+
 	["Smart cancelling is now enabled."] = "Smart cancelling is now enabled.",
 	["Smart cancelling is now disabled."] = "Smart cancelling is now disabled.",
 	
@@ -72,6 +74,7 @@ QuickAuctionsLocals = {
 	["Set fall back for %s to %s."] = "Set fall back for %s to %s.", 
 	["Set post time for %s to %s."] = "Set post time for %s to %s.",
 	
+	["Removed %s from the alt list."] = "Removed %s from the alt list.",
 	["Removed undercut on %s."] = "Removed undercut on %s.",
 	["Removed fall back on %s."] = "Removed fall back on %s.",
 	["Removed %s from whitelist."] = "Removed %s from whitelist.",
@@ -90,8 +93,8 @@ QuickAuctionsLocals = {
 	["/qa cap <amount> <link/type> - Only allow <amount> of the same kind of auction to be up at the same time."] = "/qa cap <amount> <link/type> - Only allow <amount> of the same kind of auction to be up at the same time.",
 	["/qa fallback <money> <link/type> - How much money to default to if nobody else has an auction up."] = "/qa fallback <money> <link/type> - How much money to default to if nobody else has an auction up.",
 	["/qa threshold <money> <link/type> - Don't post any auctions that would go below this amount."] = "/qa threshold <money> <link/type> - Don't post any auctions that would go below this amount.",
-	["/qa addwhite <name> - Adds a name to the whitelist to not undercut."] = "/qa addwhite <name> - Adds a name to the whitelist to not undercut.",
-	["/qa removewhite <name> - Removes a name from the whitelist."] = "/qa removewhite <name> - Removes a name from the whitelist.",
+	["/qa addwhite/removewhite <name> - White list management, will not undercut people on this list."] = "/qa addwhite/removewhite <name> - White list management, will not undercut people on this list.",
+	["/qa addalt/removealt <name> - Alt list management, will show auctions by them in the summary, as if you were on them."] = "/qa addalt/removealt <name> - Alt list management, will show auctions by them in the summary, as if you were on them.",
 	["/qa additem <link> <quantity> - Adds an item to the list of things that should be managed, *IF* the item can stack you must provide a quantity to post it in."] = "/qa additem <link> <quantity> - Adds an item to the list of things that should be managed, *IF* the item can stack you must provide a quantity to post it in.",
 	["/qa removeitem <link> - Removes an item from the managed list."] = "/qa removeitem <link> - Removes an item from the managed list.",
 	["/qa toggle <gems/uncut/glyphs/enchants> - Lets you toggle entire categories of items: All cut gems, all uncut gems, and all glyphs. These will always be put onto the AH as the single item, if you want to override it to post multiple then use the additem command."] = "/qa toggle <gems/uncut/glyphs/enchants> - Lets you toggle entire categories of items: All cut gems, all uncut gems, and all glyphs. These will always be put onto the AH as the single item, if you want to override it to post multiple then use the additem command.",

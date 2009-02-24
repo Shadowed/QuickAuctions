@@ -29,6 +29,7 @@ function QA:OnInitialize()
 		categoryToggle = {},
 		hideCategories = {},
 		crafts = {},
+		alts = {},
 	}
 	
 	-- Load defaults in
@@ -667,7 +668,7 @@ function QA:AddAuctionRecord(name, link, owner, quantity, bid, buyout)
 	end
 
 	-- Not only the player has posted this anymore :(
-	local isPlayer = owner == playerName
+	local isPlayer = owner == playerName or QuickAuctionsDB.alts[owner]
 	if( not isPlayer ) then
 		auctionData[name].onlyPlayer = nil
 	end
@@ -747,7 +748,7 @@ function QA:GetLowestAuction(name)
 				
 				-- If the lowest we found was from the player, but someone else is matching it (and they aren't on our white list)
 				-- then we swap the owner to that person
-				if( owner == playerName ) then
+				if( owner == playerName or QuickAuctionsDB.alts[owner] ) then
 					buyout = record.buyout
 					bid = record.bid
 					owner = record.owner
@@ -759,6 +760,23 @@ function QA:GetLowestAuction(name)
 	end
 	
 	return buyout, bid, owner, isWhitelist, isPlayer
+end
+
+-- Find out how much of an item we have total on alts
+function QA:GetAltAuctionTotals(name)
+	-- No data on it
+	if( not auctionData[name] or auctionData[name].quantity == 0 ) then
+		return 0
+	end
+	
+	local total = 0
+	for _, record in pairs(auctionData[name].records) do
+		if( record.used and record.isPlayer and record.owner ~= playerName ) then
+			total = total + record.quantity
+		end
+	end
+	
+	return total
 end
 
 -- Time to scan auctions!
@@ -1177,6 +1195,18 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 	elseif( cmd == "removewhite" and arg ) then
 		QuickAuctionsDB.whitelist[arg] = nil
 		self:Print(string.format(L["Removed %s from whitelist."], arg))
+
+	-- Add alt to list. We might as well add alts to the whitelist, because you don't want to undercut yourself anyway.
+	elseif( cmd == "addalt" and arg ) then
+		QuickAuctionsDB.whitelist[arg] = true
+		QuickAuctionsDB.alts[arg] = true
+		self:Print(string.format(L["Added %s to the alt list."], arg))
+
+	-- Remove alt from list
+	elseif( cmd == "removealt" and arg ) then
+		QuickAuctionsDB.whitelist[arg] = nil
+		QuickAuctionsDB.alts[arg] = nil
+		self:Print(string.format(L["Removed %s from the alt list."], arg))
 	
 	-- Smart cancelling
 	elseif( cmd == "smartcancel" ) then
@@ -1213,7 +1243,7 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 			self:Print(L["Trade skill saving is now disabled."])
 			QuickAuctionsDB.crafts = {}
 		end
-	
+		
 	-- Enables asshole mode! Automatically scans every 60 seconds, and posts every 30 seconds
 	elseif( cmd == "super" ) then
 		if( self.superFrame ) then
@@ -1266,8 +1296,8 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 		self:Echo(L["/qa cap <amount> <link/type> - Only allow <amount> of the same kind of auction to be up at the same time."])
 		self:Echo(L["/qa fallback <money> <link/type> - How much money to default to if nobody else has an auction up."])
 		self:Echo(L["/qa threshold <money> <link/type> - Don't post any auctions that would go below this amount."])
-		self:Echo(L["/qa addwhite <name> - Adds a name to the whitelist to not undercut."])
-		self:Echo(L["/qa removewhite <name> - Removes a name from the whitelist."])
+		self:Echo(L["/qa addwhite/removewhite <name> - White list management, will not undercut people on this list."])
+		self:Echo(L["/qa addalt/removealt <name> - Alt list management, will show auctions by them in the summary, as if you were on them."])
 		self:Echo(L["/qa additem <link> <quantity> - Adds an item to the list of things that should be managed, *IF* the item can stack you must provide a quantity to post it in."])
 		self:Echo(L["/qa removeitem <link> - Removes an item from the managed list."])
 		self:Echo(L["/qa toggle <gems/uncut/glyphs/enchants> - Lets you toggle entire categories of items: All cut gems, all uncut gems, and all glyphs. These will always be put onto the AH as the single item, if you want to override it to post multiple then use the additem command."])
