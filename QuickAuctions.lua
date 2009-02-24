@@ -552,7 +552,7 @@ function QA:CheckItems()
 					if( not tempList[name] ) then
 						tempList[name] = true
 						
-						if( auctionData[name].playerOnly and buyoutPrice < fallback ) then
+						if( auctionData[name].onlyPlayer and buyoutPrice < fallback ) then
 							self:Echo(string.format(L["You are the only one posting %s for %s buyout, but the fallback is %s (per item), cancelling so you can re-list higher."], itemLink, self:FormatTextMoney(buyoutPrice), self:FormatTextMoney(fallback)))
 						else
 							self:Echo(string.format(L["Undercut on %s, by %s, buyout %s, bid %s, our buyout %s, our bid %s (per item)"], itemLink, lowestOwner, self:FormatTextMoney(lowestBuyout), self:FormatTextMoney(lowestBid), self:FormatTextMoney(buyoutPrice), self:FormatTextMoney(bid)))
