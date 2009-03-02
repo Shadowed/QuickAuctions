@@ -71,6 +71,23 @@ function QA:AHInitialize()
 	-- Little hooky buttons
 	self:CreateButtons()
 	
+	-- Time out the button disabling
+	local LAST_ACTION_TIMEOUT = 10
+	local postTimer = CreateFrame("Frame")
+	postTimer.timeElapsed = 0
+	postTimer:Hide()
+	
+	postTimer:SetScript("OnUpdate", function(self, elapsed)
+		self.timeElapsed = self.timeElapsed - elapsed
+		
+		if( self.timeElapsed <= 0 ) then
+			self:Hide()
+						
+			QA.postButton:Enable()
+			QA.postButton:SetText(L["Post Items"])
+		end
+	end)
+	
 	-- Hook chat to block auction post/cancels, and also let us know when we're done posting
 	local orig_ChatFrame_SystemEventHandler = ChatFrame_SystemEventHandler
 	ChatFrame_SystemEventHandler = function(self, event, msg)
@@ -93,10 +110,16 @@ function QA:AHInitialize()
 			totalPostsSet = totalPostsSet - 1
 			
 			if( totalPostsSet <= 0 ) then
+				postTimer:Hide()
 				QA:QueueSet()
+			else
+				postTimer.timeElapsed = LAST_ACTION_TIMEOUT
+				postTimer:Show()
 			end
 			
 			if( QA.postButton.havePosted >= QA.postButton.totalPosts ) then
+				postTimer:Hide()
+				
 				QA:Print(string.format(L["Done posting %d auctions."], QA.postButton.totalPosts))
 
 				QA.postButton:SetText(L["Post Items"])
@@ -105,7 +128,7 @@ function QA:AHInitialize()
 				QA.postButton.totalPosts = 0
 				QA.postButton.havePosted = 0
 			else
-				-- This one went throughdo next
+				-- This one went through do next
 				if( totalPostsSet > 0 ) then
 					QA:PostQueuedAuction()
 				end
@@ -203,6 +226,9 @@ end
 function QA:GetSafeLink(link)
 	if( not link ) then return nil end
 	local link = string.match(link, "|H(.-):([-0-9]+):([0-9]+)|h")
+	if( not link ) then
+		return nil
+	end
 	
 	-- Reduce the size of the link if it has no important data in it
 	return string.gsub(link, ":0:0:0:0:0:0", "")
@@ -395,8 +421,8 @@ function QA:PostItem(link)
 			buyout = buyout / 10000
 						
 			-- If smart undercut is on, then someone who posts an auction of 99g99s0c, it will auto undercut to 99g
-			-- instead of 99g99s0c - undercutBy
-			if( not QuickAuctionsDB.smartUndercut or buyout == math.floor(buyout) ) then
+			-- instead of 99g99s0c - undercutBy, also make sure the buyout is above 1g
+			if( ( not QuickAuctionsDB.smartUndercut or buyout == math.floor(buyout) ) and lowestBuyout > 10000 ) then
 				buyout = (buyout * 10000) - (QuickAuctionsDB.undercut[name] or QuickAuctionsDB.undercut[itemCategory] or QuickAuctionsDB.undercut.default)
 			else
 				buyout = math.floor(buyout) * 10000
@@ -793,9 +819,10 @@ function QA:ScanAuctionList()
 	local shown, total = GetNumAuctionItems("list")
 		
 	-- Check for bad data quickly
-	if( currentQuery.retries <= 5 ) then
+	if( currentQuery.retries < 2 ) then
 		for i=1, shown do
-			if( not GetAuctionItemInfo("list", i) ) then
+			local name, _, _, _, _, _, _, _, _, _, _, owner = GetAuctionItemInfo("list", i)     
+			if( not name or not owner ) then
 				currentQuery.retries = currentQuery.retries + 1
 				
 				self:SendQuery()
@@ -1042,6 +1069,8 @@ local function parseVariableOption(arg, configKey, isMoney, defaultMsg, setMsg, 
 		return
 	end
 	
+	link = string.trim(link)
+	
 	-- If they passed 0 then we remove the value
 	if( amount <= 0 ) then
 		QuickAuctionsDB[configKey][name] = nil
@@ -1134,7 +1163,7 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 			self:Print(L["Invalid item link given."])
 			return
 		-- If the item can stack, and they didn't provide how much we should stack it in, then error
-		elseif( stackCount > 1 and not quantity or quantity <= 0 ) then
+		elseif( stackCount > 1 and ( not quantity or quantity <= 0 ) ) then
 			self:Print(string.format(L["The item %s can stack up to %d, you must set the quantity that it should post them in."], link, stackCount))
 			return
 		
@@ -1232,6 +1261,25 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 				CancelAuction(i)
 			end
 		end
+	
+	-- Sum if everything sells
+	elseif( cmd == "sumall" ) then
+		local totalPrice = 0
+		local totalAuctions = 0
+		for i=1, (GetNumAuctionItems("owner")) do
+			local name, texture, quantity, _, _, _, bid, _, buyoutPrice, _, _, owner, wasSold = GetAuctionItemInfo("owner", i)     
+			if( wasSold == 0 ) then
+				totalAuctions = totalAuctions + 1
+				totalPrice = totalPrice + buyoutPrice
+			end
+		end
+		
+		if( totalAuctions == 0 ) then
+			self:Print(L["No active auctions found to summarize."])
+		else
+			self:Print(string.format(L["Summary for %d auctions: %s - 5%% = %s total made."], totalAuctions, self:FormatTextMoney(totalPrice), self:FormatTextMoney(totalPrice * 0.95)))
+		end
+
 	
 	-- Trade skill saving
 	elseif( cmd == "tradeskill" ) then
