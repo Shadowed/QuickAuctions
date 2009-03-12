@@ -47,6 +47,11 @@ function QA:ProcessSplitQueue()
 			if( link == splitLink and itemCount > splitQuantity ) then
 				-- It's still locked, so we have to wait before we try and use it again
 				if( itemLocked ) then
+					if( not timerFrame ) then
+						self:BAG_UPDATE()
+						return
+					end
+					
 					timeElapsed = 0.15
 					timerFrame:Show()
 					return

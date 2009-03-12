@@ -372,7 +372,7 @@ function Summary:Update()
 				row.quantity:SetPoint("TOPRIGHT", row, "TOPRIGHT", -134, -4)
 
 				-- Is the button supposed to be + or -?
-				if( QuickAuctionsDB.categoryToggle[data.name] ) then
+				if( not QuickAuctionsDB.categoryToggle[data.name] ) then
 					row.button:SetNormalTexture("Interface\\Buttons\\UI-MinusButton-UP")
 					row.button:SetPushedTexture("Interface\\Buttons\\UI-MinusButton-DOWN")
 					row.button:SetHighlightTexture("Interface\\Buttons\\UI-MinusButton-Hilight", "ADD")

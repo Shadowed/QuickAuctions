@@ -422,7 +422,7 @@ function QA:PostItem(link)
 						
 			-- If smart undercut is on, then someone who posts an auction of 99g99s0c, it will auto undercut to 99g
 			-- instead of 99g99s0c - undercutBy, also make sure the buyout is above 1g
-			if( ( not QuickAuctionsDB.smartUndercut or buyout == math.floor(buyout) ) and lowestBuyout > 10000 ) then
+			if( not QuickAuctionsDB.smartUndercut or buyout == math.floor(buyout) or lowestBuyout < 10000 ) then
 				buyout = (buyout * 10000) - (QuickAuctionsDB.undercut[name] or QuickAuctionsDB.undercut[itemCategory] or QuickAuctionsDB.undercut.default)
 			else
 				buyout = math.floor(buyout) * 10000

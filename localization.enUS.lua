@@ -33,7 +33,10 @@ QuickAuctionsLocals = {
 	["Invalid number passed."] = "Invalid number passed.",
 	["Invalid item link given."] = "Invalid item link given.",
 	["Invalid item type toggle entered."] = "Invalid item type toggle entered.",
-
+	
+	["No active auctions found to summarize."] = "No active auctions found to summarize.",
+	["Summary for %d auctions: %s - 5%% = %s total made."] = "Summary for %d auctions: %s - 5%% = %s total made.",
+	
 	["Added %s to the whitelist."] = "Added %s to the whitelist.",
 	["Added %s to the alt list."] = "Added %s to the alt list.",
 
