@@ -2,7 +2,7 @@ QA.Summary = {}
 
 local Summary = QA.Summary
 local L = QuickAuctionsLocals
-local gettingData, selectedSummary, summaryCats
+local gettingData, selectedSummary, summaryCats, createQuantity, focusedLink
 local displayData, createdCats, rowDisplay, usedLinks = {}, {}, {}, {}
 local MAX_SUMMARY_ROWS = 24
 local ROW_HEIGHT = 20
@@ -146,7 +146,6 @@ function Summary:UpdateItemData(summaryData, name, quantity, link, itemLevel, it
 
 	local row = displayData[index]
 	local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = QA:GetLowestAuction(name)
-
 	row.enabled = true
 	row.name = name
 	row.quantity = quantity
@@ -240,29 +239,6 @@ function Summary:CompileData()
 	self:Update()
 end
 
--- Text listing for backup things
-function Summary:List()
-	for _, parentData in pairs(displayData) do
-		if( parentData.enabled and parentData.isParent ) then
-			-- Print parent
-			local link = parentData.link and select(2, GetItemInfo(parentData.link))
-			if( parentData.bid and parentData.buyout ) then
-				print(string.format("%s: buyout %s / bid %s", link or parentData.name, QA:FormatTextMoney(parentData.buyout), QA:FormatTextMoney(parentData.bid)))
-			else
-				print(link or parentData.name)
-			end
-			
-			-- Nowwww find all the children
-			for _, childData in pairs(displayData) do
-				if( childData.enabled and not childData.isParent and childData.parent == parentData.name ) then
-					local link = select(2, GetItemInfo(childData.link))
-					print(string.format(" -- %s: buyout %s / bid %s", link or childData.name, QA:FormatTextMoney(childData.buyout), QA:FormatTextMoney(childData.bid)))
-				end
-			end
-		end
-	end
-end
-
 function Summary:Update()
 	local self = Summary
 	
@@ -351,6 +327,7 @@ function Summary:Update()
 				row.queryFor = itemName
 				row.parent = data.name
 				row.link = link
+				row.baseLink = nil
 				
 				-- If it's hidden, label it as red
 				if( QuickAuctionsDB.hideCategories[data.name] ) then
@@ -386,13 +363,29 @@ function Summary:Update()
 			else
 				row.queryFor = itemName
 				row.link = link
+				row.baseLink = data.link
 
 				local createTag = ""
 				if( summaryData.canCraft and not summaryData.canCraft(data.link, itemName) ) then
 					createTag = string.format("|T%s:18:18:-1:0|t", READY_CHECK_NOT_READY_TEXTURE)
 				end
+				
+				local craftQuantity = ""
+				if( QuickAuctionsDB.craftQueue[data.link] ) then
+					craftQuantity = string.format("%s%d|r x ", GREEN_FONT_COLOR_CODE, QuickAuctionsDB.craftQueue[data.link])
+				end
+				
+				local colorCode = ""
+				if( focusedLink == row.baseLink ) then
+					craftQuantity = string.format("%d x ", createQuantity or 0)
+					
+					colorCode = "|cffffce00"
+					row:EnableKeyboard(true)
+				else
+					row:EnableKeyboard(false)
+				end
 
-				row:SetFormattedText("%s%s", createTag, (summaryData.filter and summaryData.filter(data.name) or data.name))
+				row:SetFormattedText("%s%s%s%s|r", createTag, craftQuantity, colorCode, (summaryData.filter and summaryData.filter(data.name) or data.name))
 				row:Show()
 				row.button:Hide()
 				
@@ -432,7 +425,6 @@ function Summary:CreateGUI()
 		insets = {left = 9, right = 9, top = 9, bottom = 9},
 	})
 	self.frame:SetScript("OnShow", function(self)
-		selectedSummary = "Gems"
 		Summary:Update()
 	end)
 	
@@ -655,6 +647,28 @@ function Summary:CreateGUI()
 	row.tooltip = L["CTRL click item categories to remove them from the list completely, CTRL clicking again will show them."]
 	
 	self.hideButton = row
+
+	-- Reset shopping queue
+	local row = CreateFrame("Button", nil, self.leftFrame, "UIPanelButtonTemplate")
+	row:SetHeight(16)
+	row:SetWidth(130)
+	row:SetNormalFontObject(GameFontNormalSmall)
+	row:SetHighlightFontObject(GameFontHighlightSmall)
+	row:SetDisabledFontObject(GameFontDisableSmall)
+	row:SetText(L["Reset craft queue"])
+	row:SetScript("OnEnter", showTooltip)
+	row:SetScript("OnLeave", hideTooltip)
+	row:SetScript("OnClick", function()
+		for k in pairs(QuickAuctionsDB.craftQueue) do
+			QuickAuctionsDB.craftQueue[k] = nil
+		end
+		
+		Summary:Update()
+	end)
+	row:SetPoint("TOPLEFT", self.hideButton, "BOTTOMLEFT", 0, -2)
+	row.tooltip = L["Reset the craft queue list for every item."]
+	
+	self.hideButton = row
 	
 	-- Rows
 	local function toggleCategory(self)
@@ -665,21 +679,93 @@ function Summary:CreateGUI()
 	end
 	
 	local function rowClicked(self)
+		if( IsAltKeyDown() and CanSendAuctionQuery() and self.queryFor ) then
+			AuctionFrameBrowse.page = 0
+			BrowseName:SetText(self.queryFor)
+
+			QueryAuctionItems(self.queryFor, nil, nil, 0, 0, 0, 0, 0, 0)
+		end
+		
+		if( self.baseLink ) then
+			return
+		end
+		
 		if( IsControlKeyDown() and self.parent ) then
 			QuickAuctionsDB.hideCategories[self.parent] = not QuickAuctionsDB.hideCategories[self.parent]
 			Summary:Update()
-		elseif( IsAltKeyDown() and CanSendAuctionQuery() and self.queryFor ) then
-			AuctionFrameBrowse.page = 0
-			BrowseName:SetText(self.queryFor)
-			
-			QueryAuctionItems(self.queryFor, nil, nil, 0, 0, 0, 0, 0, 0)
 		else
 			toggleCategory(self)
 		end
 	end
 	
+	-- Set this row as focused
+	local function OnDoubleClick(self)
+		if( self.baseLink ) then
+			if( focusedLink == self.baseLink ) then
+				focusedLink = nil
+				createQuantity = nil
+				Summary:Update()
+				return
+			end
+			
+			createQuantity = nil
+			focusedLink = self.baseLink
+			Summary:Update()
+		end
+	end
+	
+	-- They typed a quantity in
+	local function OnKeyDown(self, key)
+		if( not self.baseLink ) then
+			return
+		end
+		
+		-- Enter pressed, unfocus
+		if( key == "ENTER" and createQuantity ) then
+			QuickAuctionsDB.craftQueue[self.baseLink] = tonumber(createQuantity)
+			createQuantity = nil
+			focusedLink = nil
+			Summary:Update()
+			
+			if( QA.Tradeskill.frame and QA.Tradeskill.frame:IsVisible() ) then
+				QA.Tradeskill:RebuildList()
+				QA.Tradeskill:Update()
+			end
+			
+			return
+		-- Escape, don't add to list
+		elseif( key == "ESCAPE" ) then
+			focusedLink = nil
+			createQuantity = nil
+			QuickAuctionsDB.craftQueue[self.baseLink] = nil
+			Summary:Update()
+
+			if( QA.Tradeskill.frame and QA.Tradeskill.frame:IsVisible() ) then
+				QA.Tradeskill:RebuildList()
+				QA.Tradeskill:Update()
+			end
+
+			return
+		end
+		
+		-- Make sure it's a number now (obviously)
+		local number = tonumber(key)
+		if( not number ) then
+			return
+		end
+		
+		if( not createQuantity ) then
+			createQuantity = number
+		else
+			createQuantity = createQuantity .. number
+		end
+		
+		Summary:Update()
+	end
+	
 	self.rows = {}
 		
+	local lastFocused
 	local offset = 0
 	for i=1, MAX_SUMMARY_ROWS do
 		local row = CreateFrame("Button", nil, self.middleFrame)
@@ -690,6 +776,8 @@ function Summary:CreateGUI()
 		row:GetFontString():SetPoint("LEFT", row, "LEFT", 0, 0)
 		row:SetPushedTextOffset(0, 0)
 		--row:SetScript("OnClick", toggleParent)
+		row:SetScript("OnKeyUp", OnKeyDown)
+		row:SetScript("OnDoubleClick", OnDoubleClick)
 		row:SetScript("OnEnter", showTooltip)
 		row:SetScript("OnLeave", hideTooltip)
 		row:SetScript("OnClick", rowClicked)

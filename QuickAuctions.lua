@@ -25,6 +25,7 @@ function QA:OnInitialize()
 		threshold = {default = 500000},
 		fallback = {default = 200000},
 		postCap = {default = 2},
+		craftQueue = {},
 		summaryItems = {},
 		categoryToggle = {},
 		hideCategories = {},
@@ -200,7 +201,7 @@ function QA:SetupAuctionQuery(scanType, showProgress, filter, page, classIndex, 
 	currentQuery.showProgress = showProgress
 	currentQuery.filter = filter
 	currentQuery.retries = 0
-	
+
 	if( scanType == "summary" ) then
 		self:FlagDataReset()
 	else
@@ -262,7 +263,7 @@ function QA:QueueSet()
 	local name, _, _, _, _, itemType, _, stackCount = GetItemInfo(link)
 	local itemCategory = self:GetItemCategory(link)
 	local quantity = type(QuickAuctionsDB.itemList[name]) == "number" and QuickAuctionsDB.itemList[name] or 1
-	
+		
 	-- This item cannot stack, so we don't need to bother with splitting and can post it all
 	if( stackCount == 1 ) then
 		self:PostItem(table.remove(postList, 1))
@@ -270,16 +271,18 @@ function QA:QueueSet()
 	end
 	
 	-- If post cap is 20, we have 4 on the AH, then we can post 16 more before hitting cap
-	local leftToCap = (QuickAuctionsDB.postCap[name] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default) - (activeAuctions[name] or 0)
+	local leftToCap = (QuickAuctionsDB.postCap[name] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default)
 	-- If we have 4 of the item, we post it in stacks of 1, we can can post 4
 	local canPost = math.floor(GetItemCount(link) / quantity)
 	
-	-- Can't post any more
-	if( leftToCap <= 0 ) then
-		self:QueueSet()
-		return
-	-- Not enough to post it :(
-	elseif( canPost == 0 ) then
+	-- Subtract how many we have on this tier
+	local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = self:GetLowestAuction(name)
+	if( isPlayer ) then
+		leftToCap = leftToCap - self:GetItemQuantity(name, lowestBuyout, lowestBid)
+	end
+		
+	-- Nothing to post, or we can't post anything
+	if( leftToCap == 0 or canPost == 0 ) then
 		table.remove(postList, 1)
 		self:QueueSet()
 		return
@@ -345,10 +348,9 @@ function QA:PostAuctions()
 			if( link ) then
 				local name, _, _, _, _, _, _, stackCount = GetItemInfo(link)
 				local itemCategory = self:GetItemCategory(link)
-				local postCap = QuickAuctionsDB.postCap[name] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default
 				
 				-- Make sure we aren't already at the post cap, to reduce the item scans needed
-				if( self:IsValidItem(link) and ( not activeAuctions[name] or activeAuctions[name] < postCap ) ) then
+				if( self:IsValidItem(link) ) then
 					local added = self:AddQueryFilter(name)
 					if( added ) then
 						table.insert(postList, link)
@@ -390,18 +392,18 @@ function QA:PostQueuedAuction()
 	
 	local bag = table.remove(auctionPostQueue, 1)
 	local slot = table.remove(auctionPostQueue, 1)
-	local minBid = table.remove(auctionPostQueue, 1)
+	local bid = table.remove(auctionPostQueue, 1)
 	local buyout = table.remove(auctionPostQueue, 1)
 	local postTime = table.remove(auctionPostQueue, 1)
 	
 	PickupContainerItem(bag, slot)
 	ClickAuctionSellItemButton()
-	StartAuction(minBid, buyout, postTime)
+	StartAuction(bid, buyout, postTime)
 end
 
 function QA:PostItem(link)
 	local name = GetItemInfo(link)
-	local totalPosted = activeAuctions[name] or 0
+	local totalPosted = 0
 	local itemCategory = self:GetItemCategory(link)
 	local quantity = type(QuickAuctionsDB.itemList[name]) == "number" and QuickAuctionsDB.itemList[name] or 1
 	local postTime = QuickAuctionsDB.postTime[name] or QuickAuctionsDB.postTime[itemCategory] or QuickAuctionsDB.postTime.default
@@ -410,11 +412,16 @@ function QA:PostItem(link)
 	local bid, buyout
 	
 	totalPostsSet = 0
-
+		
 	-- Figure out what price we are posting at
 	if( lowestOwner ) then
 		buyout = lowestBuyout
 		bid = lowestBid
+		
+		-- The lowest player is the player, so find out how many they have at this "tier" posted
+		if( isPlayer ) then
+			totalPosted = self:GetItemQuantity(name, lowestBuyout, lowestBid)
+		end
 				
 		-- It's not us, and it's not a white list who is lowest, so undercut them
 		if( not isPlayer and not isWhitelist ) then
@@ -442,7 +449,13 @@ function QA:PostItem(link)
 
 		self:Echo(string.format(L["No data found for %s, using %s buyout and %s bid default."], name, self:FormatTextMoney(buyout), self:FormatTextMoney(bid)))
 	end
-
+	
+	-- We're already above post cap, next set
+	if( totalPosted >= postCap ) then
+		self:QueueSet()	
+		return
+	end
+	
 	-- Find the item in our inventory
 	for i=#(auctionPostQueue), 1, -1 do table.remove(auctionPostQueue, i) end
 	for bag=0, 4 do
@@ -469,7 +482,7 @@ function QA:PostItem(link)
 					table.insert(auctionPostQueue, bid * quantity)
 					table.insert(auctionPostQueue, buyout * quantity)
 					table.insert(auctionPostQueue, postTime * 60)
-										
+					
 					totalPostsSet = totalPostsSet + 1
 				else
 					for i=#(auctionPostQueue), 1, -1 do table.remove(auctionPostQueue, i) end
@@ -510,7 +523,7 @@ function QA:PostItems()
 		local itemCategory = self:GetItemCategory(link)
 		local threshold = QuickAuctionsDB.threshold[name] or QuickAuctionsDB.threshold[itemCategory] or QuickAuctionsDB.threshold.default
 		
-		local lowestBuyout = self:GetLowestAuction(name)
+		local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = self:GetLowestAuction(name)
 		if( lowestBuyout and lowestBuyout <= threshold ) then
 			self:Echo(string.format(L["Not posting %s, because the buyout is %s per item and the threshold is %s"], name, self:FormatTextMoney(lowestBuyout), self:FormatTextMoney(threshold)))
 			table.remove(postList, i)
@@ -518,7 +531,7 @@ function QA:PostItems()
 			-- Figure out how many auctions we will be posting quickly
 			local quantity = type(QuickAuctionsDB.itemList[name]) == "number" and QuickAuctionsDB.itemList[name] or 1
 			local willPost = math.floor(GetItemCount(link) / quantity)
-			local leftToCap = (QuickAuctionsDB.postCap[name] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default) - (activeAuctions[name] or 0)
+			local leftToCap = (QuickAuctionsDB.postCap[name] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default) - self:GetItemQuantity(name, lowestBuyout, lowestBid)
 			willPost = willPost > leftToCap and leftToCap or willPost
 		
 			self.postButton.totalPosts = self.postButton.totalPosts + willPost
@@ -526,7 +539,8 @@ function QA:PostItems()
 	end
 
 	-- Nothing to post, it's all below a threshold
-	if( #(postList) == 0 ) then
+	if( #(postList) == 0 or self.postButton.totalPosts == 0 ) then
+		self:Print(L["Nothing to post."])
 		self.postButton.totalPosts = 0
 		return
 	end
@@ -742,6 +756,21 @@ function QA:IsLowestAuction(name, buyout, bid)
 	end
 	
 	return true
+end
+
+-- Searches the item data to find out how many we have on the provided item info
+function QA:GetItemQuantity(name, buyout, bid)
+	if( not auctionData[name] or auctionData[name].quantity == 0 ) then
+		return 0
+	end
+	
+	for _, record in pairs(auctionData[name].records) do
+		if( record.used and record.isPlayer and record.buyout == buyout and record.bid == bid ) then
+			return record.quantity
+		end
+	end
+	
+	return 0
 end
 
 -- Find out the lowest price for this auction

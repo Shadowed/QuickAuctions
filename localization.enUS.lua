@@ -25,6 +25,7 @@ QuickAuctionsLocals = {
 	["Undercut on %s, by %s, buyout %s, bid %s, our buyout %s, our bid %s (per item)"] = "Undercut on %s, by %s, buyout %s, bid %s, our buyout %s, our bid %s (per item)",
 	["Undercut on %s, by %s, buyout %s, our buyout %s (per item), threshold is %s so not cancelling."] = "Undercut on %s, by %s, buyout %s, our buyout %s (per item), threshold is %s so not cancelling.",
 	["Nothing to cancel."] = "Nothing to cancel.",
+	["Nothing to post."] = "Nothing to post.",
 	
 	-- Slash commands
 	["Invalid time passed, should be 12, 24 or 48."] = "Invalid time passed, should be 12, 24 or 48.",
@@ -145,9 +146,13 @@ QuickAuctionsLocals = {
 	["Hide hidden"] = "Hide hidden",
 	["CTRL click item categories to remove them from the list completely, CTRL clicking again will show them."] = "CTRL click item categories to remove them from the list completely, CTRL clicking again will show them.",
 	
+	["Reset the craft queue list for every item."] = "Reset the craft queue list for every item.",
+	
 	["Scroll of Enchant (.+) %- .+"] = "Scroll of Enchant (.+) %- .+",
 	["Scroll of Enchant (.+)"] = "Scroll of Enchant (.+)",
 	["Perfect (.+)"] = "Perfect (.+)",
 
+	["Reset craft queue"] = "Reset craft queue",
 	["Cannot find class or sub class index, localization issue perhaps?"] = "Cannot find class or sub class index, localization issue perhaps?",
+	["Materials required"] = "Materials required",
 }
