@@ -684,6 +684,7 @@ function Summary:CreateGUI()
 			BrowseName:SetText(self.queryFor)
 
 			QueryAuctionItems(self.queryFor, nil, nil, 0, 0, 0, 0, 0, 0)
+			return
 		end
 		
 		if( self.baseLink ) then

@@ -20,6 +20,7 @@ function QA:OnInitialize()
 		itemTypes = {},
 		itemList = {},
 		whitelist = {},
+		groups = {},
 		postTime = {default = 12},
 		undercut = {default = 10000},
 		threshold = {default = 500000},
@@ -31,6 +32,7 @@ function QA:OnInitialize()
 		hideCategories = {},
 		crafts = {},
 		alts = {},
+		alertedThreshold = {},
 	}
 	
 	-- Load defaults in
@@ -69,25 +71,17 @@ function QA:AHInitialize()
 		return orig_QueryAuctionItems(name, minLevel, maxLevel, invTypeIndex, classIndex, subClassIndex, page, isUsable, qualityIndex, getAll, ...)
 	end
 	
+	-- Hook auction OnHide to interrupt scans if we have to
+	AuctionFrame:HookScript("OnHide", function(self)
+		if( currentQuery.running ) then
+			QA:Print(L["Auction House closed while running a scan, stopped scanning."])
+		end
+		
+		QA:ForceQueryStop()
+	end)
+	
 	-- Little hooky buttons
 	self:CreateButtons()
-	
-	-- Time out the button disabling
-	local LAST_ACTION_TIMEOUT = 10
-	local postTimer = CreateFrame("Frame")
-	postTimer.timeElapsed = 0
-	postTimer:Hide()
-	
-	postTimer:SetScript("OnUpdate", function(self, elapsed)
-		self.timeElapsed = self.timeElapsed - elapsed
-		
-		if( self.timeElapsed <= 0 ) then
-			self:Hide()
-						
-			QA.postButton:Enable()
-			QA.postButton:SetText(L["Post Items"])
-		end
-	end)
 	
 	-- Hook chat to block auction post/cancels, and also let us know when we're done posting
 	local orig_ChatFrame_SystemEventHandler = ChatFrame_SystemEventHandler
@@ -111,16 +105,10 @@ function QA:AHInitialize()
 			totalPostsSet = totalPostsSet - 1
 			
 			if( totalPostsSet <= 0 ) then
-				postTimer:Hide()
 				QA:QueueSet()
-			else
-				postTimer.timeElapsed = LAST_ACTION_TIMEOUT
-				postTimer:Show()
 			end
 			
 			if( QA.postButton.havePosted >= QA.postButton.totalPosts ) then
-				postTimer:Hide()
-				
 				QA:Print(string.format(L["Done posting %d auctions."], QA.postButton.totalPosts))
 
 				QA.postButton:SetText(L["Post Items"])
@@ -221,6 +209,15 @@ end
 function QA:GetItemCategory(link)
 	if( not link ) then return "" end
 	local name, _, _, _, _, itemType, _, stackCount = GetItemInfo(link)
+	
+	-- Check if it's a group
+	for group, items in pairs(QuickAuctionsDB.groups) do
+		if( items[link] ) then
+			return group
+		end
+	end
+	
+	-- Nope, check if it's under a default group
 	return typeInfo[itemType .. stackCount]
 end
 
@@ -333,6 +330,13 @@ function QA:CheckActiveAuctions()
 	end
 end
 
+local function sortByStack(a, b)
+	local aStack = select(8, GetItemInfo(a)) or 20
+	local bStack = select(8, GetItemInfo(b)) or 20
+	
+	return aStack < bStack
+end
+
 -- Prepare to post auctions
 function QA:PostAuctions()
 	-- Reset data
@@ -359,6 +363,9 @@ function QA:PostAuctions()
 			end
 		end
 	end
+	
+	-- Sort the post list so that non stackable items are first
+	table.sort(postList, sortByStack)
 		
 	-- Start us up!
 	self:StartScan("post")
@@ -412,6 +419,9 @@ function QA:PostItem(link)
 	local bid, buyout
 	
 	totalPostsSet = 0
+	
+	-- Reset the threshold alert
+	QuickAuctionsDB.alertedThreshold[link] = nil
 		
 	-- Figure out what price we are posting at
 	if( lowestOwner ) then
@@ -515,7 +525,7 @@ function QA:PostItems()
 	self.scanButton:SetText(L["Scan Items"])
 	self.postButton.totalPosts = 0
 	self.postButton.havePosted = 0
-
+	
 	-- Quick check for threshold info
 	for i=#(postList), 1, -1 do
 		local link = postList[i]
@@ -525,7 +535,10 @@ function QA:PostItems()
 		
 		local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = self:GetLowestAuction(name)
 		if( lowestBuyout and lowestBuyout <= threshold ) then
-			self:Echo(string.format(L["Not posting %s, because the buyout is %s per item and the threshold is %s"], name, self:FormatTextMoney(lowestBuyout), self:FormatTextMoney(threshold)))
+			if( not QuickAuctionsDB.alertedThreshold[link] ) then
+				self:Echo(string.format(L["Not posting %s, because the buyout is %s per item and the threshold is %s"], name, self:FormatTextMoney(lowestBuyout), self:FormatTextMoney(threshold)))
+				QuickAuctionsDB.alertedThreshold[link] = true
+			end
 			table.remove(postList, i)
 		else
 			-- Figure out how many auctions we will be posting quickly
@@ -638,13 +651,20 @@ end
 function QA:FinishedScanning()
 	self.scanButton:SetText(L["Scan Items"])
 	self.scanButton:Enable()
-
+	
+	local wasForced = currentQuery.forceStop
+	
 	currentQuery.running = nil
 	currentQuery.forceStop = nil
 	currentQuery.showProgress = nil
 
 	-- Reset item queue
 	for i=#(currentQuery.list), 1, -1 do table.remove(currentQuery.list, i) end
+	
+	-- Stop was forced, don't trigger callbacks
+	if( wasForced and currentQuery.scanType ~= "summary" ) then
+		return
+	end
 
 	-- Call trigger function
 	if( currentQuery.scanType == "scan" ) then
@@ -1066,7 +1086,7 @@ end
 -- Quick method of setting these variables without duplicating it 500 times
 local function parseVariableOption(arg, configKey, isMoney, defaultMsg, setMsg, removedMsg)
 	local self = QA
-	local amount, link = string.split(" ", arg, 2)
+	local amount, itemID = string.split(" ", arg, 2)
 	amount = (isMoney and self:DeformatMoney(amount) or tonumber(amount))
 	if( not amount ) then
 		if( isMoney ) then
@@ -1078,38 +1098,41 @@ local function parseVariableOption(arg, configKey, isMoney, defaultMsg, setMsg, 
 	end
 	
 	-- Default value
-	if( not link ) then
+	if( not itemID ) then
 		QuickAuctionsDB[configKey].default = amount
 		self:Print(string.format(defaultMsg, (isMoney and self:FormatTextMoney(amount) or amount)))
 		return
 	end
 	
-	-- Set it for a specific item
-	local name = GetItemInfo(link)
-
-	-- It's an entire category of items, not a specific one
-	if( not name and validTypes[link] ) then
-		name = link
-		link = validTypes[link]
+	-- Figure out what we're modifying, is it an item, group, or an item type
+	local name = GetItemInfo(itemID)
+	-- Item type
+	if( not name and validTypes[itemID] ) then
+		name = itemID
+		itemID = validTypes[itemID]
+	
+	-- Group
+	elseif( not name and QuickAuctionsDB.groups[itemID] ) then
+		name = itemID
 		
-	-- Bad link given
+	-- Bad item link
 	elseif( not name ) then
-		self:Print(L["Invalid item link, or item type passed."])
+		self:Print(L["Invalid item link, item type or group name passed."])
 		return
 	end
 	
-	link = string.trim(link)
+	itemID = string.trim(itemID)
 	
 	-- If they passed 0 then we remove the value
 	if( amount <= 0 ) then
 		QuickAuctionsDB[configKey][name] = nil
-		self:Print(string.format(removedMsg, link))
+		self:Print(string.format(removedMsg, itemID))
 		return
 	end
 	
 	-- Set it for this item now!
 	QuickAuctionsDB[configKey][name] = amount
-	self:Print(string.format(setMsg, link, (isMoney and self:FormatTextMoney(amount) or amount)))
+	self:Print(string.format(setMsg, itemID, (isMoney and self:FormatTextMoney(amount) or amount)))
 end
 
 -- Slash commands
@@ -1266,6 +1289,102 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 		QuickAuctionsDB.alts[arg] = nil
 		self:Print(string.format(L["Removed %s from the alt list."], arg))
 	
+	-- Add to group list
+	elseif( cmd == "addgroup" and arg ) then
+		local group, items = string.split(" ", arg, 2)
+		if( not group ) then
+			self:Print(L["Invalid group name passed."])
+			return
+		elseif( not items ) then
+			self:Print(L["Invalid item link given."])
+			return
+		end
+
+		-- Parse item linkslocal itemLinks = {}
+		local itemLinks = {}
+		local foundLink
+		for link in string.gmatch(items, "|H(.-):([-0-9]+):([0-9]+)|h") do
+			foundLink = true
+			itemLinks[string.gsub(link, ":0:0:0:0:0:0", "")] = true
+		end
+		
+		if( not foundLink ) then
+			self:Print(L["Invalid item link given."])
+			return
+		end
+		
+		-- Setup group
+		if( not QuickAuctionsDB.groups[group] ) then
+			QuickAuctionsDB.groups[group] = {}
+		end
+	
+		-- Do a quick check, make sure an item isn't in another group
+		local text
+		for groupName, list in pairs(QuickAuctionsDB.groups) do
+			if( groupName ~= group ) then
+				for link in pairs(list) do
+					if( itemLinks[link] ) then
+						text = (text or "") .. select(2, GetItemInfo(link))
+						itemLinks[link] = nil
+					end
+				end
+			end
+		end
+		
+		if( text ) then
+			self:Print(string.format(L["You cannot add %s to the group %s, it already exists in another group."], text, group))
+		end
+
+		-- Now add all the items to it
+		local text = ""
+		for link in pairs(itemLinks) do
+			if( not QuickAuctionsDB.groups[group][link] ) then
+				QuickAuctionsDB.groups[group][link] = true
+				text = text .. select(2, GetItemInfo(link))
+			end
+		end
+		
+		if( text == "" ) then
+			return
+		end
+		
+		self:Print(string.format(L["Added %s to the %s group."], text, group))
+	
+	-- Remove from group list
+	elseif( cmd == "removegroup" and arg ) then
+		local group, items = string.split(" ", arg, 2)
+		if( not group or not QuickAuctionsDB.groups[group] ) then
+			self:Print(L["Invalid group name passed."])
+			return
+		elseif( not items ) then
+			self:Print(L["Invalid item link given."])
+			return
+		end
+
+		-- Parse item linkslocal itemLinks = {}
+		local itemLinks = {}
+		local foundLink
+		for link in string.gmatch(items, "|H(.-):([-0-9]+):([0-9]+)|h") do
+			foundLink = true
+			itemLinks[string.gsub(link, ":0:0:0:0:0:0", "")] = true
+		end
+		
+		if( not foundLink ) then
+			self:Print(L["Invalid item link given."])
+			return
+		end
+
+		-- Now add all the items to it
+		local text = ""
+		for link in pairs(itemLinks) do
+			if( QuickAuctionsDB.groups[group][link] ) then
+				QuickAuctionsDB.groups[group][link] = nil
+				text = text .. select(2, GetItemInfo(link))
+			end
+		end
+
+		self:Print(string.format(L["Removed %s from the %s group."], text, group))
+			
 	-- Smart cancelling
 	elseif( cmd == "smartcancel" ) then
 		QuickAuctionsDB.smartCancel = not QuickAuctionsDB.smartCancel
@@ -1309,7 +1428,6 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 			self:Print(string.format(L["Summary for %d auctions: %s - 5%% = %s total made."], totalAuctions, self:FormatTextMoney(totalPrice), self:FormatTextMoney(totalPrice * 0.95)))
 		end
 
-	
 	-- Trade skill saving
 	elseif( cmd == "tradeskill" ) then
 		QuickAuctionsDB.saveCraft = not QuickAuctionsDB.saveCraft
@@ -1342,42 +1460,118 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 		self.superFrame:SetScript("OnUpdate", function(self, elapsed)
 			self.timeElapsed = self.timeElapsed + elapsed
 			
-			if( self.timeElapsed >= 30 and not self.postedAlready ) then
-				self.postedAlready = true
-				if( AuctionFrame:IsVisible() ) then
-					QA.postButton:Click()
-				end
-			end
-			
-			if( self.timeElapsed >= 60 ) then
+			if( self.timeElapsed >= 300 ) then
 				self.timeElapsed = 0
-				self.postedAlready = nil
-				
-				if( AuctionFrame:IsVisible() ) then
-					self.scansRan = self.scansRan + 1
-					QA.scanButton:Click()
-					ChatFrame1:AddMessage(string.format(L["[%s] Scan running..."], self.scansRan))
+				if( AuctionFrame:IsVisible() and QA.postButton:IsEnabled() and QA.scanButton:IsEnabled() ) then
+					QA.postButton:Click()
 				end
 			end
 		end)
 		
 		self:Print(L["Enabled super auctioning!"])
+	
+	elseif( cmd == "list" and arg ) then
+		if( arg == "bidpercent" ) then
+			self:Print(string.format(L["Posting auction bids at %d%% of buyout."], QuickAuctionsDB.bidpercent))
+		elseif( arg == "items" ) then
+			local list = {}
+			for name, quantity in pairs(QuickAuctionsDB.itemList) do
+				table.insert(list, string.format("%s x |cff33ff99%d|r", name, type(quantity) == "number" and quantity or 1))	
+			end
+			
+			if( #(list) > 0 ) then
+				self:Echo(table.concat(list, ", "))
+			else
+				self:Print(L["Found no items to list."])
+			end
+			
+		elseif( arg == "groups" ) then
+			local found
+			for name, list in pairs(QuickAuctionsDB.groups) do
+				found = true
+				self:Echo(string.format("|cff33ff99%s|r", name))
+				
+				for link in pairs(list) do
+					self:Echo(string.format("- %s", (GetItemInfo(link)) or link))
+				end
+			end
+			
+			if( not found ) then
+				self:Print(L["Found no items to list."])
+			end
+		
+		elseif( arg == "whitelist" or arg == "alts" ) then
+			local list = {}
+			for name in pairs(QuickAuctionsDB[arg]) do
+				-- Since we cheat and add alts to the whitelist, don't show them in the white list if it's an alt
+				if( arg == "alts" or  arg == "whitelist" and not QuickAuctionsDB.alts[name] ) then
+					table.insert(list, name)
+				end
+			end
+			
+			if( #(list) > 0 ) then
+				if( arg == "whitelist" ) then
+					self:Print(string.format(L["White list: %s"], table.concat(list, ", ")))
+				else
+					self:Print(string.format(L["Alt list: %s"], table.concat(list, ", ")))
+				end
+			else
+				self:Print(L["Found no characters to list."])
+			end
+			
+		elseif( arg == "time" or arg == "cap" or arg == "undercut" or arg == "fallback" or arg == "threshold" ) then
+			self:Print(L["LIST"][arg])
+			
+			local key = arg
+			if( arg == "time" ) then
+				key = "postTime"
+			elseif( arg == "cap" ) then
+				key = "postCap"
+			end
+			
+			local list = {}
+			for name, value in pairs(QuickAuctionsDB[key]) do
+				list[value] = list[value] or {}
+				table.insert(list[value], name)
+			end
+			
+			for category, items in pairs(list) do
+				if( arg ~= "time" and arg ~= "cap" ) then
+					category = self:FormatTextMoney(category)
+				else
+					category = string.format("|cff33ff99%s|r", category)
+				end
+				
+				if( #(items) <= 4 ) then
+					self:Echo(string.format("%s - %s", category, table.concat(items, ", ")))
+				else
+					for _, item in pairs(items) do
+						self:Echo(string.format("- %s", item))
+					end
+				end
+			end
+			
+		else
+			self:Print(L["Invalid argument passed for listing configurations."])
+		end
 	else
 		self:Print(L["Slash commands"])
 		self:Echo(L["/qa tradeskill - Saves what items you can create from various trade skills and displays them in the summary."])
 		self:Echo(L["/qa smartcut - Toggles smart undercutting (Going from 1.9g -> 1g first instead of 1.9g - undercut amount."])
 		self:Echo(L["/qa smartcancel - Toggles smart canceling, will not cancel if the item is below the threshold, or will cancel if you can make more relisting it."])
 		self:Echo(L["/qa bidpercent <0-100> - Percentage of the buyout that the bid should be, 200g buyout and this set at 90 will put the bid at 180g."])
-		self:Echo(L["/qa time <12/24/48> <link/type> - Amount of hours to put auctions up for."])
-		self:Echo(L["/qa undercut <money> <link/type> - How much to undercut people by."])
-		self:Echo(L["/qa cap <amount> <link/type> - Only allow <amount> of the same kind of auction to be up at the same time."])
-		self:Echo(L["/qa fallback <money> <link/type> - How much money to default to if nobody else has an auction up."])
-		self:Echo(L["/qa threshold <money> <link/type> - Don't post any auctions that would go below this amount."])
+		self:Echo(L["/qa time <12/24/48> <link/type/group> - Amount of hours to put auctions up for."])
+		self:Echo(L["/qa undercut <money> <link/type/roup> - How much to undercut people by."])
+		self:Echo(L["/qa cap <amount> <link/type/group> - Only allow <amount> of the same kind of auction to be up at the same time."])
+		self:Echo(L["/qa fallback <money> <link/type/group> - How much money to default to if nobody else has an auction up."])
+		self:Echo(L["/qa threshold <money> <link/type/group> - Don't post any auctions that would go below this amount."])
 		self:Echo(L["/qa addwhite/removewhite <name> - White list management, will not undercut people on this list."])
 		self:Echo(L["/qa addalt/removealt <name> - Alt list management, will show auctions by them in the summary, as if you were on them."])
 		self:Echo(L["/qa additem <link> <quantity> - Adds an item to the list of things that should be managed, *IF* the item can stack you must provide a quantity to post it in."])
+		self:Echo(L["/qa addgroup/removegroup <group> <link> - Group management for unique categories of items."])
 		self:Echo(L["/qa removeitem <link> - Removes an item from the managed list."])
 		self:Echo(L["/qa toggle <gems/uncut/glyphs/enchants> - Lets you toggle entire categories of items: All cut gems, all uncut gems, and all glyphs. These will always be put onto the AH as the single item, if you want to override it to post multiple then use the additem command."])
+		self:Echo(L["/qa list <time/bidpercent/cap/undercut/fallback/threshold/whitelist/alts/items> - Lists the set values for any of the passed categories."])
 		self:Echo(L["/qa cancelall - Cancel all of your auctions. REGARDLESS of if you were undercut or not."])
 		self:Echo(L["/qa summary - Toggles the summary frame."])
 	end

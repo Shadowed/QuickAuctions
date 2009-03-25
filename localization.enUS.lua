@@ -1,6 +1,5 @@
 QuickAuctionsLocals = {
 	-- Misc things
-	["DB format upgraded, reset configuration."] = "DB format upgraded, reset configuration.",
 	["Quick Auctions"] = "Quick Auctions",
 	
 	["View a summary of what the highest selling of certain items is."] = "View a summary of what the highest selling of certain items is.",
@@ -17,6 +16,8 @@ QuickAuctionsLocals = {
 
 	["%d/%d items"] = "%d/%d items",
 	
+	["Auction House closed while running a scan, stopped scanning."] = "Auction House closed while running a scan, stopped scanning.",
+	
 	["You are the only one posting %s for %s buyout, but the fallback is %s (per item), cancelling so you can re-list higher."] = "You are the only one posting %s for %s buyout, but the fallback is %s (per item), cancelling so you can re-list higher.",
 	["You only have %d of %s, and posting it in stacks of %d, not posting."] = "You only have %d of %s, and posting it in stacks of %d, not posting.",
 	["No data found for %s, using %s buyout and %s bid default."] = "No data found for %s, using %s buyout and %s bid default.",
@@ -29,17 +30,35 @@ QuickAuctionsLocals = {
 	
 	-- Slash commands
 	["Invalid time passed, should be 12, 24 or 48."] = "Invalid time passed, should be 12, 24 or 48.",
-	["Invalid item link, or item type passed."] = "Invalid item link, or item type passed.",
+	["Invalid item link, item type or group name passed."] = "Invalid item link, item type or group name passed.",
 	["Invalid money format given, should be #g for gold, #s for silver, #c for copper. For example: 5g2s10c would set it 5 gold, 2 silver, 10 copper."] = "Invalid money format given, should be #g for gold, #s for silver, #c for copper. For example: 5g2s10c would set it 5 gold, 2 silver, 10 copper.",
 	["Invalid number passed."] = "Invalid number passed.",
 	["Invalid item link given."] = "Invalid item link given.",
 	["Invalid item type toggle entered."] = "Invalid item type toggle entered.",
+	["Invalid group name passed."] = "Invalid group name passed.",
+	["Invalid argument passed for listing configurations."] = "Invalid argument passed for listing configurations.",
 	
 	["No active auctions found to summarize."] = "No active auctions found to summarize.",
 	["Summary for %d auctions: %s - 5%% = %s total made."] = "Summary for %d auctions: %s - 5%% = %s total made.",
+	["Posting auction bids at %d%% of buyout."] = "Posting auction bids at %d%% of buyout.",
+	["Found no items to list."] = "Found no items to list.",
+	["You cannot add %s to the group %s, it already exists in another group."] = "You cannot add %s to the group %s, it already exists in another group.",
+	
+	["Found no characters to list."] = "Found no characters to list.",
+	["White list: %s"] = "White list: %s",
+	["Alt list: %s"] = "Alt list: %s",
+	
+	["LIST"] = {
+		["time"] = "Listing auction times",
+		["cap"] = "Listing auction post cap",
+		["undercut"] = "Listing auction undercut values",
+		["fallback"] = "Listing auction fallbacks",
+		["threshold"] = "Listing auction thresholds",
+	},
 	
 	["Added %s to the whitelist."] = "Added %s to the whitelist.",
 	["Added %s to the alt list."] = "Added %s to the alt list.",
+	["Added %s to the %s group."] = "Added %s to the %s group.",
 
 	["Smart cancelling is now enabled."] = "Smart cancelling is now enabled.",
 	["Smart cancelling is now disabled."] = "Smart cancelling is now disabled.",
@@ -86,6 +105,7 @@ QuickAuctionsLocals = {
 	["Removed post cap on %s."] = "Removed post cap on %s.",
 	["Removed threshold on %s."] = "Removed threshold on %s.",
 	["Removed post time for %s."] = "Removed post time for %s.",
+	["Removed %s from the %s group."] = "Removed %s from the %s group.",
 	
 	["Slash commands"] = "Slash commands",
 	["/qa tradeskill - Saves what items you can create from various trade skills and displays them in the summary."] = "/qa tradeskill - Saves what items you can create from various trade skills and displays them in the summary.",
@@ -104,6 +124,8 @@ QuickAuctionsLocals = {
 	["/qa toggle <gems/uncut/glyphs/enchants> - Lets you toggle entire categories of items: All cut gems, all uncut gems, and all glyphs. These will always be put onto the AH as the single item, if you want to override it to post multiple then use the additem command."] = "/qa toggle <gems/uncut/glyphs/enchants> - Lets you toggle entire categories of items: All cut gems, all uncut gems, and all glyphs. These will always be put onto the AH as the single item, if you want to override it to post multiple then use the additem command.",
 	["/qa summary - Toggles the summary frame."] = "/qa summary - Toggles the summary frame.",
 	["/qa cancelall - Cancel all of your auctions. REGARDLESS of if you were undercut or not."] = "/qa cancelall - Cancel all of your auctions. REGARDLESS of if you were undercut or not.",
+	["/qa addgroup/removegroup <group> <link> - Group management for unique categories of items."] = "/qa addgroup/removegroup <group> <link> - Group management for unique categories of items.",
+	["/qa list <time/bidpercent/cap/undercut/fallback/threshold/whitelist/alts/items> - Lists the set values for any of the passed categories."] = "/qa list <time/bidpercent/cap/undercut/fallback/threshold/whitelist/alts/items> - Lists the set values for any of the passed categories.",
 	
 	-- Summary
 	["Stop"] = "Stop",

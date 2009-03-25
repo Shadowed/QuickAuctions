@@ -245,11 +245,14 @@ end
 
 -- Item we were crafting was created
 function Tradeskill:UNIT_SPELLCAST_SUCCEEDED(event, unit, name)
-	if( unit == "player" and name == creatingItem ) then
+	if( unit == "player" and name == creatingItem and QuickAuctionsDB.craftQueue[creatingItemID] ) then
 		QuickAuctionsDB.craftQueue[creatingItemID] = QuickAuctionsDB.craftQueue[creatingItemID] - 1
 
 		if( QuickAuctionsDB.craftQueue[creatingItemID] <= 0 ) then
 			QuickAuctionsDB.craftQueue[creatingItemID] = nil
+
+			creatingItem = nil
+			creatingItemID = nil
 		end
 	end
 end
