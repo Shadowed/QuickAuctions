@@ -145,7 +145,7 @@ function Summary:UpdateItemData(summaryData, name, quantity, link, itemLevel, it
 	if( not displayData[index] ) then displayData[index] = {} end
 
 	local row = displayData[index]
-	local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = QA:GetLowestAuction(name)
+	local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = QA:GetLowestAuction(link)
 	row.enabled = true
 	row.name = name
 	row.quantity = quantity
@@ -193,15 +193,15 @@ function Summary:CompileData()
 	for k in pairs(usedLinks) do usedLinks[k] = nil end
 			
 	-- Make sure we got data we want
-	for name, data in pairs(QA.auctionData) do
-		local name, _, _, itemLevel, _, itemType, subType, stackCount = GetItemInfo(data.link)
+	for link, data in pairs(QA.auctionData) do
+		local name, _, _, itemLevel, _, itemType, subType, stackCount = GetItemInfo(link)
 		
 		-- Is this data we want?
 		if( name and data.quantity > 0 and ( not summaryData.itemType or summaryData.itemType == itemType ) and ( not summaryData.notSubType or summaryData.notSubType ~= subType ) and ( not summaryData.subType or summaryData.subType == subType ) ) then
-			usedLinks[data.link] = true
-			QuickAuctionsDB.summaryItems[selectedSummary][data.link] = true
+			usedLinks[link] = true
+			QuickAuctionsDB.summaryItems[selectedSummary][link] = true
 			
-			self:UpdateItemData(summaryData, name, data.quantity, data.link, itemLevel, itemType, subType, stackCount)
+			self:UpdateItemData(summaryData, name, data.quantity, link, itemLevel, itemType, subType, stackCount)
 		end
 	end
 		
@@ -291,7 +291,7 @@ function Summary:Update()
 				row.quantity:SetText(data.quantity)
 			elseif( data.quantity ) then
 				local inventory = GetItemCount(data.link) > 0 and string.format("(%d) ", GetItemCount(data.link)) or ""
-				local activeNumber = (QA.activeAuctions[data.name] or 0) + QA:GetAltAuctionTotals(data.name)
+				local activeNumber = (QA.activeAuctions[data.link] or 0) + QA:GetAltAuctionTotals(data.link)
 				local active = ""
 				
 				if( activeNumber > 0 ) then

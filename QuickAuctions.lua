@@ -46,6 +46,26 @@ function QA:OnInitialize()
 			end
 		end
 	end
+	
+	-- Reset any item based configuration
+	if( QuickAuctionsDB.revision <= 1160 ) then
+		checkTbl = function(tbl)
+			for key in pairs(tbl) do
+				if( not QuickAuctionsDB.groups[key] and not validTypes[key] and key ~= "default" and not string.match(key, "item:") ) then
+					tbl[key] = nil
+				end
+			end
+		end
+
+		checkTbl(QuickAuctionsDB.postTime)
+		checkTbl(QuickAuctionsDB.undercut)
+		checkTbl(QuickAuctionsDB.threshold)
+		checkTbl(QuickAuctionsDB.fallback)
+		checkTbl(QuickAuctionsDB.postCap)
+		checkTbl(QuickAuctionsDB.itemList)
+		
+		self:Print(L["Reset all item name based configurations."])
+	end
 
 	-- Got to let the "module" access these
 	QA.auctionData = auctionData
@@ -56,6 +76,30 @@ function QA:OnInitialize()
 	QuickAuctionsDB.revision = tonumber(string.match("$Revision$", "(%d+)") or 1)
 	
 	playerName = UnitName("player")
+end
+
+-- Quick starter function for groups
+function QA:LoadGems()
+	local list = {
+		["scarlet"] = {39996, 39999, 39997, 40001, 40002, 40003, 39998, 40000},
+		["autumn"] = {40012, 40016, 40017, 40014, 40013, 40015},
+		["monarch"] = {40058, 40039, 40043, 40046, 40050, 40054, 40038, 40041, 40057, 40044, 40037, 40045, 40047, 40048, 40053, 40051, 40059, 40040, 40056, 40055, 40049, 40052},
+		["earthsiege"] = {41380, 41389, 41395, 41396, 41401, 41385, 41381, 41397, 41398, 41382},
+		["skyflare"] = {41285, 41307, 41377, 41333, 41335, 41378, 41379, 41376, 41339, 41400, 41375},
+	}
+	
+	for name, items in pairs(list) do
+		QuickAuctionsDB.groups[name] = {}
+		local added = {}
+		for _, itemid in pairs(items) do
+			local itemid = string.format("item:%d", itemid)
+			QuickAuctionsDB.groups[name][itemid] = true
+			table.insert(added, (select(2, GetItemInfo(itemid))) or itemid)
+		end
+		
+		self:Echo(string.format("Created group %s", name))
+		self:Echo(table.concat(added, " "))
+	end
 end
 
 -- AH loaded
@@ -76,7 +120,7 @@ function QA:AHInitialize()
 		if( currentQuery.running ) then
 			QA:Print(L["Auction House closed while running a scan, stopped scanning."])
 		end
-		
+
 		QA:ForceQueryStop()
 	end)
 	
@@ -201,7 +245,7 @@ end
 
 function QA:IsValidItem(link)
 	local name, _, _, _, _, itemType, _, stackCount = GetItemInfo(link)
-	if( QuickAuctionsDB.itemList[name] or QuickAuctionsDB.itemTypes[itemType .. stackCount] ) then
+	if( QuickAuctionsDB.itemList[link] or QuickAuctionsDB.itemTypes[itemType .. stackCount] ) then
 		return true
 	end
 end
@@ -235,7 +279,7 @@ end
 function QA:ScanAuctions()
 	for i=1, (GetNumAuctionItems("owner")) do
 		local name = GetAuctionItemInfo("owner", i)
-		local itemLink = GetAuctionItemLink("owner", i)
+		local itemLink = self:GetSafeLink(GetAuctionItemLink("owner", i))
 		
 		if( itemLink and self:IsValidItem(itemLink) and select(13, GetAuctionItemInfo("owner", i)) == 0 ) then
 			self:AddQueryFilter(name)
@@ -259,7 +303,7 @@ function QA:QueueSet()
 	local link = postList[1]
 	local name, _, _, _, _, itemType, _, stackCount = GetItemInfo(link)
 	local itemCategory = self:GetItemCategory(link)
-	local quantity = type(QuickAuctionsDB.itemList[name]) == "number" and QuickAuctionsDB.itemList[name] or 1
+	local quantity = type(QuickAuctionsDB.itemList[link]) == "number" and QuickAuctionsDB.itemList[link] or 1
 		
 	-- This item cannot stack, so we don't need to bother with splitting and can post it all
 	if( stackCount == 1 ) then
@@ -268,14 +312,14 @@ function QA:QueueSet()
 	end
 	
 	-- If post cap is 20, we have 4 on the AH, then we can post 16 more before hitting cap
-	local leftToCap = (QuickAuctionsDB.postCap[name] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default)
+	local leftToCap = (QuickAuctionsDB.postCap[link] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default)
 	-- If we have 4 of the item, we post it in stacks of 1, we can can post 4
 	local canPost = math.floor(GetItemCount(link) / quantity)
 	
 	-- Subtract how many we have on this tier
-	local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = self:GetLowestAuction(name)
+	local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = self:GetLowestAuction(link)
 	if( isPlayer ) then
-		leftToCap = leftToCap - self:GetItemQuantity(name, lowestBuyout, lowestBid)
+		leftToCap = leftToCap - self:GetItemQuantity(link, lowestBuyout, lowestBid)
 	end
 		
 	-- Nothing to post, or we can't post anything
@@ -323,9 +367,9 @@ end
 function QA:CheckActiveAuctions()
 	for k in pairs(activeAuctions) do activeAuctions[k] = nil end
 	for i=1, (GetNumAuctionItems("owner")) do
-		local name, _, _, _, _, _, _, _, _, _, _, _, wasSold = GetAuctionItemInfo("owner", i)   
-		if( wasSold == 0 ) then
-			activeAuctions[name] = (activeAuctions[name] or 0) + 1
+		if( select(13, GetAuctionItemInfo("owner", i)) ) then
+			local link = self:GetSafeLink(GetAuctionItemLink("owner", i))
+			activeAuctions[link] = (activeAuctions[link] or 0) + 1
 		end
 	end
 end
@@ -412,10 +456,10 @@ function QA:PostItem(link)
 	local name = GetItemInfo(link)
 	local totalPosted = 0
 	local itemCategory = self:GetItemCategory(link)
-	local quantity = type(QuickAuctionsDB.itemList[name]) == "number" and QuickAuctionsDB.itemList[name] or 1
-	local postTime = QuickAuctionsDB.postTime[name] or QuickAuctionsDB.postTime[itemCategory] or QuickAuctionsDB.postTime.default
-	local postCap = QuickAuctionsDB.postCap[name] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default
-	local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = self:GetLowestAuction(name)
+	local quantity = type(QuickAuctionsDB.itemList[link]) == "number" and QuickAuctionsDB.itemList[link] or 1
+	local postTime = QuickAuctionsDB.postTime[link] or QuickAuctionsDB.postTime[itemCategory] or QuickAuctionsDB.postTime.default
+	local postCap = QuickAuctionsDB.postCap[link] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default
+	local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = self:GetLowestAuction(link)
 	local bid, buyout
 	
 	totalPostsSet = 0
@@ -430,7 +474,7 @@ function QA:PostItem(link)
 		
 		-- The lowest player is the player, so find out how many they have at this "tier" posted
 		if( isPlayer ) then
-			totalPosted = self:GetItemQuantity(name, lowestBuyout, lowestBid)
+			totalPosted = self:GetItemQuantity(link, lowestBuyout, lowestBid)
 		end
 				
 		-- It's not us, and it's not a white list who is lowest, so undercut them
@@ -440,7 +484,7 @@ function QA:PostItem(link)
 			-- If smart undercut is on, then someone who posts an auction of 99g99s0c, it will auto undercut to 99g
 			-- instead of 99g99s0c - undercutBy, also make sure the buyout is above 1g
 			if( not QuickAuctionsDB.smartUndercut or buyout == math.floor(buyout) or lowestBuyout < 10000 ) then
-				buyout = (buyout * 10000) - (QuickAuctionsDB.undercut[name] or QuickAuctionsDB.undercut[itemCategory] or QuickAuctionsDB.undercut.default)
+				buyout = (buyout * 10000) - (QuickAuctionsDB.undercut[link] or QuickAuctionsDB.undercut[itemCategory] or QuickAuctionsDB.undercut.default)
 			else
 				buyout = math.floor(buyout) * 10000
 			end
@@ -454,7 +498,7 @@ function QA:PostItem(link)
 
 	-- No other data available, default to our fallback for it
 	else
-		buyout = QuickAuctionsDB.fallback[name] or QuickAuctionsDB.fallback[itemCategory] or QuickAuctionsDB.fallback.default
+		buyout = QuickAuctionsDB.fallback[link] or QuickAuctionsDB.fallback[itemCategory] or QuickAuctionsDB.fallback.default
 		bid = buyout * QuickAuctionsDB.bidpercent
 
 		self:Echo(string.format(L["No data found for %s, using %s buyout and %s bid default."], name, self:FormatTextMoney(buyout), self:FormatTextMoney(bid)))
@@ -531,9 +575,9 @@ function QA:PostItems()
 		local link = postList[i]
 		local name = GetItemInfo(link)
 		local itemCategory = self:GetItemCategory(link)
-		local threshold = QuickAuctionsDB.threshold[name] or QuickAuctionsDB.threshold[itemCategory] or QuickAuctionsDB.threshold.default
+		local threshold = QuickAuctionsDB.threshold[link] or QuickAuctionsDB.threshold[itemCategory] or QuickAuctionsDB.threshold.default
 		
-		local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = self:GetLowestAuction(name)
+		local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = self:GetLowestAuction(link)
 		if( lowestBuyout and lowestBuyout <= threshold ) then
 			if( not QuickAuctionsDB.alertedThreshold[link] ) then
 				self:Echo(string.format(L["Not posting %s, because the buyout is %s per item and the threshold is %s"], name, self:FormatTextMoney(lowestBuyout), self:FormatTextMoney(threshold)))
@@ -542,9 +586,9 @@ function QA:PostItems()
 			table.remove(postList, i)
 		else
 			-- Figure out how many auctions we will be posting quickly
-			local quantity = type(QuickAuctionsDB.itemList[name]) == "number" and QuickAuctionsDB.itemList[name] or 1
+			local quantity = type(QuickAuctionsDB.itemList[link]) == "number" and QuickAuctionsDB.itemList[link] or 1
 			local willPost = math.floor(GetItemCount(link) / quantity)
-			local leftToCap = (QuickAuctionsDB.postCap[name] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default) - self:GetItemQuantity(name, lowestBuyout, lowestBid)
+			local leftToCap = (QuickAuctionsDB.postCap[link] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default) - self:GetItemQuantity(link, lowestBuyout, lowestBid)
 			willPost = willPost > leftToCap and leftToCap or willPost
 		
 			self.postButton.totalPosts = self.postButton.totalPosts + willPost
@@ -579,36 +623,36 @@ function QA:CheckItems()
 	
 	for i=1, (GetNumAuctionItems("owner")) do
 		local name, texture, quantity, _, _, _, bid, _, buyoutPrice, _, _, owner, wasSold = GetAuctionItemInfo("owner", i)     
+		local link = self:GetSafeLink(GetAuctionItemLink("owner", i))
 				
-		local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = self:GetLowestAuction(name)
+		local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = self:GetLowestAuction(link)
 		if( wasSold == 0 and lowestOwner ) then
 			buyoutPrice = buyoutPrice / quantity
 			bid = bid / quantity
 			
-			local itemLink = GetAuctionItemLink("owner", i)
-			local itemCategory = self:GetItemCategory(itemLink)
-			local threshold = QuickAuctionsDB.threshold[name] or QuickAuctionsDB.threshold[itemCategory] or QuickAuctionsDB.threshold.default
-			local fallback = QuickAuctionsDB.fallback[name] or QuickAuctionsDB.fallback[itemCategory] or QuickAuctionsDB.fallback.default
+			local itemCategory = self:GetItemCategory(link)
+			local threshold = QuickAuctionsDB.threshold[link] or QuickAuctionsDB.threshold[itemCategory] or QuickAuctionsDB.threshold.default
+			local fallback = QuickAuctionsDB.fallback[link] or QuickAuctionsDB.fallback[itemCategory] or QuickAuctionsDB.fallback.default
 						
 			
 			-- They aren't us (The player posting), or on our whitelist so easy enough
 			-- They are on our white list, but they undercut us, OR they matched us but the bid is lower
 			-- The player is the only one with it on the AH and it's below the threshold
-			if( ( not isPlayer and not isWhitelist ) or ( isWhitelist and ( buyoutPrice > lowestBuyout or ( buyoutPrice == lowestBuyout and lowestBid < bid ) ) ) or ( QuickAuctionsDB.smartCancel and auctionData[name].onlyPlayer and buyoutPrice < fallback ) ) then
+			if( ( not isPlayer and not isWhitelist ) or ( isWhitelist and ( buyoutPrice > lowestBuyout or ( buyoutPrice == lowestBuyout and lowestBid < bid ) ) ) or ( QuickAuctionsDB.smartCancel and auctionData[link].onlyPlayer and buyoutPrice < fallback ) ) then
 				-- Don't cancel if the buyout is equal, or below our threshold
 				if( QuickAuctionsDB.smartCancel and lowestBuyout <= threshold ) then
-					if( not tempList[name] ) then
-						tempList[name] = true
-						self:Echo(string.format(L["Undercut on %s, by %s, buyout %s, our buyout %s (per item), threshold is %s so not cancelling."], itemLink, lowestOwner, self:FormatTextMoney(lowestBuyout), self:FormatTextMoney(buyoutPrice), self:FormatTextMoney(threshold)))
+					if( not tempList[link] ) then
+						tempList[link] = true
+						self:Echo(string.format(L["Undercut on %s, by %s, buyout %s, our buyout %s (per item), threshold is %s so not cancelling."], (GetAuctionItemLink("owner", i)), lowestOwner, self:FormatTextMoney(lowestBuyout), self:FormatTextMoney(buyoutPrice), self:FormatTextMoney(threshold)))
 					end
 				else
-					if( not tempList[name] ) then
-						tempList[name] = true
+					if( not tempList[link] ) then
+						tempList[link] = true
 						
-						if( auctionData[name].onlyPlayer and buyoutPrice < fallback ) then
-							self:Echo(string.format(L["You are the only one posting %s for %s buyout, but the fallback is %s (per item), cancelling so you can re-list higher."], itemLink, self:FormatTextMoney(buyoutPrice), self:FormatTextMoney(fallback)))
+						if( auctionData[link].onlyPlayer and buyoutPrice < fallback ) then
+							self:Echo(string.format(L["You are the only one posting %s for %s buyout, but the fallback is %s (per item), cancelling so you can re-list higher."], (GetAuctionItemLink("owner", i)), self:FormatTextMoney(buyoutPrice), self:FormatTextMoney(fallback)))
 						else
-							self:Echo(string.format(L["Undercut on %s, by %s, buyout %s, bid %s, our buyout %s, our bid %s (per item)"], itemLink, lowestOwner, self:FormatTextMoney(lowestBuyout), self:FormatTextMoney(lowestBid), self:FormatTextMoney(buyoutPrice), self:FormatTextMoney(bid)))
+							self:Echo(string.format(L["Undercut on %s, by %s, buyout %s, bid %s, our buyout %s, our bid %s (per item)"], (GetAuctionItemLink("owner", i)), lowestOwner, self:FormatTextMoney(lowestBuyout), self:FormatTextMoney(lowestBid), self:FormatTextMoney(buyoutPrice), self:FormatTextMoney(bid)))
 						end
 					end
 					
@@ -702,15 +746,15 @@ end
 -- Add a new record
 function QA:AddAuctionRecord(name, link, owner, quantity, bid, buyout)
 	-- No data yet, create it
-	if( not auctionData[name] ) then
-		auctionData[name] = {quantity = 0, link = link, onlyPlayer = true, records = {}}
+	if( not auctionData[link] ) then
+		auctionData[link] = {quantity = 0, link = link, name = name, onlyPlayer = true, records = {}}
 	-- Flagged for reset once we see it
-	elseif( auctionData[name].reset ) then
-		auctionData[name].quantity = 0
-		auctionData[name].onlyPlayer = true
-		auctionData[name].reset = nil
+	elseif( auctionData[link].reset ) then
+		auctionData[link].quantity = 0
+		auctionData[link].onlyPlayer = true
+		auctionData[link].reset = nil
 		
-		for _, record in pairs(auctionData[name].records) do
+		for _, record in pairs(auctionData[link].records) do
 			record.owner = nil
 			record.used = nil
 			record.quantity = 0
@@ -720,7 +764,7 @@ function QA:AddAuctionRecord(name, link, owner, quantity, bid, buyout)
 	end
 	
 	-- Update total of this item
-	auctionData[name].quantity = auctionData[name].quantity + quantity
+	auctionData[link].quantity = auctionData[link].quantity + quantity
 	
 	-- Don't add this data, just add the quantity if it has no buyout
 	if( buyout <= 0 ) then
@@ -730,7 +774,7 @@ function QA:AddAuctionRecord(name, link, owner, quantity, bid, buyout)
 	-- Not only the player has posted this anymore :(
 	local isPlayer = owner == playerName or QuickAuctionsDB.alts[owner]
 	if( not isPlayer ) then
-		auctionData[name].onlyPlayer = nil
+		auctionData[link].onlyPlayer = nil
 	end
 	
 	-- Find one thats unused if we can
@@ -738,7 +782,7 @@ function QA:AddAuctionRecord(name, link, owner, quantity, bid, buyout)
 	bid = bid / quantity
 	
 	-- Find either a record that isn't in use, or one that matches this data already we can update
-	for _, record in pairs(auctionData[name].records) do
+	for _, record in pairs(auctionData[link].records) do
 		if( not record.used or ( record.owner == owner and record.buyout == buyout and record.bid == bid ) ) then
 			record.used = true
 			record.buyout = buyout
@@ -751,17 +795,17 @@ function QA:AddAuctionRecord(name, link, owner, quantity, bid, buyout)
 	end
 	
 	-- Nothing available, create a new one
-	table.insert(auctionData[name].records, {used = true, owner = owner, buyout = buyout, bid = bid, isPlayer = isPlayer, quantity = quantity})
+	table.insert(auctionData[link].records, {used = true, owner = owner, buyout = buyout, bid = bid, isPlayer = isPlayer, quantity = quantity})
 end
 
 -- Find out if we got undercut on this item
 function QA:IsLowestAuction(name, buyout, bid)
 	-- We don't even have data on this
-	if( not auctionData[name] ) then
+	if( not auctionData[link] ) then
 		return true
 	end
 	
-	for _, record in pairs(auctionData[name].records) do
+	for _, record in pairs(auctionData[link].records) do
 		if( record.used ) then
 			-- They are on our whitelist, and they undercut us, or they matched our buyout but under bid us.
 			if( QuickAuctionsDB.whitelist[record.owner] ) then
@@ -779,12 +823,12 @@ function QA:IsLowestAuction(name, buyout, bid)
 end
 
 -- Searches the item data to find out how many we have on the provided item info
-function QA:GetItemQuantity(name, buyout, bid)
-	if( not auctionData[name] or auctionData[name].quantity == 0 ) then
+function QA:GetItemQuantity(link, buyout, bid)
+	if( not auctionData[link] or auctionData[link].quantity == 0 ) then
 		return 0
 	end
 	
-	for _, record in pairs(auctionData[name].records) do
+	for _, record in pairs(auctionData[link].records) do
 		if( record.used and record.isPlayer and record.buyout == buyout and record.bid == bid ) then
 			return record.quantity
 		end
@@ -794,15 +838,15 @@ function QA:GetItemQuantity(name, buyout, bid)
 end
 
 -- Find out the lowest price for this auction
-function QA:GetLowestAuction(name)
+function QA:GetLowestAuction(link)
 	-- No data on it
-	if( not auctionData[name] or auctionData[name].quantity == 0 ) then
+	if( not auctionData[link] or auctionData[link].quantity == 0 ) then
 		return nil
 	end
 		
 	-- Find lowest
 	local buyout, bid, owner
-	for _, record in pairs(auctionData[name].records) do
+	for _, record in pairs(auctionData[link].records) do
 		if( record.used and ( not buyout or ( record.buyout < buyout or ( record.buyout <= buyout and record.bid < bid ) ) ) ) then
 			buyout = record.buyout
 			bid = record.bid
@@ -814,7 +858,7 @@ function QA:GetLowestAuction(name)
 	-- the reason we do it like this, is so if Apple posts an item at 50g, Orange posts one at 50g
 	-- but you only have Apple on your white list, it'll undercut it because Orange posted it as well
 	local isWhitelist, isPlayer = true, true
-	for _, record in pairs(auctionData[name].records) do
+	for _, record in pairs(auctionData[link].records) do
 		if( record.used and record.buyout == buyout ) then
 			if( not record.isPlayer ) then
 				if( not QuickAuctionsDB.whitelist[record.owner] ) then
@@ -838,14 +882,14 @@ function QA:GetLowestAuction(name)
 end
 
 -- Find out how much of an item we have total on alts
-function QA:GetAltAuctionTotals(name)
+function QA:GetAltAuctionTotals(link)
 	-- No data on it
-	if( not auctionData[name] or auctionData[name].quantity == 0 ) then
+	if( not auctionData[link] or auctionData[link].quantity == 0 ) then
 		return 0
 	end
 	
 	local total = 0
-	for _, record in pairs(auctionData[name].records) do
+	for _, record in pairs(auctionData[link].records) do
 		if( record.used and record.isPlayer and record.owner ~= playerName ) then
 			total = total + record.quantity
 		end
@@ -1106,17 +1150,21 @@ local function parseVariableOption(arg, configKey, isMoney, defaultMsg, setMsg, 
 	
 	-- Figure out what we're modifying, is it an item, group, or an item type
 	local name = GetItemInfo(itemID)
+	-- Item link
+	if( name ) then
+		name = self:GetSafeLink(itemID)
+		
 	-- Item type
-	if( not name and validTypes[itemID] ) then
+	elseif( validTypes[itemID] ) then
 		name = itemID
 		itemID = validTypes[itemID]
 	
 	-- Group
-	elseif( not name and QuickAuctionsDB.groups[itemID] ) then
+	elseif( QuickAuctionsDB.groups[itemID] ) then
 		name = itemID
 		
-	-- Bad item link
-	elseif( not name ) then
+	-- Bad item identifier
+	else
 		self:Print(L["Invalid item link, item type or group name passed."])
 		return
 	end
@@ -1225,7 +1273,7 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 			quantity = stackCount
 		end
 		
-		QuickAuctionsDB.itemList[name] = quantity or true
+		QuickAuctionsDB.itemList[self:GetSafeLink(link)] = quantity or true
 		if( quantity ) then
 			self:Print(string.format(L["Now managing %s in Quick Auctions! Will post auctions with %s x %d"], link, link, quantity))
 		else
@@ -1475,8 +1523,8 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 			self:Print(string.format(L["Posting auction bids at %d%% of buyout."], QuickAuctionsDB.bidpercent))
 		elseif( arg == "items" ) then
 			local list = {}
-			for name, quantity in pairs(QuickAuctionsDB.itemList) do
-				table.insert(list, string.format("%s x |cff33ff99%d|r", name, type(quantity) == "number" and quantity or 1))	
+			for link, quantity in pairs(QuickAuctionsDB.itemList) do
+				table.insert(list, string.format("%s x |cff33ff99%d|r", (select(2, GetItemInfo(link))) or link, type(quantity) == "number" and quantity or 1))	
 			end
 			
 			if( #(list) > 0 ) then
@@ -1530,9 +1578,9 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 			end
 			
 			local list = {}
-			for name, value in pairs(QuickAuctionsDB[key]) do
+			for link, value in pairs(QuickAuctionsDB[key]) do
 				list[value] = list[value] or {}
-				table.insert(list[value], name)
+				table.insert(list[value], (select(2, GetItemInfo(link))) or link)
 			end
 			
 			for category, items in pairs(list) do
