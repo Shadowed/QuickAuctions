@@ -48,7 +48,7 @@ function QA:OnInitialize()
 	end
 	
 	-- Reset any item based configuration
-	if( QuickAuctionsDB.revision <= 1160 ) then
+	if( QuickAuctionsDB.revision and QuickAuctionsDB.revision <= 1160 ) then
 		checkTbl = function(tbl)
 			for key in pairs(tbl) do
 				if( not QuickAuctionsDB.groups[key] and not validTypes[key] and key ~= "default" and not string.match(key, "item:") ) then
