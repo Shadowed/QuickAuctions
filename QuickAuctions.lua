@@ -74,7 +74,7 @@ function QA:OnInitialize()
 	
 	-- DB version
 	QuickAuctionsDB.revision = tonumber(string.match("$Revision$", "(%d+)") or 1)
-	
+
 	playerName = UnitName("player")
 end
 
@@ -118,7 +118,15 @@ function QA:AHInitialize()
 	-- Hook auction OnHide to interrupt scans if we have to
 	AuctionFrame:HookScript("OnHide", function(self)
 		if( currentQuery.running ) then
-			QA:Print(L["Auction House closed while running a scan, stopped scanning."])
+			QA:Print(L["Stopped scanning due to the Auction House being closed."])
+		elseif( QA.postButton.totalPosts and QA.postButton.totalPosts > 0 ) then
+			QA.postButton.totalPosts = 0
+			QA.postButton.havePosted = 0
+			QA.postButton:SetText(L["Post Items"])
+			QA.postButton:Enable()
+			QA:Print(L["Stopped posting due to the Auction House being closed."])
+			
+			for i=#(postList), 1, -1 do table.remove(postList, i) end
 		end
 
 		QA:ForceQueryStop()
@@ -248,6 +256,19 @@ function QA:IsValidItem(link)
 	if( QuickAuctionsDB.itemList[link] or QuickAuctionsDB.itemTypes[itemType .. stackCount] ) then
 		return true
 	end
+end
+
+function QA:PartOfCategory(link, category)
+	if( not link ) then return false end
+	local name, _, _, _, _, itemType, _, stackCount = GetItemInfo(link)
+	
+	-- Part of a group
+	if( QuickAuctionsDB.groups[category] and QuickAuctionsDB.groups[category][link] ) then
+		return true
+	end
+	
+	-- Nope, check if it's under a default group
+	return typeInfo[itemType .. stackCount] == category
 end
 
 function QA:GetItemCategory(link)
@@ -1452,7 +1473,9 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 
 		for i=1, (GetNumAuctionItems("owner")) do
 			local name, _, _, _, _, _, _, _, _, _, _, _, wasSold = GetAuctionItemInfo("owner", i)   
-			if( wasSold == 0 ) then
+			local link = self:GetSafeLink(GetAuctionItemLink("owner", i))
+			
+			if( wasSold == 0 and ( not arg or ( arg and self:PartOfCategory(link, arg) ) ) ) then
 				self.scanButton.totalCancels = self.scanButton.totalCancels + 1
 				CancelAuction(i)
 			end

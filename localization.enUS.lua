@@ -18,7 +18,8 @@ QuickAuctionsLocals = {
 	
 	["Reset all item name based configurations."] = "Reset all item name based configurations.",
 	
-	["Auction House closed while running a scan, stopped scanning."] = "Auction House closed while running a scan, stopped scanning.",
+	["Stopped scanning due to the Auction House being closed."] = "Stopped scanning due to the Auction House being closed.",
+	["Stopped posting due to the Auction House being closed."] = "Stopped posting due to the Auction House being closed.",
 	
 	["You are the only one posting %s for %s buyout, but the fallback is %s (per item), cancelling so you can re-list higher."] = "You are the only one posting %s for %s buyout, but the fallback is %s (per item), cancelling so you can re-list higher.",
 	["You only have %d of %s, and posting it in stacks of %d, not posting."] = "You only have %d of %s, and posting it in stacks of %d, not posting.",
