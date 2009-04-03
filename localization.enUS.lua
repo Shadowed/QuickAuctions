@@ -21,6 +21,7 @@ QuickAuctionsLocals = {
 	["Stopped scanning due to the Auction House being closed."] = "Stopped scanning due to the Auction House being closed.",
 	["Stopped posting due to the Auction House being closed."] = "Stopped posting due to the Auction House being closed.",
 	
+	["%s by %s is listed at %s, but that is above the maximum price threshold of %s, posted it at %s instead."] = "%s by %s is listed at %s, but that is above the maximum price threshold of %s, posted it at %s instead.",
 	["You are the only one posting %s for %s buyout, but the fallback is %s (per item), cancelling so you can re-list higher."] = "You are the only one posting %s for %s buyout, but the fallback is %s (per item), cancelling so you can re-list higher.",
 	["You only have %d of %s, and posting it in stacks of %d, not posting."] = "You only have %d of %s, and posting it in stacks of %d, not posting.",
 	["No data found for %s, using %s buyout and %s bid default."] = "No data found for %s, using %s buyout and %s bid default.",
@@ -46,6 +47,7 @@ QuickAuctionsLocals = {
 	["Posting auction bids at %d%% of buyout."] = "Posting auction bids at %d%% of buyout.",
 	["Found no items to list."] = "Found no items to list.",
 	["You cannot add %s to the group %s, it already exists in another group."] = "You cannot add %s to the group %s, it already exists in another group.",
+	["Auction prices will not exceed %d%% of the fallback price."] = "Auction prices will not exceed %d%% of the fallback price.",
 	
 	["Found no characters to list."] = "Found no characters to list.",
 	["White list: %s"] = "White list: %s",
@@ -129,6 +131,7 @@ QuickAuctionsLocals = {
 	["/qa cancelall - Cancel all of your auctions. REGARDLESS of if you were undercut or not."] = "/qa cancelall - Cancel all of your auctions. REGARDLESS of if you were undercut or not.",
 	["/qa addgroup/removegroup <group> <link> - Group management for unique categories of items."] = "/qa addgroup/removegroup <group> <link> - Group management for unique categories of items.",
 	["/qa list <time/bidpercent/cap/undercut/fallback/threshold/whitelist/alts/items> - Lists the set values for any of the passed categories."] = "/qa list <time/bidpercent/cap/undercut/fallback/threshold/whitelist/alts/items> - Lists the set values for any of the passed categories.",
+	["/qa pricecap <percent> - How high above the fallback price an item should be posted at. 100 means an item will not be listed for more than the fallback price."] = "/qa pricecap <percent> - How high above the fallback price an item should be posted at. 100 means an item will not be listed for more than the fallback price.",
 	
 	-- Summary
 	["Stop"] = "Stop",

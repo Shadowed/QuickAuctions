@@ -17,6 +17,7 @@ function QA:OnInitialize()
 		smartCancel = true,
 		saveCraft = false,
 		bidpercent = 1.0,
+		pricepercent = 1.5,
 		itemTypes = {},
 		itemList = {},
 		whitelist = {},
@@ -516,12 +517,22 @@ function QA:PostItem(link)
 		
 		bid = math.floor(bid)
 		buyout = math.floor(buyout)
+		
+		-- Check if they are going above out threshold
+		local fallback = QuickAuctionsDB.fallback[link] or QuickAuctionsDB.fallback[itemCategory] or QuickAuctionsDB.fallback.default
+		if( buyout > (fallback * QuickAuctionsDB.pricepercent) ) then
+			buyout = fallback
+			bid = fallback * QuickAuctionsDB.bidpercent
+			
+			self:Echo(string.format(L["%s by %s is listed at %s, but that is above the maximum price threshold of %s, posted it at %s instead."], name, lowestOwner, self:FormatTextMoney(buyout), self:FormatTextMoney(fallback * QuickAuctionsDB.pricepercent), self:FormatTextMoney(fallback)))
+		end
+		
 
 	-- No other data available, default to our fallback for it
 	else
 		buyout = QuickAuctionsDB.fallback[link] or QuickAuctionsDB.fallback[itemCategory] or QuickAuctionsDB.fallback.default
 		bid = buyout * QuickAuctionsDB.bidpercent
-
+		
 		self:Echo(string.format(L["No data found for %s, using %s buyout and %s bid default."], name, self:FormatTextMoney(buyout), self:FormatTextMoney(bid)))
 	end
 	
@@ -612,7 +623,9 @@ function QA:PostItems()
 			local leftToCap = (QuickAuctionsDB.postCap[link] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default) - self:GetItemQuantity(link, lowestBuyout, lowestBid)
 			willPost = willPost > leftToCap and leftToCap or willPost
 		
-			self.postButton.totalPosts = self.postButton.totalPosts + willPost
+			if( willPost > 0 ) then
+				self.postButton.totalPosts = self.postButton.totalPosts + willPost
+			end
 		end
 	end
 
@@ -1229,6 +1242,14 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 	elseif( cmd == "cap" and arg ) then
 		parseVariableOption(arg, "postCap", false, L["Default post cap for auctions set to %s."], L["Set post cap for %s to %s."], L["Removed post cap on %s."])
 	
+	-- Post price cap
+	elseif( cmd == "pricecap" and arg ) then
+		local amount = tonumber(arg)
+		if( amount < 0 ) then amount = 0 end
+		
+		self:Print(string.format(L["Auction prices will not exceed %d%% of the fallback price."], amount))
+		QuickAuctionsDB.pricepercent = amount / 100
+	
 	-- Post time
 	elseif( cmd == "time" and arg ) then
 		local amount = string.split(" ", arg, 2)
@@ -1631,6 +1652,7 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 		self:Echo(L["/qa smartcut - Toggles smart undercutting (Going from 1.9g -> 1g first instead of 1.9g - undercut amount."])
 		self:Echo(L["/qa smartcancel - Toggles smart canceling, will not cancel if the item is below the threshold, or will cancel if you can make more relisting it."])
 		self:Echo(L["/qa bidpercent <0-100> - Percentage of the buyout that the bid should be, 200g buyout and this set at 90 will put the bid at 180g."])
+		self:echo(L["/qa pricecap <percent> - How high above the fallback price an item should be posted at. 100 means an item will not be listed for more than the fallback price."])
 		self:Echo(L["/qa time <12/24/48> <link/type/group> - Amount of hours to put auctions up for."])
 		self:Echo(L["/qa undercut <money> <link/type/roup> - How much to undercut people by."])
 		self:Echo(L["/qa cap <amount> <link/type/group> - Only allow <amount> of the same kind of auction to be up at the same time."])
