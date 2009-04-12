@@ -85,6 +85,7 @@ function QA:LoadGems()
 		["scarlet"] = {39996, 39999, 39997, 40001, 40002, 40003, 39998, 40000},
 		["autumn"] = {40012, 40016, 40017, 40014, 40013, 40015},
 		["monarch"] = {40058, 40039, 40043, 40046, 40050, 40054, 40038, 40041, 40057, 40044, 40037, 40045, 40047, 40048, 40053, 40051, 40059, 40040, 40056, 40055, 40049, 40052},
+		["forest"] = {40094, 40089, 40105, 40091, 40104, 40086, 40100, 40095, 40103, 40098, 40092, 40106, 40099, 40090, 40096, 40101, 40085, 40102, 40088},
 		["earthsiege"] = {41380, 41389, 41395, 41396, 41401, 41385, 41381, 41397, 41398, 41382},
 		["skyflare"] = {41285, 41307, 41377, 41333, 41335, 41378, 41379, 41376, 41339, 41400, 41375},
 	}
@@ -272,6 +273,32 @@ function QA:PartOfCategory(link, category)
 	return typeInfo[itemType .. stackCount] == category
 end
 
+function QA:GetConfigValue(link, key)
+	if( not link ) then return "" end
+	-- Link settings overrides everything
+	if( QuickAuctionsDB[key][link] ) then 
+		return QuickAuctionsDB[key][link]
+	end
+	
+	local name, _, _, _, _, itemType, _, stackCount = GetItemInfo(link)
+	
+	-- Group settings overrides everything but links
+	for group, items in pairs(QuickAuctionsDB.groups) do
+		if( items[link] and QuickAuctionsDB[key][group] ) then
+			return QuickAuctionsDB[key][group]
+		end
+	end
+	
+	-- Item group settings overrides everything but groups/links
+	local type = typeInfo[itemType .. stackCount]
+	if( type and QuickAuctionsDB[key][type] ) then
+		return QuickAuctionsDB[key][type]
+	end
+
+	-- And default is the last resort	
+	return QuickAuctionsDB[key].default
+end
+
 function QA:GetItemCategory(link)
 	if( not link ) then return "" end
 	local name, _, _, _, _, itemType, _, stackCount = GetItemInfo(link)
@@ -324,7 +351,6 @@ function QA:QueueSet()
 
 	local link = postList[1]
 	local name, _, _, _, _, itemType, _, stackCount = GetItemInfo(link)
-	local itemCategory = self:GetItemCategory(link)
 	local quantity = type(QuickAuctionsDB.itemList[link]) == "number" and QuickAuctionsDB.itemList[link] or 1
 		
 	-- This item cannot stack, so we don't need to bother with splitting and can post it all
@@ -334,7 +360,7 @@ function QA:QueueSet()
 	end
 	
 	-- If post cap is 20, we have 4 on the AH, then we can post 16 more before hitting cap
-	local leftToCap = (QuickAuctionsDB.postCap[link] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default)
+	local leftToCap = self:GetConfigValue(link, "postCap")
 	-- If we have 4 of the item, we post it in stacks of 1, we can can post 4
 	local canPost = math.floor(GetItemCount(link) / quantity)
 	
@@ -417,7 +443,6 @@ function QA:PostAuctions()
 			local link = self:GetSafeLink(GetContainerItemLink(bag, slot))
 			if( link ) then
 				local name, _, _, _, _, _, _, stackCount = GetItemInfo(link)
-				local itemCategory = self:GetItemCategory(link)
 				
 				-- Make sure we aren't already at the post cap, to reduce the item scans needed
 				if( self:IsValidItem(link) ) then
@@ -477,10 +502,9 @@ end
 function QA:PostItem(link)
 	local name = GetItemInfo(link)
 	local totalPosted = 0
-	local itemCategory = self:GetItemCategory(link)
 	local quantity = type(QuickAuctionsDB.itemList[link]) == "number" and QuickAuctionsDB.itemList[link] or 1
-	local postTime = QuickAuctionsDB.postTime[link] or QuickAuctionsDB.postTime[itemCategory] or QuickAuctionsDB.postTime.default
-	local postCap = QuickAuctionsDB.postCap[link] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default
+	local postTime = self:GetConfigValue(link, "postTime")
+	local postCap = self:GetConfigValue(link, "postCap")
 	local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = self:GetLowestAuction(link)
 	local bid, buyout
 	
@@ -506,7 +530,7 @@ function QA:PostItem(link)
 			-- If smart undercut is on, then someone who posts an auction of 99g99s0c, it will auto undercut to 99g
 			-- instead of 99g99s0c - undercutBy, also make sure the buyout is above 1g
 			if( not QuickAuctionsDB.smartUndercut or buyout == math.floor(buyout) or lowestBuyout < 10000 ) then
-				buyout = (buyout * 10000) - (QuickAuctionsDB.undercut[link] or QuickAuctionsDB.undercut[itemCategory] or QuickAuctionsDB.undercut.default)
+				buyout = (buyout * 10000) - self:GetConfigValue(link, "undercut")
 			else
 				buyout = math.floor(buyout) * 10000
 			end
@@ -519,18 +543,19 @@ function QA:PostItem(link)
 		buyout = math.floor(buyout)
 		
 		-- Check if they are going above out threshold
-		local fallback = QuickAuctionsDB.fallback[link] or QuickAuctionsDB.fallback[itemCategory] or QuickAuctionsDB.fallback.default
-		if( buyout > (fallback * QuickAuctionsDB.pricepercent) ) then
-			buyout = fallback
-			bid = fallback * QuickAuctionsDB.bidpercent
-			
-			self:Echo(string.format(L["%s by %s is listed at %s, but that is above the maximum price threshold of %s, posted it at %s instead."], name, lowestOwner, self:FormatTextMoney(buyout), self:FormatTextMoney(fallback * QuickAuctionsDB.pricepercent), self:FormatTextMoney(fallback)))
-		end
-		
+		if( QuickAuctionsDB.pricepercent > 0 ) then
+			local fallback = self:GetConfigValue(link, "fallback")
+			if( buyout > (fallback * QuickAuctionsDB.pricepercent) ) then
+				buyout = fallback
+				bid = fallback * QuickAuctionsDB.bidpercent
+
+				self:Echo(string.format(L["%s by %s is listed at %s, but that is above the maximum price threshold of %s, posted it at %s instead."], name, lowestOwner, self:FormatTextMoney(buyout), self:FormatTextMoney(fallback * QuickAuctionsDB.pricepercent), self:FormatTextMoney(fallback)))
+			end
+		end		
 
 	-- No other data available, default to our fallback for it
 	else
-		buyout = QuickAuctionsDB.fallback[link] or QuickAuctionsDB.fallback[itemCategory] or QuickAuctionsDB.fallback.default
+		buyout = self:GetConfigValue(link, "fallback")
 		bid = buyout * QuickAuctionsDB.bidpercent
 		
 		self:Echo(string.format(L["No data found for %s, using %s buyout and %s bid default."], name, self:FormatTextMoney(buyout), self:FormatTextMoney(bid)))
@@ -606,8 +631,7 @@ function QA:PostItems()
 	for i=#(postList), 1, -1 do
 		local link = postList[i]
 		local name = GetItemInfo(link)
-		local itemCategory = self:GetItemCategory(link)
-		local threshold = QuickAuctionsDB.threshold[link] or QuickAuctionsDB.threshold[itemCategory] or QuickAuctionsDB.threshold.default
+		local threshold = self:GetConfigValue(link, "threshold")
 		
 		local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = self:GetLowestAuction(link)
 		if( lowestBuyout and lowestBuyout <= threshold ) then
@@ -620,7 +644,7 @@ function QA:PostItems()
 			-- Figure out how many auctions we will be posting quickly
 			local quantity = type(QuickAuctionsDB.itemList[link]) == "number" and QuickAuctionsDB.itemList[link] or 1
 			local willPost = math.floor(GetItemCount(link) / quantity)
-			local leftToCap = (QuickAuctionsDB.postCap[link] or QuickAuctionsDB.postCap[itemCategory] or QuickAuctionsDB.postCap.default) - self:GetItemQuantity(link, lowestBuyout, lowestBid)
+			local leftToCap = (self:GetConfigValue(link, "postCap")) - self:GetItemQuantity(link, lowestBuyout, lowestBid)
 			willPost = willPost > leftToCap and leftToCap or willPost
 		
 			if( willPost > 0 ) then
@@ -664,9 +688,8 @@ function QA:CheckItems()
 			buyoutPrice = buyoutPrice / quantity
 			bid = bid / quantity
 			
-			local itemCategory = self:GetItemCategory(link)
-			local threshold = QuickAuctionsDB.threshold[link] or QuickAuctionsDB.threshold[itemCategory] or QuickAuctionsDB.threshold.default
-			local fallback = QuickAuctionsDB.fallback[link] or QuickAuctionsDB.fallback[itemCategory] or QuickAuctionsDB.fallback.default
+			local threshold = self:GetConfigValue(link, "threshold")
+			local fallback = self:GetConfigValue(link, "fallback")
 						
 			
 			-- They aren't us (The player posting), or on our whitelist so easy enough

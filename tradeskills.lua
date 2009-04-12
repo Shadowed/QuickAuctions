@@ -221,7 +221,9 @@ function Tradeskill:TRADE_SKILL_UPDATE()
 		local itemid = QA:GetSafeLink(GetTradeSkillItemLink(i))
 		if( itemid ) then
 			if( QuickAuctionsDB.saveCraft ) then
-				QuickAuctionsDB.crafts[itemid] = true
+				local enchantid = string.match(GetTradeSkillRecipeLink(i), "enchant:([0-9]+)")
+				
+				QuickAuctionsDB.crafts[itemid] = tonumber(enchantid) or true
 			end
 			
 			-- Create a list of items we need to create this item

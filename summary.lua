@@ -143,13 +143,20 @@ function Summary:UpdateItemData(summaryData, name, quantity, link, itemLevel, it
 
 	index = index + 1
 	if( not displayData[index] ) then displayData[index] = {} end
-
+	
+	local enchantLink
+	-- Don't show this for things grouped by parents, because we already know what they take
+	if( summaryData.groupedBy ~= "parent" and type(QuickAuctionsDB.crafts[link]) == "number" ) then
+		enchantLink = string.format("enchant:%d", QuickAuctionsDB.crafts[link])
+	end
+	
 	local row = displayData[index]
 	local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = QA:GetLowestAuction(link)
 	row.enabled = true
 	row.name = name
 	row.quantity = quantity
 	row.link = link
+	row.enchantLink = enchantLink
 	row.buyout = lowestBuyout or 0
 	row.bid = lowestBid or 0
 	row.isLowest = isWhitelist or isPlayer
@@ -363,6 +370,7 @@ function Summary:Update()
 			else
 				row.queryFor = itemName
 				row.link = link
+				row.enchantLink = data.enchantLink
 				row.baseLink = data.link
 
 				local createTag = ""
@@ -533,14 +541,14 @@ function Summary:CreateGUI()
 			GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
 			GameTooltip:SetText(self.tooltip)
 			GameTooltip:Show()
-		elseif( self.link ) then
+		elseif( self.enchantLink or self.link ) then
 			if( self.button:IsVisible() ) then
 				GameTooltip:SetOwner(self.button, "ANCHOR_LEFT")
 			else
 				GameTooltip:SetOwner(self, "ANCHOR_LEFT")
 			end
 			
-			GameTooltip:SetHyperlink(self.link)
+			GameTooltip:SetHyperlink(self.enchantLink or self.link)
 		end
 	end
 	
