@@ -17,7 +17,7 @@ function QA:OnInitialize()
 		smartCancel = true,
 		saveCraft = false,
 		bidpercent = 1.0,
-		pricepercent = 1.5,
+		pricepercent = 10,
 		itemTypes = {},
 		itemList = {},
 		whitelist = {},
@@ -366,7 +366,7 @@ function QA:QueueSet()
 	
 	-- Subtract how many we have on this tier
 	local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = self:GetLowestAuction(link)
-	if( isPlayer ) then
+	if( isPlayer or isWhitelist ) then
 		leftToCap = leftToCap - self:GetItemQuantity(link, lowestBuyout, lowestBid)
 	end
 		
@@ -519,7 +519,7 @@ function QA:PostItem(link)
 		bid = lowestBid
 		
 		-- The lowest player is the player, so find out how many they have at this "tier" posted
-		if( isPlayer ) then
+		if( isPlayer or isWhitelist ) then
 			totalPosted = self:GetItemQuantity(link, lowestBuyout, lowestBid)
 		end
 				
@@ -637,14 +637,18 @@ function QA:PostItems()
 		if( lowestBuyout and lowestBuyout <= threshold ) then
 			if( not QuickAuctionsDB.alertedThreshold[link] ) then
 				self:Echo(string.format(L["Not posting %s, because the buyout is %s per item and the threshold is %s"], name, self:FormatTextMoney(lowestBuyout), self:FormatTextMoney(threshold)))
-				QuickAuctionsDB.alertedThreshold[link] = true
+				QuickAuctionsDB.alertedThreshold[link] = time()
 			end
 			table.remove(postList, i)
 		else
 			-- Figure out how many auctions we will be posting quickly
 			local quantity = type(QuickAuctionsDB.itemList[link]) == "number" and QuickAuctionsDB.itemList[link] or 1
 			local willPost = math.floor(GetItemCount(link) / quantity)
-			local leftToCap = (self:GetConfigValue(link, "postCap")) - self:GetItemQuantity(link, lowestBuyout, lowestBid)
+			local leftToCap = self:GetConfigValue(link, "postCap")
+			if( isPlayer or isWhitelist ) then
+				leftToCap = leftToCap - self:GetItemQuantity(link, lowestBuyout, lowestBid)
+			end
+			
 			willPost = willPost > leftToCap and leftToCap or willPost
 		
 			if( willPost > 0 ) then
