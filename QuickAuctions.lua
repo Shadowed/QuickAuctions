@@ -255,6 +255,15 @@ end
 
 function QA:IsValidItem(link)
 	local name, _, _, _, _, itemType, _, stackCount = GetItemInfo(link)
+	
+	-- Part of a group
+	for group, items in pairs(QuickAuctionsDB.groups) do
+		if( items[link] ) then
+			return true
+		end
+	end
+	
+	-- Managed manually singly, or managed through a predefined set
 	if( QuickAuctionsDB.itemList[link] or QuickAuctionsDB.itemTypes[itemType .. stackCount] ) then
 		return true
 	end
