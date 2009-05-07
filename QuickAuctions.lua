@@ -48,26 +48,6 @@ function QA:OnInitialize()
 		end
 	end
 	
-	-- Reset any item based configuration
-	if( QuickAuctionsDB.revision and QuickAuctionsDB.revision <= 1160 ) then
-		checkTbl = function(tbl)
-			for key in pairs(tbl) do
-				if( not QuickAuctionsDB.groups[key] and not validTypes[key] and key ~= "default" and not string.match(key, "item:") ) then
-					tbl[key] = nil
-				end
-			end
-		end
-
-		checkTbl(QuickAuctionsDB.postTime)
-		checkTbl(QuickAuctionsDB.undercut)
-		checkTbl(QuickAuctionsDB.threshold)
-		checkTbl(QuickAuctionsDB.fallback)
-		checkTbl(QuickAuctionsDB.postCap)
-		checkTbl(QuickAuctionsDB.itemList)
-		
-		self:Print(L["Reset all item name based configurations."])
-	end
-
 	-- Got to let the "module" access these
 	QA.auctionData = auctionData
 	QA.activeAuctions = activeAuctions
