@@ -4,8 +4,8 @@ local money, defaults, playerName
 local totalPostsSet = 0
 local activeAuctions, auctionData, postList, auctionPostQueue, tempList, itemQuantities = {}, {}, {}, {}, {}, {}, {}
 local currentQuery = {list = {}, total = 0}
-local validTypes = {["uncut"] = "uncut gems", ["gems"] = "cut gems", ["glyphs"] = "glyphs", ["enchants"] = "enchanting materials"}
-local typeInfo = {["Gem1"] = "gems", ["Gem20"] = "uncut", ["Glyph20"] = "glyphs", ["Enchanting20"] = "enchants"}
+local validTypes = {["uncut"] = "uncut gems", ["gems"] = "cut gems", ["glyphs"] = "glyphs", ["enchants"] = "enchanting materials", ["scrolls"] = "item enchants"}
+local typeInfo = {["Gem1"] = "gems", ["Gem20"] = "uncut", ["Glyph20"] = "glyphs", ["Enchanting20"] = "enchants", ["Item Enhancement5"] = "scrolls"}
 
 local L = QuickAuctionsLocals
 
@@ -126,7 +126,7 @@ function QA:AHInitialize()
 			
 			if( QA.scanButton.haveCancelled >= QA.scanButton.totalCancels ) then
 				QA:Print(string.format(L["Done cancelling %d auctions."], QA.scanButton.totalCancels))
-				QA.scanButton:SetText(L["Scan Items"])
+				QA.scanButton:SetText(L["Cancel Items"])
 				QA.scanButton:Enable()
 
 				QA.scanButton.totalCancels = 0
@@ -234,7 +234,7 @@ function QA:SetupAuctionQuery(scanType, showProgress, filter, page, classIndex, 
 end
 
 function QA:IsValidItem(link)
-	local name, _, _, _, _, itemType, _, stackCount = GetItemInfo(link)
+	local name, _, _, _, _, itemType, subType, stackCount = GetItemInfo(link)
 	
 	-- Part of a group
 	for group, items in pairs(QuickAuctionsDB.groups) do
@@ -244,7 +244,7 @@ function QA:IsValidItem(link)
 	end
 	
 	-- Managed manually singly, or managed through a predefined set
-	if( QuickAuctionsDB.itemList[link] or QuickAuctionsDB.itemTypes[itemType .. stackCount] ) then
+	if( QuickAuctionsDB.itemList[link] or QuickAuctionsDB.itemTypes[itemType .. stackCount] or QuickAuctionsDB.itemTypes[subType .. stackCount] ) then
 		return true
 	end
 end
@@ -385,11 +385,8 @@ function QA:QueueSet()
 		return
 	end
 	
-	-- If we can post 4, we have 1 valid stack, we need to do 3 splits, if we have 4 to post and 0 valid stacks, then we need to do all 4 splits
-	local newStacks = canPost - validStacks
-		
 	-- Nothing queued, meaning we have nothing to post for this item
-	if( newStacks == 0 ) then
+	if( canPost == 0 ) then
 		table.remove(postList, 1)
 		
 		self:Echo(string.format(L["You only have %d of %s, and posting it in stacks of %d, not posting."], GetItemCount(link), link, quantity))
@@ -398,7 +395,7 @@ function QA:QueueSet()
 	end
 	
 	-- And here we go!
-	self:StartSplitting(newStacks, link, quantity)
+	self:StartSplitting(canPost, link, quantity)
 end
 
 function QA:CheckActiveAuctions()
@@ -555,7 +552,7 @@ function QA:PostItem(link)
 		self:QueueSet()	
 		return
 	end
-	
+		
 	-- Find the item in our inventory
 	for i=#(auctionPostQueue), 1, -1 do table.remove(auctionPostQueue, i) end
 	for bag=0, 4 do
@@ -612,7 +609,7 @@ end
 
 function QA:PostItems()
 	self.scanButton:Enable()
-	self.scanButton:SetText(L["Scan Items"])
+	self.scanButton:SetText(L["Cancel Items"])
 	self.postButton.totalPosts = 0
 	self.postButton.havePosted = 0
 	
@@ -667,7 +664,7 @@ end
 function QA:CheckItems()
 	for k in pairs(tempList) do tempList[k] = nil end
 	
-	self.scanButton:SetText(L["Scan Items"])
+	self.scanButton:SetText(L["Cancel Items"])
 	
 	self.scanButton.haveCancelled = 0
 	self.scanButton.totalCancels = 0
@@ -743,7 +740,7 @@ function QA:AUCTION_ITEM_LIST_UPDATE()
 end
 
 function QA:FinishedScanning()
-	self.scanButton:SetText(L["Scan Items"])
+	self.scanButton:SetText(L["Cancel Items"])
 	self.scanButton:Enable()
 	
 	local wasForced = currentQuery.forceStop
@@ -1071,9 +1068,9 @@ function QA:CreateButtons()
 	
 	-- Scan our posted items
 	local button = CreateFrame("Button", nil, AuctionFrameAuctions, "UIPanelButtonTemplate")
-	button.tooltip = L["Scan posted auctions to see if any were undercut."]
+	button.tooltip = L["Cancels any posted auctions that you were undercut on."]
 	button:SetPoint("TOPRIGHT", AuctionFrameAuctions, "TOPRIGHT", 51, -15)
-	button:SetText(L["Scan Items"])
+	button:SetText(L["Cancel Items"])
 	button:SetWidth(110)
 	button:SetHeight(18)
 	button:SetScript("OnEnter", showTooltip)
@@ -1503,7 +1500,7 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 	
 	-- Cancel all player auctions
 	elseif( cmd == "cancelall" ) then
-		self.scanButton:SetText(L["Scan Items"])
+		self.scanButton:SetText(L["Cancel Items"])
 
 		self.scanButton.haveCancelled = 0
 		self.scanButton.totalCancels = 0
@@ -1679,7 +1676,7 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 		self:Echo(L["/qa additem <link> <quantity> - Adds an item to the list of things that should be managed, *IF* the item can stack you must provide a quantity to post it in."])
 		self:Echo(L["/qa addgroup/removegroup <group> <link> - Group management for unique categories of items."])
 		self:Echo(L["/qa removeitem <link> - Removes an item from the managed list."])
-		self:Echo(L["/qa toggle <gems/uncut/glyphs/enchants> - Lets you toggle entire categories of items: All cut gems, all uncut gems, and all glyphs. These will always be put onto the AH as the single item, if you want to override it to post multiple then use the additem command."])
+		self:Echo(L["/qa toggle <gems/uncut/glyphs/enchants/scrolls> - Lets you toggle entire categories of items: All item enchants, All cut gems, all uncut gems, and all glyphs. These will always be put onto the AH as the single item, if you want to override it to post multiple then use the additem command."])
 		self:Echo(L["/qa list <time/bidpercent/cap/undercut/fallback/threshold/whitelist/alts/items> - Lists the set values for any of the passed categories."])
 		self:Echo(L["/qa cancelall - Cancel all of your auctions. REGARDLESS of if you were undercut or not."])
 		self:Echo(L["/qa summary - Toggles the summary frame."])

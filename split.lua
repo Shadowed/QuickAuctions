@@ -12,6 +12,7 @@ function QA:StartSplitting(stacks, link, quantity)
 	splitLink = link
 	splitQuantity = quantity
 	
+	self.frame:RegisterEvent("BAG_UPDATE")
 	self:ProcessSplitQueue()
 end
 
@@ -64,8 +65,6 @@ function QA:ProcessSplitQueue()
 					return
 				end
 
-
-				self.frame:RegisterEvent("BAG_UPDATE")
 				SplitContainerItem(bag, slot, splitQuantity)
 				PickupContainerItem(freeBag, freeSlot)
 				return
@@ -88,8 +87,6 @@ local function checkBags(self, elapsed)
 	
 	timeElapsed = 0
 	self:Hide()
-
-	QA.frame:UnregisterEvent("BAG_UPDATE")
 	
 	-- Check how many stacks we have left
 	for bag=0, 4 do
@@ -108,6 +105,7 @@ local function checkBags(self, elapsed)
 		newStacks = 0
 		splitLink = nil
 
+		QA.frame:UnregisterEvent("BAG_UPDATE")
 		QA:FinishedSplitting()
 	else
 		QA:ProcessSplitQueue()

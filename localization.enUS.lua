@@ -5,13 +5,13 @@ QuickAuctionsLocals = {
 	["View a summary of what the highest selling of certain items is."] = "View a summary of what the highest selling of certain items is.",
 	["Summarize"] = "Summarize",
 	
-	["Scan posted auctions to see if any were undercut."] = "Scan posted auctions to see if any were undercut.",
+	["Cancels any posted auctions that you were undercut on."] = "Cancels any posted auctions that you were undercut on.",
 	["Post items from your inventory into the auction house."] = "Post items from your inventory into the auction house.",
 
 	["Done cancelling %d auctions."] = "Done cancelling %d auctions.",
 	["Done posting %d auctions."] = "Done posting %d auctions.",
 
-	["Scan Items"] = "Scan Items",
+	["Cancel Items"] = "Cancel Items",
 	["Post Items"] = "Post Items",
 
 	["%d/%d items"] = "%d/%d items",
@@ -126,7 +126,7 @@ QuickAuctionsLocals = {
 	["/qa addalt/removealt <name> - Alt list management, will show auctions by them in the summary, as if you were on them."] = "/qa addalt/removealt <name> - Alt list management, will show auctions by them in the summary, as if you were on them.",
 	["/qa additem <link> <quantity> - Adds an item to the list of things that should be managed, *IF* the item can stack you must provide a quantity to post it in."] = "/qa additem <link> <quantity> - Adds an item to the list of things that should be managed, *IF* the item can stack you must provide a quantity to post it in.",
 	["/qa removeitem <link> - Removes an item from the managed list."] = "/qa removeitem <link> - Removes an item from the managed list.",
-	["/qa toggle <gems/uncut/glyphs/enchants> - Lets you toggle entire categories of items: All cut gems, all uncut gems, and all glyphs. These will always be put onto the AH as the single item, if you want to override it to post multiple then use the additem command."] = "/qa toggle <gems/uncut/glyphs/enchants> - Lets you toggle entire categories of items: All cut gems, all uncut gems, and all glyphs. These will always be put onto the AH as the single item, if you want to override it to post multiple then use the additem command.",
+	["/qa toggle <gems/uncut/glyphs/enchants/scrolls> - Lets you toggle entire categories of items: All item enchants, All cut gems, all uncut gems, and all glyphs. These will always be put onto the AH as the single item, if you want to override it to post multiple then use the additem command."] = "/qa toggle <gems/uncut/glyphs/enchants/scrolls> - Lets you toggle entire categories of items: All item enchants, All cut gems, all uncut gems, and all glyphs. These will always be put onto the AH as the single item, if you want to override it to post multiple then use the additem command.",
 	["/qa summary - Toggles the summary frame."] = "/qa summary - Toggles the summary frame.",
 	["/qa cancelall - Cancel all of your auctions. REGARDLESS of if you were undercut or not."] = "/qa cancelall - Cancel all of your auctions. REGARDLESS of if you were undercut or not.",
 	["/qa addgroup/removegroup <group> <link> - Group management for unique categories of items."] = "/qa addgroup/removegroup <group> <link> - Group management for unique categories of items.",
