@@ -251,7 +251,7 @@ end
 
 function QA:PartOfCategory(link, category)
 	if( not link ) then return false end
-	local name, _, _, _, _, itemType, _, stackCount = GetItemInfo(link)
+	local name, _, _, _, _, itemType, subType, stackCount = GetItemInfo(link)
 	
 	-- Part of a group
 	if( QuickAuctionsDB.groups[category] and QuickAuctionsDB.groups[category][link] ) then
@@ -259,7 +259,7 @@ function QA:PartOfCategory(link, category)
 	end
 	
 	-- Nope, check if it's under a default group
-	return typeInfo[itemType .. stackCount] == category
+	return typeInfo[itemType .. stackCount] == category or typeInfo[subType .. stackCount] == category
 end
 
 function QA:GetConfigValue(link, key)
@@ -269,7 +269,7 @@ function QA:GetConfigValue(link, key)
 		return QuickAuctionsDB[key][link]
 	end
 	
-	local name, _, _, _, _, itemType, _, stackCount = GetItemInfo(link)
+	local name, _, _, _, _, itemType, subType, stackCount = GetItemInfo(link)
 	
 	-- Group settings overrides everything but links
 	for group, items in pairs(QuickAuctionsDB.groups) do
@@ -279,7 +279,7 @@ function QA:GetConfigValue(link, key)
 	end
 	
 	-- Item group settings overrides everything but groups/links
-	local type = typeInfo[itemType .. stackCount]
+	local type = typeInfo[itemType .. stackCount] or typeInfo[subType .. stackCount]
 	if( type and QuickAuctionsDB[key][type] ) then
 		return QuickAuctionsDB[key][type]
 	end
@@ -341,7 +341,7 @@ function QA:QueueSet()
 	local link = postList[1]
 	local name, _, _, _, _, itemType, _, stackCount = GetItemInfo(link)
 	local quantity = type(QuickAuctionsDB.itemList[link]) == "number" and QuickAuctionsDB.itemList[link] or 1
-		
+	
 	-- This item cannot stack, so we don't need to bother with splitting and can post it all
 	if( stackCount == 1 ) then
 		self:PostItem(table.remove(postList, 1))
@@ -612,7 +612,7 @@ function QA:PostItems()
 	self.scanButton:SetText(L["Cancel Items"])
 	self.postButton.totalPosts = 0
 	self.postButton.havePosted = 0
-	
+		
 	-- Quick check for threshold info
 	for i=#(postList), 1, -1 do
 		local link = postList[i]
