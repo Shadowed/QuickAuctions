@@ -162,6 +162,8 @@ function QA:AHInitialize()
 			
 			return true
 		end
+		
+		return orig_ChatFrame_SystemEventHandler(self, event, msg)
 	end
 end
 
