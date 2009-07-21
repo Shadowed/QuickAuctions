@@ -1,13 +1,23 @@
 ## Interface: 30100
-## Title: Quick Auctions
-## Notes: Speeds up posting auctions
-## Version: $Revision$
+## Title: Quick Auctions 2
+## Notes: Makes it easier to manage large quantities of items in the auction house.
 ## Author: Mayen
+## LoadManagers: AddonLoader
+## X-LoadOn-Slash: /qa, /quickauction, /quickauctions
+## X-LoadOn-AuctionHouse: true
+## X-LoadOn-Crafting: true
 ## SavedVariables: QuickAuctionsDB
+
+libs\LibStub-1.0\LibStub-1.0.xml
+libs\CallbackHandler-1.0\CallbackHandler-1.0.xml
+libs\AceAddon-3.0\AceAddon-3.0.xml
+libs\AceDB-3.0\AceDB-3.0.xml
+libs\AceGUI-3.0\AceGUI-3.0.xml
 
 localization.enUS.lua
 
 QuickAuctions.lua
+scan.lua
 split.lua
-tradeskills.lua
-summary.lua
+post.lua
+config.lua
