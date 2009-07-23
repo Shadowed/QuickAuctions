@@ -175,7 +175,7 @@ function QuickAuctions:AuctionHouseLoaded()
 	button:SetScript("OnEnter", showTooltip)
 	button:SetScript("OnLeave", hideTooltip)
 	button:SetScript("OnClick", function(self)
-		QuickAuctions.Manage:Post()
+		QuickAuctions.Manage:PostScan()
 	end)
 	
 	self.buttons.post = button
@@ -190,6 +190,7 @@ function QuickAuctions:AuctionHouseLoaded()
 	button:SetScript("OnEnter", showTooltip)
 	button:SetScript("OnLeave", hideTooltip)
 	button:SetScript("OnClick", function(self)
+		QuickAuctions.Manage:CancelScan()
 	end)
 	
 	self.buttons.cancel = button
