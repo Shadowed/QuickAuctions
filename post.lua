@@ -1,7 +1,7 @@
 local Post = QuickAuctions:NewModule("Post", "AceEvent-3.0")
 local L = QuickAuctionsLocals
 local status = QuickAuctions.status
-local postQueue, postTotal = {}, {}
+local postQueue, postTotal, overallTotal = {}, {}, 0
 local POST_TIMEOUT = 5
 local frame = CreateFrame("Frame")
 frame:Hide()
@@ -11,7 +11,7 @@ function Post:OnInitialize()
 end
 
 function Post:AuctionHouseClosed()
-	if( status.isPosting ) then
+	if( status.isPosting and not status.isScanning ) then
 		self:Stop()
 		QuickAuctions:Print(L["Posting was interrupted due to the Auction House was closed."])
 	end
@@ -19,6 +19,7 @@ end
 
 function Post:Start()
 	if( not status.isPosting ) then
+		overallTotal = 0
 		status.isPosting = true
 		self:RegisterEvent("CHAT_MSG_SYSTEM")
 		frame:Show()
@@ -26,6 +27,8 @@ function Post:Start()
 end
 
 function Post:Stop()
+	QuickAuctions:Log(string.format(L["Finished posting %d items"], overallTotal))
+	
 	table.wipe(postQueue)
 	table.wipe(postTotal)
 	
@@ -59,9 +62,7 @@ function Post:PostAuction(queue)
 	local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = QuickAuctions.Scan:GetLowestAuction(link)
 	
 	postTotal[link] = (postTotal[link] or 0) + 1
-
-	-- Add another item to block
-	QuickAuctions.totalToBlock = QuickAuctions.totalToBlock + 1
+	overallTotal = overallTotal + 1
 	
 	-- Also set our timeout so it knows if it can fully stop
 	frame.timeElapsed = POST_TIMEOUT
