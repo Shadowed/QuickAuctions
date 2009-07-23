@@ -948,7 +948,7 @@ local function manageGroupsConfig(container)
 	add:SetCallback("OnEnter", showTooltip)
 	add:SetCallback("OnLeave", hideTooltip)
 	add:SetLabel(add:GetUserData("name"))
-	add:SetRelativeWidth(0.35)
+	add:SetRelativeWidth(0.50)
 	add:SetCallback("OnEnterPressed", addGroup)
 	add:SetText(nil)
 	addList:AddChild(add)
@@ -1027,7 +1027,36 @@ end
 SLASH_QUICKAUCTIONS1 = "/qa"
 SLASH_QUICKAUCTIONS2 = "/quickauction"
 SLASH_QUICKAUCTIONS3 = "/quickauctions"
-SlashCmdList["QUICKAUCTIONS"] = function()
+SlashCmdList["QUICKAUCTIONS"] = function(msg)
+	local cmd, arg = string.split(" ", msg or "", 2)
+	cmd = string.lower(cmd or "")
+	if( cmd == "cancelall" ) then
+		if( AuctionFrame and AuctionFrame:IsVisible() ) then
+			local group = string.trim(string.lower(arg or ""))
+			local groupName
+			if( group ~= "" ) then
+				for name in pairs(QuickAuctions.db.profile.groups) do
+					if( string.lower(name) == group ) then
+						groupName = name
+						break
+					end
+				end
+
+				if( not groupName ) then
+					QuickAuctions:Print(string.format(L["No group named %s exists."], arg))
+					return
+				end
+			end
+			
+			QuickAuctions.Manage:CancelAll(groupName)
+		else
+			QuickAuctions:Print(L["Cannot cancel auctions without the Auction House window open."])
+		end
+		
+		return
+	end
+	
+	-- Pop the configuration
 	if( not configFrame or not configFrame:IsVisible() ) then
 		createOptions()
 		configFrame:Show()
