@@ -1,7 +1,8 @@
 local Manage = QuickAuctions:NewModule("Manage", "AceEvent-3.0")
 local L = QuickAuctionsLocals
 local status = QuickAuctions.status
-local reverseLookup, postQueue, scanList, tempList, stats, newLine = {}, {}, {}, {}, {}
+local reverseLookup, postQueue, scanList, tempList, stats = {}, {}, {}, {}, {}
+local totalToCancel, totalCancelled = 0, 0
 
 Manage.stats = stats
 
@@ -42,15 +43,153 @@ function Manage:StopLog()
 	self:UnregisterMessage("SUF_STOP_SCAN")
 end
 
-function Manage:Cancel()
+function Manage:StopCancelling()
+	self:StopLog()
+	self:UnregisterEvent("CHAT_MSG_SYSTEM")
+	
+	status.isCancelling = nil
+	totalCancelled = 0
+	totalToCancel = 0
+end
+
+function Manage:CancelScan()
 	self:StartLog()
+	self:RegisterEvent("CHAT_MSG_SYSTEM")
 	
 	table.wipe(scanList)
 	table.wipe(tempList)
 	
 	updateReverseLookup()
 	
-	-- Add a scan based on items in the Ah that match
+	-- Add a scan based on items in the AH that match
+	for i=1, GetNumAuctionItems("owner") do
+		if( select(13, GetAuctionItemInfo("owner", i)) == 0 ) then
+			local link = QuickAuctions:GetSafeLink(GetAuctionItemLink("owner", i))
+			if( reverseLookup[link] ) then
+				tempList[GetAuctionItemInfo("owner", i)] = true
+			end
+		end
+	end
+	
+	for name in pairs(tempList) do
+		table.insert(scanList, name)
+	end
+	
+	if( #(scanList) == 0 ) then
+		QuickAuctions:Log(L["Nothing to cancel, you have no unsold auctions up."], true)
+		return
+	end
+
+	status.isCancelling = true
+	QuickAuctions.Scan:StartItemScan(scanList)
+end
+
+function Manage:CHAT_MSG_SYSTEM(event, msg)
+	if( msg == ERR_AUCTION_REMOVED ) then
+		totalToCancel = totalToCancel - 1
+		
+		if( totalToCancel <= 0 ) then
+			QuickAuctions:Log(string.format(L["Finished cancelling %d auctions"], totalCancelled), true)
+			
+			-- Unlock posting, cancelling doesn't require the auction house to be open meaning we can cancel everything
+			-- then go run to the mailbox while it cancels just fine
+			if( not AuctionFrame:IsVisible() ) then
+				QuickAuctions:Print(string.format(L["Finished cancelling %d auctions"], totalCancelled))
+			end
+
+			self:StopCancelling()
+		end
+	end
+end
+
+function Manage:CancelAll(group)
+	self:RegisterEvent("CHAT_MSG_SYSTEM")
+	status.isCancelling = true
+	table.wipe(tempList)
+	
+	updateReverseLookup()
+	
+	if( group ) then
+		QuickAuctions:Log(string.format(L["Mass cancelling posted items in the group %s"], group), true)
+	else
+		QuickAuctions:Log(L["Mass cancelling posted items"], true)
+	end
+	
+	for i=1, GetNumAuctionItems("owner") do
+		local name, _, _, _, _, _, _, _, _, _, _, _, wasSold = GetAuctionItemInfo("owner", i)     
+		local link = QuickAuctions:GetSafeLink(GetAuctionItemLink("owner", i))
+		if( wasSold == 0 and ( group and reverseLookup[link] == group or not group ) ) then
+			if( not tempList[name] ) then
+				tempList[name] = true
+				QuickAuctions:Log(string.format(L["Cancelled %s"], name), true)
+			end
+			
+			totalToCancel = totalToCancel + 1
+			totalCancelled = totalCancelled + 1
+			CancelAuction(i)
+		end
+	end
+	
+	if( totalToCancel == 0 ) then
+		QuickAuctions:Log(L["Nothing to cancel"], true)
+		self:StopCancelling()
+	end
+end
+
+function Manage:Cancel()
+	table.wipe(tempList)
+	
+	for i=1, GetNumAuctionItems("owner") do
+		local name, _, quantity, _, _, _, bid, _, buyout, activeBid, highBidder, _, wasSold = GetAuctionItemInfo("owner", i)     
+		local link = QuickAuctions:GetSafeLink(GetAuctionItemLink("owner", i))
+				
+		local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = QuickAuctions.Scan:GetLowestAuction(link)
+		if( wasSold == 0 and lowestOwner ) then
+			buyout = buyout / quantity
+			bid = bid / quantity
+			
+			local threshold = self:GetConfigValue(link, "threshold")
+			local fallback = self:GetConfigValue(link, "fallback")
+						
+			-- They aren't us (The player posting), or on our whitelist so easy enough
+			-- They are on our white list, but they undercut us, OR they matched us but the bid is lower
+			-- The player is the only one with it on the AH and it's below the threshold
+			if( ( not isPlayer and not isWhitelist ) or
+				( isWhitelist and ( buyout > lowestBuyout or ( buyout == lowestBuyout and lowestBid < bid ) ) ) or
+				( QuickAuctions.db.smartCancel and QuickAuctions.Scan:IsPlayerOnly(link) and buyout < fallback ) ) then
+				
+				-- Don't cancel if the buyout is equal, or below our threshold
+				if( QuickAuctions.db.profile.smartCancel and lowestBuyout <= threshold ) then
+					if( not tempList[name] ) then
+						tempList[name] = true
+						
+						QuickAuctions:Log(string.format(L["Undercut on %s by %s, their buyout %s, yours %s (per item), threshold is %s not cancelling"], name, lowestOwner, QuickAuctions:FormatTextMoney(lowestBuyout, true), QuickAuctions:FormatTextMoney(buyout, true), self:FormatTextMoney(threshold, true)), true)
+					end
+				-- Don't cancel an auction if it has a bid and we're set to not cancel those
+				elseif( not QuickAuctions.db.profile.cancelWithBid and activeBid > 0 ) then
+					QuickAuctions:Log(string.format(L["Undercut on %s by %s, but %s placed a bid of %s so not cancelling"], name, lowestOwner, highBidder, QuickAuctions:FormatTextMoney(activeBid, true)), true)
+				else
+					if( not tempList[name] ) then
+						tempList[name] = true
+						if( QuickAuctions.Scan:IsPlayerOnly(link) and buyout < fallback ) then
+							QuickAuctions:Log(string.format(L["You are the only one posting %s, the fallback is %s (per item), cancelling so you can relist it for more gold"], name, QuickAuctions:FormatTextMoney(fallback)), true)
+						else
+							QuickAuctions:Log(string.format(L["Undercut on %s by %s, buyout %s, yours %s (per item)"], name, lowestOwner, QuickAuctions:FormatTextMoney(lowestBuyout, true), QuickAuctions:FormatTextMoney(buyout, true)), true)
+						end
+					end
+					
+					totalToCancel = totalToCancel + 1
+					totalCancelled = totalCancelled + 1
+					CancelAuction(i)
+				end
+			end
+		end
+	end
+	
+	if( totalToCancel == 0 ) then
+		QuickAuctions:Log(L["Nothing to cancel"], true)
+		self:StopCancelling()
+	end
 end
 
 -- Makes sure that the items that stack the lowest are posted first to free up space for items
@@ -62,7 +201,7 @@ local function sortByStack(a, b)
 	return aStack < bStack
 end
 
-function Manage:Post()
+function Manage:PostScan()
 	self:StartLog()
 	
 	table.wipe(postQueue)
@@ -118,6 +257,7 @@ function Manage:PostItems(itemLink)
 	local perAuction = math.min(stackCount, self:GetConfigValue(itemLink, "perAuction"))
 	local perPost = math.floor(GetItemCount(itemLink) / perAuction)
 	local postCap = self:GetConfigValue(itemLink, "postCap")
+	local threshold = self:GetConfigValue(itemLink, "threshold")
 	local auctionsCreated, activeAuctions = 0, 0
 	
 	QuickAuctions:Log(string.format(L["Queued %s to be posted"], name))
@@ -127,8 +267,25 @@ function Manage:PostItems(itemLink)
 		return
 	end
 
-	-- Lowest person is either the player or someone on their whitelist
 	local buyout, bid, _, isPlayer, isWhitelist = QuickAuctions.Scan:GetLowestAuction(itemLink)
+	
+	-- Check if we're going to go below the threshold
+	if( buyout ) then
+		-- Smart undercutting is enabled, and the auction is for at least 1 gold, round it down to the nearest gold piece
+		local testBuyout = buyout
+		if( QuickAuctions.db.profile.smartUndercut and testBuyout > COPPER_PER_GOLD ) then
+			testBuyout = math.floor(buyout / COPPER_PER_GOLD) * COPPER_PER_GOLD
+		else
+			testBuyout = testBuyout - QuickAuctions.Manage:GetConfigValue(link, "undercut")
+		end
+		
+		if( testBuyout < threshold ) then
+			QuickAuctions:Log(string.format(L["Skipped %s, lowest buyout is %s threshold is %s"], name, QuickAuctions:FormatTextMoney(buyout, true), QuickAuctions:FormatTextMoney(threshold, true)))
+			return
+		end
+	end
+	
+	-- Either the player or a whitelist person is the lowest teir so use this tiers quantity of items
 	if( isPlayer or isWhitelist ) then
 		activeAuctions = QuickAuctions.Scan:GetItemQuantity(itemLink, buyout, bid)
 	end
@@ -188,7 +345,12 @@ function Manage:SUF_START_SCAN(event, type, total)
 	table.wipe(stats)
 end
 
-function Manage:SUF_STOP_SCAN()
+function Manage:SUF_STOP_SCAN(event, interrupted)
+	if( interrupted ) then
+		QuickAuctions:Log(L["Scan interrupted before it could finish"], true)
+		return
+	end
+
 	QuickAuctions:Log(L["Scan finished!"], true)
 
 	if( status.isManaging ) then
@@ -198,14 +360,17 @@ function Manage:SUF_STOP_SCAN()
 			startSplitter = nil
 			
 			QuickAuctions:Log(L["Starting to split and post items..."], true)
+			
+			-- First do a threshold check on everything
 			QuickAuctions.Split:Start()
 		else
 			QuickAuctions:Log(L["Nothing to post"], true)
 		end
 		
 	elseif( status.isCancelling ) then
-		QuickAuctions:Log(L["Starting to cancel..."])
-		newLine = true
+		QuickAuctions:Log(L["Starting to cancel..."], true)
+		
+		self:Cancel()
 	end
 end
 
