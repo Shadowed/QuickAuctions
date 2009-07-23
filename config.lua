@@ -280,20 +280,18 @@ local function createAuctionSettings(container, group)
 	container:AddChild(fallback)
 	container:AddChild(fallbackCap)
 	
-	local postTime = AceGUI:Create("Dropdown")
-	postTime:SetUserData("name", L["Post time"]) 
-	postTime:SetUserData("desc", L["How long auctions should be posted for."])
-	postTime:SetUserData("group", "postTime")
-	postTime:SetUserData("key", group)
-	postTime:SetCallback("OnEnter", showTooltip)
-	postTime:SetCallback("OnLeave", hideTooltip)
-	postTime:SetCallback("OnValueChanged", groupValueChanged)
-	postTime:SetLabel(postTime:GetUserData("name"))
-	local hours = QuickAuctions.db.profile[postTime:GetUserData("group")][postTime:GetUserData("key")] or QuickAuctions.defaults.profile[postTime:GetUserData("group")].default
-	postTime:SetValue(hours)
-	postTime:SetText(timeTable[hours])
-	postTime:SetList(timeTable)
-	postTime:SetRelativeWidth(WIDGET_WIDTH)
+	local postCap = AceGUI:Create("Slider")
+	postCap:SetUserData("name", L["Post cap"]) 
+	postCap:SetUserData("desc", L["How many auctions of the same item should be up at any one time.\n\nNote that post cap only applies if you weren't undercut, if you were undercut you can post more until you hit the post cap."])
+	postCap:SetUserData("group", "postCap")
+	postCap:SetUserData("key", group)
+	postCap:SetCallback("OnEnter", showTooltip)
+	postCap:SetCallback("OnLeave", hideTooltip)
+	postCap:SetCallback("OnValueChanged", groupValueChanged)
+	postCap:SetLabel(postCap:GetUserData("name"))
+	postCap:SetSliderValues(1, 40, 1)
+	postCap:SetValue(QuickAuctions.db.profile[postCap:GetUserData("group")][postCap:GetUserData("key")] or QuickAuctions.defaults.profile[postCap:GetUserData("group")].default)
+	postCap:SetRelativeWidth(WIDGET_WIDTH)
 	
 	local bidPercent = AceGUI:Create("Slider")
 	bidPercent:SetUserData("name", L["Bid percent"]) 
@@ -328,6 +326,76 @@ local function createAuctionSettings(container, group)
 		container:AddChild(enable)
 
 		local enable = AceGUI:Create("CheckBox")
+		enable:SetUserData("name", L["Override post cap"])
+		enable:SetUserData("desc", L["Allows you to override the default post cap settings."])
+		enable:SetUserData("group", "postCap")
+		enable:SetUserData("key", group)
+		enable:SetUserData("parent", postCap)
+		enable:SetLabel(enable:GetUserData("name"))
+		enable:SetCallback("OnValueChanged", overrideSettings)
+		enable:SetCallback("OnEnter", showTooltip)
+		enable:SetCallback("OnLeave", hideTooltip)
+		enable:SetValue(QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")] and true or false)
+		enable:SetRelativeWidth(WIDGET_WIDTH)
+		postCap:SetDisabled(not QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")])
+		
+		container:AddChild(enable)
+		
+		local sep = AceGUI:Create("Label")
+		sep:SetFullWidth(true)
+		container:AddChild(sep)
+	end
+	
+	container:AddChild(bidPercent)
+	container:AddChild(postCap)
+
+	local perAuction = AceGUI:Create("Slider")
+	perAuction:SetUserData("name", L["Items per auction"]) 
+	perAuction:SetUserData("desc", L["How many items each auction should contain, if the item cannot stack it will always post at least one item."])
+	perAuction:SetUserData("group", "perAuction")
+	perAuction:SetUserData("key", group)
+	perAuction:SetCallback("OnEnter", showTooltip)
+	perAuction:SetCallback("OnLeave", hideTooltip)
+	perAuction:SetCallback("OnValueChanged", groupSliderChanged)
+	perAuction:SetCallback("OnMouseUp", groupSliderChanged)
+	perAuction:SetLabel(perAuction:GetUserData("name"))
+	perAuction:SetSliderValues(1, 40, 1)
+	perAuction:SetValue(QuickAuctions.db.profile[perAuction:GetUserData("group")][perAuction:GetUserData("key")] or QuickAuctions.defaults.profile[perAuction:GetUserData("group")].default)
+	perAuction:SetRelativeWidth(WIDGET_WIDTH)
+
+	local postTime = AceGUI:Create("Dropdown")
+	postTime:SetUserData("name", L["Post time"]) 
+	postTime:SetUserData("desc", L["How long auctions should be posted for."])
+	postTime:SetUserData("group", "postTime")
+	postTime:SetUserData("key", group)
+	postTime:SetCallback("OnEnter", showTooltip)
+	postTime:SetCallback("OnLeave", hideTooltip)
+	postTime:SetCallback("OnValueChanged", groupValueChanged)
+	postTime:SetLabel(postTime:GetUserData("name"))
+	local hours = QuickAuctions.db.profile[postTime:GetUserData("group")][postTime:GetUserData("key")] or QuickAuctions.defaults.profile[postTime:GetUserData("group")].default
+	postTime:SetValue(hours)
+	postTime:SetText(timeTable[hours])
+	postTime:SetList(timeTable)
+	postTime:SetRelativeWidth(WIDGET_WIDTH)
+	
+	if( group ~= "default" ) then
+		local enable = AceGUI:Create("CheckBox")
+		enable:SetUserData("name", L["Override per auction"])
+		enable:SetUserData("desc", L["Allows you to override the default items per auction."])
+		enable:SetUserData("group", "perAuction")
+		enable:SetUserData("key", group)
+		enable:SetUserData("parent", perAuction)
+		enable:SetLabel(enable:GetUserData("name"))
+		enable:SetCallback("OnValueChanged", overrideSettings)
+		enable:SetCallback("OnEnter", showTooltip)
+		enable:SetCallback("OnLeave", hideTooltip)
+		enable:SetValue(QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")] and true or false)
+		enable:SetRelativeWidth(WIDGET_WIDTH)
+		perAuction:SetDisabled(not QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")])
+		
+		container:AddChild(enable)
+
+		local enable = AceGUI:Create("CheckBox")
 		enable:SetUserData("name", L["Override post time"])
 		enable:SetUserData("desc", L["Allows you to override the default post time settings."])
 		enable:SetUserData("group", "postTime")
@@ -342,13 +410,9 @@ local function createAuctionSettings(container, group)
 		postTime:SetDisabled(not QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")])
 		
 		container:AddChild(enable)
-		
-		local sep = AceGUI:Create("Label")
-		sep:SetFullWidth(true)
-		container:AddChild(sep)
 	end
 	
-	container:AddChild(bidPercent)
+	container:AddChild(perAuction)
 	container:AddChild(postTime)
 end
 
@@ -693,14 +757,6 @@ local function groupDeleteConfig(container)
 	updateEditGroupList(items)
 end
 
--- family 0 = bag with no type, family 1/2/4 are special bags that can only hold certain types of items
-local function isContainer(bag)
-	if( bag == 0 or bag == -1 ) then return true end
-	
-	local itemFamily = GetItemFamily(GetInventoryItemLink("player", ContainerIDToInventoryID(bag)))
-	return itemFamily == 0 or itemFamily > 4
-end
-
 -- Make sure the item isn't soulbound
 local scanTooltip
 local function isSoulbound(bag, slot)
@@ -739,7 +795,7 @@ local function updateAddGroupList(container)
 
 	local row = 0
 	for bag=4, 0, -1 do
-		if( isContainer(bag) ) then
+		if( QuickAuctions:IsValidBag(bag) ) then
 			for slot=1, GetContainerNumSlots(bag) do
 				local link = GetContainerItemLink(bag, slot)
 				local itemID = QuickAuctions:GetSafeLink(link)

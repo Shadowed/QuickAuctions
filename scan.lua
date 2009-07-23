@@ -1,7 +1,8 @@
 local Scan = QuickAuctions:NewModule("Scan", "AceEvent-3.0")
 local L = QuickAuctionsLocals
 local status = QuickAuctions.status
-auctionData = {}
+local auctionData = {}
+Scan.auctionData = auctionData
 
 function Scan:OnInitialize()
 	self:RegisterMessage("SUF_AH_LOADED", "AuctionHouseLoaded")
@@ -30,14 +31,8 @@ function Scan:AuctionHouseClosed()
 	end
 end
 
-function Scan:QueueItem(name)
-	for _, itemName in pairs(status.filterList) do if( itemName == name ) then return end end
-	table.insert(status.filterList, name)
-end
-
-function Scan:StartItemScan()
-	if( #(status.filterList) == 0 ) then
-		self:SendMessage("SUF_START_SCAN", "item", 0)
+function Scan:StartItemScan(filterList)
+	if( #(filterList) == 0 ) then
 		return
 	end
 	
@@ -45,9 +40,12 @@ function Scan:StartItemScan()
 	status.isScanning = "item"
 	status.page = 0
 	status.retries = 0
-	status.filter = status.filterList[1]
+	status.filterList = filterList
+	status.filter = filterList[1]
 	status.classIndex = nil
 	status.subClassIndex = nil
+	
+	table.wipe(auctionData)
 
 	self:SendMessage("SUF_START_SCAN", "item", #(status.filterList))
 	self:RegisterEvent("AUCTION_ITEM_LIST_UPDATE")
@@ -59,12 +57,14 @@ function Scan:StartCategoryScan(classIndex, subClassList)
 	status.isScanning = "category"
 	status.page = 0
 	status.retries = 0
-	status.filter = nil
+	status.filter = ""
 	status.classIndex = classIndex
 	status.subClassList = subClassList
 	status.subClassIndex = subClassList[1]
+
+	table.wipe(auctionData)
 	
-	self:SendMessage("SUF_START_SCAN", "category", classIndex)
+	self:SendMessage("SUF_START_SCAN", "category")
 	self:RegisterEvent("AUCTION_ITEM_LIST_UPDATE")
 	self:SendQuery()
 end
@@ -200,9 +200,7 @@ function Scan:GetLowestAuction(link)
 			
 			-- If the lowest we found was from the player, but someone else is matching it (and they aren't on our white list)
 			-- then we swap the owner to that person
-			if( QuickAuctions.db.realm.player[owner] ) then
-				buyout, bid, owner = record.buyout, record.bid, record.owner
-			end
+			buyout, bid, owner = record.buyout, record.bid, record.owner
 		end
 	end
 	
@@ -230,6 +228,7 @@ end
 -- Time to scan auctions!
 function Scan:ScanAuctions()
 	local shown, total = GetNumAuctionItems("list")
+	local totalPages = math.ceil(total / NUM_AUCTION_ITEMS_PER_PAGE)
 		
 	-- Check for bad data quickly
 	if( status.retries < 3 ) then
@@ -238,7 +237,7 @@ function Scan:ScanAuctions()
 			if( not name or not owner ) then
 				status.retries = status.retries + 1
 				
-				self:SendMessage("SUF_QUERY_UPDATE", "retry", status.retries)
+				self:SendMessage("SUF_QUERY_UPDATE", "retry", status.filter, status.page + 1, totalPages, status.retries, 3)
 				self:SendQuery()
 				return
 			end
@@ -256,10 +255,13 @@ function Scan:ScanAuctions()
 	-- This query has more pages to scan
 	if( shown == NUM_AUCTION_ITEMS_PER_PAGE ) then
 		status.page = status.page + 1
-		self:SendMessage("SUF_QUERY_UPDATE", "page", status.page)
+		self:SendMessage("SUF_QUERY_UPDATE", "page", status.filter, status.page + 1, totalPages)
 		self:SendQuery()
 		return
 	end
+
+	-- Finished with the page
+	self:SendMessage("SUF_QUERY_UPDATE", "done", status.filter, totalPages, totalPages)
 	
 	-- Scanned all the pages for this filter, remove what we were just looking for then
 	if( status.isScanning == "item" ) then
@@ -284,14 +286,14 @@ function Scan:ScanAuctions()
 	-- Query the next filter if we have one
 	if( status.filter ) then
 		status.page = 0
-		self:SendMessage("SUF_QUERY_UPDATE", "next", #(status.filterList), status.filter)
+		self:SendMessage("SUF_QUERY_UPDATE", "next", status.filter, #(status.filterList))
 		self:SendQuery()
 		return
 	
 	-- Orr let us query the next sub class if we got one
 	elseif( status.subClassIndex ) then
 		status.page = 0
-		self:SendMessage("SUF_QUERY_UPDATE", "next", #(status.subClassList), status.subClassIndex)
+		self:SendMessage("SUF_QUERY_UPDATE", "next", status.filter, status.subClassIndex, #(status.subClassIndex))
 		self:SendQuery()
 		return
 	end

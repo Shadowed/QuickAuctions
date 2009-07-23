@@ -20,6 +20,8 @@ function QuickAuctions:OnInitialize()
 			fallback = {default = 0},
 			fallbackCap = {default = 5},
 			threshold = {default = 0},
+			postCap = {default = 4},
+			perAuction = {default = 1},
 		},
 		realm = {
 			player = {},
@@ -29,6 +31,8 @@ function QuickAuctions:OnInitialize()
 	
 	self.db = LibStub:GetLibrary("AceDB-3.0"):New("QuickAuctionsDB", self.defaults, true)
 	self.Scan = self.modules.Scan
+	self.Manage = self.modules.Manage
+	self.Split = self.modules.Split
 	self.Post = self.modules.Post
 	
 	-- Add this character to the alt list so it's not undercut by the player
@@ -53,11 +57,18 @@ function QuickAuctions:OnInitialize()
 	end)
 end
 
+function QuickAuctions:WipeLog()
+	logLine = nil
+	table.wipe(statusLog)
+
+	self:UpdateStatusLog()
+end
+
 -- Doing the new line stuff so I can do live updates and show "X item Page #/#" without adding # new lines
 function QuickAuctions:Log(msg, newLine)
 	if( newLine or not logLine ) then logLine = #(statusLog) + 1 end
 	statusLog[logLine] = msg
-
+	
 	self:UpdateStatusLog()
 end
 
@@ -84,9 +95,7 @@ function QuickAuctions:AuctionHouseLoaded()
 	-- Block system messages for auctions being removed or posted
 	local orig_ChatFrame_SystemEventHandler = ChatFrame_SystemEventHandler
 	ChatFrame_SystemEventHandler = function(self, event, msg)
-		if( msg == ERR_AUCTION_REMOVED and status.isCancelling ) then
-			return true
-		elseif( msg == ERR_AUCTION_STARTED and status.isPosting ) then
+		if( msg == ERR_AUCTION_REMOVED and status.isCancelling or msg == ERR_AUCTION_STARTED and status.isPosting ) then
 			return true
 		end
 		
@@ -166,6 +175,7 @@ function QuickAuctions:AuctionHouseLoaded()
 	button:SetScript("OnEnter", showTooltip)
 	button:SetScript("OnLeave", hideTooltip)
 	button:SetScript("OnClick", function(self)
+		QuickAuctions.Manage:Post()
 	end)
 	
 	self.buttons.post = button
@@ -201,16 +211,16 @@ function QuickAuctions:CreateStatus()
 		edgeSize = 1,
 		insets = {left = 1, right = 1, top = 1, bottom = 1}}
 
-	local frame = CreateFrame("Frame", nil, AuctionsScrollFrame)
+	local frame = CreateFrame("Frame", nil, AuctionFrameAuctions)
 	frame:SetBackdrop(backdrop)
-	frame:SetBackdropColor(0, 0, 0, 1)
+	frame:SetBackdropColor(0, 0, 0, 0.85)
 	frame:SetBackdropBorderColor(0.60, 0.60, 0.60, 1)
-	frame:SetFrameLevel(25)
+	frame:SetFrameLevel(30)
 	frame:SetHeight(1)
 	frame:SetWidth(1)
 	frame:ClearAllPoints()
-	frame:SetPoint("TOPLEFT", BrowseCurrentBidSort, "BOTTOMLEFT", -220, 28)
-	frame:SetPoint("BOTTOMRIGHT", AuctionsCloseButton, "TOPRIGHT", -26, 2)
+	frame:SetPoint("TOPLEFT", AuctionsQualitySort, "BOTTOMLEFT", -2, -2)
+	frame:SetPoint("BOTTOMRIGHT", AuctionsCloseButton, "TOPRIGHT", -5, 2)
 	frame:SetScript("OnShow", function() QuickAuctions:UpdateStatusLog() end)
 	frame:Hide()
 
@@ -235,6 +245,45 @@ function QuickAuctions:CreateStatus()
 	
 	
 	self.statusFrame = frame
+end
+
+-- Stolen from Tekkub!
+local GOLD_TEXT = "|cffffd700g|r"
+local SILVER_TEXT = "|cffc7c7cfs|r"
+local COPPER_TEXT = "|cffeda55fc|r"
+
+-- Truncate tries to save space, after 10g stop showing copper, after 100g stop showing silver
+function QuickAuctions:FormatTextMoney(money, truncate)
+	local gold = math.floor(money / COPPER_PER_GOLD)
+	local silver = math.floor((money - (gold * COPPER_PER_GOLD)) / COPPER_PER_SILVER)
+	local copper = math.fmod(money, COPPER_PER_SILVER)
+	local text = ""
+	
+	-- Add gold
+	if( gold > 0 ) then
+		text = gold .. GOLD_TEXT .. " "
+	end
+	
+	-- Add silver
+	if( silver > 0 and ( not truncate or gold < 100 ) ) then
+		text = text .. silver .. SILVER_TEXT .. " "
+	end
+	
+	-- Add copper if we have no silver/gold found, or if we actually have copper
+	if( text == "" or ( copper > 0 and ( not truncate or gold <= 10 ) ) ) then
+		text = text .. copper .. COPPER_TEXT
+	end
+	
+	return string.trim(text)
+end
+
+-- Makes sure this bag is an actual bag and not an ammo, soul shard, etc bag
+function QuickAuctions:IsValidBag(bag)
+	if( bag == 0 or bag == -1 ) then return true end
+	
+	-- family 0 = bag with no type, family 1/2/4 are special bags that can only hold certain types of items
+	local itemFamily = GetItemFamily(GetInventoryItemLink("player", ContainerIDToInventoryID(bag)))
+	return itemFamily == 0 or itemFamily > 4
 end
 
 function QuickAuctions:Print(msg)

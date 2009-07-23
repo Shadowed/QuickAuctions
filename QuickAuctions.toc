@@ -19,5 +19,6 @@ localization.enUS.lua
 QuickAuctions.lua
 scan.lua
 split.lua
-post.lua
+manage.lua
 config.lua
+post.lua
