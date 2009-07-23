@@ -27,7 +27,7 @@ end
 function Scan:AuctionHouseClosed()
 	if( status.isScanning ) then
 		QuickAuctions:Print(L["Scan interrupted due to Auction House being closed."])
-		self:StopScanning()
+		self:StopScanning(true)
 	end
 end
 
@@ -40,6 +40,7 @@ function Scan:StartItemScan(filterList)
 	status.isScanning = "item"
 	status.page = 0
 	status.retries = 0
+	status.hardRetry = nil
 	status.filterList = filterList
 	status.filter = filterList[1]
 	status.classIndex = nil
@@ -57,6 +58,7 @@ function Scan:StartCategoryScan(classIndex, subClassList)
 	status.isScanning = "category"
 	status.page = 0
 	status.retries = 0
+	status.hardRetry = nil
 	status.filter = ""
 	status.classIndex = classIndex
 	status.subClassList = subClassList
@@ -69,13 +71,13 @@ function Scan:StartCategoryScan(classIndex, subClassList)
 	self:SendQuery()
 end
 
-function Scan:StopScanning()
+function Scan:StopScanning(interrupted)
 	if( not status.isScanning ) then return end
 	
 	status.active = nil
 	status.isScanning = nil
 
-	self:SendMessage("SUF_STOP_SCAN")
+	self:SendMessage("SUF_STOP_SCAN", interrupted)
 	self:UnregisterEvent("AUCTION_ITEM_LIST_UPDATE")
 	self.scanFrame:Hide()
 end
@@ -172,6 +174,10 @@ function Scan:GetItemQuantity(link, buyout, bid)
 	return 0
 end
 
+function Scan:IsPlayerOnly(link)
+	return auctionData[link] and auctionData[link].onlyPlayer
+end
+
 -- Find out the lowest price for this auction
 function Scan:GetLowestAuction(link)
 	-- No data on it
@@ -209,9 +215,10 @@ end
 
 -- Do a delay before scanning the auctions so it has time to load all of the owner information
 Scan.scanFrame = CreateFrame("Frame")
+Scan.scanFrame.timeDelay = 1
 Scan.scanFrame:SetScript("OnUpdate", function(self, elapsed)
 	self.timeElapsed = self.timeElapsed + elapsed
-	if( self.timeElapsed >= 1 ) then
+	if( self.timeElapsed >= self.timeDelay ) then
 		self.timeElapsed = 0
 		self:Hide()
 
@@ -237,13 +244,31 @@ function Scan:ScanAuctions()
 			if( not name or not owner ) then
 				status.retries = status.retries + 1
 				
-				self:SendMessage("SUF_QUERY_UPDATE", "retry", status.filter, status.page + 1, totalPages, status.retries, 3)
-				self:SendQuery()
+				-- Hard retry
+				if( status.hardRetry ) then
+					self:SendMessage("SUF_QUERY_UPDATE", "retry", status.filter, status.page + 1, totalPages, status.retries, 3)
+					self:SendQuery()
+				-- Soft retry
+				else
+					self.scanFrame.timeElapsed = 0
+					self.scanFrame.timeDelay = status.retries * 0.50
+					self.scanFrame:Show()
+					
+					-- QA will wait 0.50 seconds per retry (0.50, 1.0, 1.50 = 3 seconds) more during a soft retry
+					-- if that still fails, it will fallback on a hard retry where it will requery 3 times, if the requeries
+					-- fail still, then it will let the data through with an unknown owner
+					if( status.retries >= 3 ) then
+						status.hardRetry = true
+						status.retries = 0
+					end
+				end
 				return
 			end
 		end
 	end
-	
+		
+	self.scanFrame.timeDelay = 1
+	status.hardRetry = nil
 	status.retries = 0
 
 	-- Find the lowest auction (if any) out of this list
