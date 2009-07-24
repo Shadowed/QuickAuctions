@@ -618,6 +618,8 @@ local function deleteGroup(widget, event)
 				QuickAuctions.db.profile.fallback[confirmGroup] = nil
 				QuickAuctions.db.profile.fallbackCap[confirmGroup] = nil
 				QuickAuctions.db.profile.threshold[confirmGroup] = nil
+				QuickAuctions.db.profile.postCap[confirmGroup] = nil
+				QuickAuctions.db.profile.perAuction[confirmGroup] = nil
 				
 				updateTree()
 				categoryTree:SelectByPath("groups")
