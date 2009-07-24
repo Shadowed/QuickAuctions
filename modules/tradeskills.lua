@@ -2,14 +2,26 @@ local Tradeskill = QuickAuctions:NewModule("Tradeskill", "AceEvent-3.0")
 local L = QuickAuctionsLocals
 local ROW_HEIGHT = 16
 local MAX_ROWS = 23
-local throttle, creatingItem, creatingItemID
+local creatingItem, creatingItemID
 local itemList, rowDisplay, materials, tradeList = {}, {}, {}, {}
+local professions = {[GetSpellInfo(2259)] = "Alchemy", [GetSpellInfo(2018)] = "Blacksmith", [GetSpellInfo(33359)] = "Cook", [GetSpellInfo(2108)] = "Leatherworker", [GetSpellInfo(7411)] = "Enchanter", [GetSpellInfo(4036)] = "Engineer", [GetSpellInfo(51311)] = "Jewelcrafter", [GetSpellInfo(3908)] = "Tailor", [GetSpellInfo(45357)] = "Scribe"}
 
-local professions = {
-	[GetSpellInfo(2259)] = "Alchemy", [GetSpellInfo(2018)] = "Blacksmith", [GetSpellInfo(33359)] = "Cook",
-	[GetSpellInfo(2108)] = "Leatherworker", [GetSpellInfo(7411)] = "Enchanter", [GetSpellInfo(4036)] = "Engineer",
-	[GetSpellInfo(51311)] = "Jewelcrafter", [GetSpellInfo(3908)] = "Tailor", [GetSpellInfo(45357)] = "Scribe",
-}
+function Tradeskill:OnInitialize()
+	self:RegisterEvent("ADDON_LOADED")
+	self:RegisterEvent("TRADE_SKILL_SHOW")
+	self:RegisterEvent("TRADE_SKILL_UPDATE")
+	self:RegisterEvent("TRADE_SKILL_CLOSE")
+end
+
+function Tradeskill:StartCastEvents()
+	self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+	self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
+end
+
+function Tradeskill:StopCastEvents()
+	self:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+	self:UnregisterEvent("UNIT_SPELLCAST_INTERRUPTED")
+end
 
 function Tradeskill:Update()
 	local self = Tradeskill
@@ -20,21 +32,23 @@ function Tradeskill:Update()
 	
 	-- Build our display list
 	for id, itemid in pairs(itemList) do
-		if( tradeList[itemid] and QuickAuctionsDB.craftQueue[itemid] ) then
+		if( tradeList[itemid] and QuickAuctions.db.factionrealm.craftQueue[itemid] ) then
 			table.insert(rowDisplay, id)
 		end
 	end
 	
-	table.insert(rowDisplay, string.format("|cffffce00%s|r", L["Materials required"]))
-	
-	for itemid, needed in pairs(materials) do
-		local itemCount = GetItemCount(itemid)
-		local color = RED_FONT_COLOR_CODE
-		if( itemCount >= needed ) then
-			color = GREEN_FONT_COLOR_CODE
-		end
+	if( #(rowDisplay) > 0 ) then
+		table.insert(rowDisplay, string.format("|cffffce00%s|r", L["Materials required"]))
 		
-		table.insert(rowDisplay, string.format("%s %s[%d/%d]|r", (GetItemInfo(itemid)), color, itemCount, needed))
+		for itemid, needed in pairs(materials) do
+			local itemCount = GetItemCount(itemid)
+			local color = RED_FONT_COLOR_CODE
+			if( itemCount >= needed ) then
+				color = GREEN_FONT_COLOR_CODE
+			end
+			
+			table.insert(rowDisplay, string.format("%s %s[%d/%d]|r", (GetItemInfo(itemid)), color, itemCount, needed))
+		end
 	end
 		
 	-- Update scroll bar
@@ -51,7 +65,7 @@ function Tradeskill:Update()
 			local row = self.rows[displayIndex]
 			if( type(data) == "number" ) then	
 				local itemid = itemList[data]
-				row:SetFormattedText("%s [%d]", (GetItemInfo(itemid)), QuickAuctionsDB.craftQueue[itemid])
+				row:SetFormattedText("%s [%d]", (GetItemInfo(itemid)), QuickAuctions.db.factionrealm.craftQueue[itemid])
 				row.itemID = itemid
 			else
 				row:SetText(data)
@@ -70,7 +84,7 @@ end
 
 function Tradeskill:RebuildList()
 	for i=#(itemList), 1, -1 do table.remove(itemList, i) end
-	for itemid in pairs(QuickAuctionsDB.craftQueue) do
+	for itemid in pairs(QuickAuctions.db.factionrealm.craftQueue) do
 		if( tradeList[itemid] ) then
 			table.insert(itemList, itemid)
 		end
@@ -86,7 +100,7 @@ function Tradeskill:CreateFrame()
 	end
 	
 	local function OnShow()
-		QA.Tradeskill:RebuildList()
+		Tradeskill:RebuildList()
 		Tradeskill:Update()
 	end
 	
@@ -120,17 +134,7 @@ function Tradeskill:CreateFrame()
 		insets = {left = 9, right = 9, top = 9, bottom = 9},
 	})
 		
-	-- Container frame backdrop
-	local backdrop = {
-		bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
-		edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-		tile = true,
-		tileSize = 16,
-		edgeSize = 16,
-		insets = { left = 3, right = 3, top = 5, bottom = 3 }
-	}
-	
-	-- scroll frame
+	-- Scroll frame
 	self.frame.scroll = CreateFrame("ScrollFrame", "QACraftGUIScroll", self.frame, "FauxScrollFrameTemplate")
 	self.frame.scroll:SetPoint("TOPLEFT", self.frame, "TOPLEFT", 0, -10)
 	self.frame.scroll:SetPoint("BOTTOMRIGHT", self.frame, "BOTTOMRIGHT", -30, 8)
@@ -149,10 +153,10 @@ function Tradeskill:CreateFrame()
 		end
 				
 		for i=1, GetNumTradeSkills() do
-			local itemid = QA:GetSafeLink(GetTradeSkillItemLink(i))
-			if( itemid == self.itemID and QuickAuctionsDB.craftQueue[itemid] ) then
+			local itemid = QuickAuctions:GetSafeLink(GetTradeSkillItemLink(i))
+			if( itemid == self.itemID and QuickAuctions.db.factionrealm.craftQueue[itemid] ) then
 				-- Make sure we don't wait for it to create more than we can
-				local quantity = QuickAuctionsDB.craftQueue[itemid]
+				local quantity = QuickAuctions.db.factionrealm.craftQueue[itemid]
 				local name = GetItemInfo(itemid)
 				local createCap = select(3, GetTradeSkillInfo(i))
 				if( quantity > createCap ) then
@@ -164,6 +168,8 @@ function Tradeskill:CreateFrame()
 
 				self:SetAttribute("type", "macro")
 				self:SetAttribute("macrotext", string.format("/script DoTradeSkill(%d,%d);", i, quantity))
+				
+				self:StartCastEvents()
 			end
 		end
 	end
@@ -189,70 +195,95 @@ function Tradeskill:CreateFrame()
 end
 
 function Tradeskill:ADDON_LOADED(event, addon)
-	if( addon ~= "Blizzard_TradeSkillUI" ) then
-		return
+	if( addon == "Blizzard_TradeSkillUI" ) then
+		self:CreateFrame()
+		self:UnregisterEvent("ADDON_LOADED")
 	end
-	
-	self:CreateFrame()
 end
 
--- Trade skill opened/updated, save list (again) if needed
-function Tradeskill:TRADE_SKILL_UPDATE()
-	if( IsTradeSkillLinked() or not GetTradeSkillLine() or not professions[GetTradeSkillLine()] or ( throttle and throttle > GetTime() ) ) then
-		return
-	end
-	
-	throttle = GetTime() + 1
-	
-	-- This way we know we have data for this profession and can show if we can/cannot make it
-	if( QuickAuctionsDB.saveCraft ) then
-		QuickAuctionsDB.crafts[professions[GetTradeSkillLine()]] = true
-	end	
-	
-	-- Reset materials list
-	for k in pairs(materials) do materials[k] = nil end
-	-- Reset item list so we know what to show/what not to
-	for k in pairs(tradeList) do tradeList[k] = nil end
-	
-	-- Record list
-	for i=1, GetNumTradeSkills() do
-		local itemid = QA:GetSafeLink(GetTradeSkillItemLink(i))
-		if( itemid ) then
-			if( QuickAuctionsDB.saveCraft ) then
-				local enchantid = string.match(GetTradeSkillRecipeLink(i), "enchant:([0-9]+)")
-				
-				QuickAuctionsDB.crafts[itemid] = tonumber(enchantid) or true
-			end
-			
-			-- Create a list of items we need to create this item
-			if( QuickAuctionsDB.craftQueue[itemid] ) then
-				for rID=1, GetTradeSkillNumReagents(i) do
-					local perOne = select(3, GetTradeSkillReagentInfo(i, rID))
-					local link = QA:GetSafeLink(GetTradeSkillReagentItemLink(i, rID))
+function Tradeskill:TRADE_SKILL_SHOW()
+	self:RegisterEvent("BAG_UPDATE")
+	self:TradeskillUpdate()
+end
 
-					materials[link] = (materials[link] or 0) + (QuickAuctionsDB.craftQueue[itemid] * perOne)
-				end
-			end
+function Tradeskill:TRADE_SKILL_CLOSE()
+	self:UnregisterEvent("BAG_UPDATE")
+end
+
+
+-- Trade skill opened/updated, save list (again) if needed
+do
+	local timeElapsed = 0
+	local frame = CreateFrame("Frame")
+	frame:SetScript("OnUpdate", function(self, elapsed)
+		timeElapsed = timeElapsed + elapsed
+		
+		if( timeElapsed >= 0.25 ) then
+			timeElapsed = 0
+			self:Hide()
 			
-			tradeList[itemid] = true
+			Tradeskill:TradeskillUpdate()
 		end
+	end)
+	frame:Hide()
+	
+	function Tradeskill:TRADE_SKILL_UPDATE()
+		timeElapsed = 0
+		frame:Show()
 	end
 	
-	if( self.frame and self.frame:IsVisible() ) then
-		self:Update()
+	function Tradeskill:TradeskillUpdate()
+		if( IsTradeSkillLinked() or not GetTradeSkillLine() or not professions[GetTradeSkillLine()]) then
+			return
+		end
+		
+		-- This way we know we have data for this profession and can show if we can/cannot make it
+		QuickAuctions.db.factionrealm.crafts[professions[GetTradeSkillLine()]] = true
+				
+		-- Reset materials list
+		for k in pairs(materials) do materials[k] = nil end
+		-- Reset item list so we know what to show/what not to
+		for k in pairs(tradeList) do tradeList[k] = nil end
+		
+		-- Record list
+		for i=1, GetNumTradeSkills() do
+			local itemid = QuickAuctions:GetSafeLink(GetTradeSkillItemLink(i))
+			if( itemid ) then
+				local enchantid = string.match(GetTradeSkillRecipeLink(i), "enchant:([0-9]+)")
+				QuickAuctions.db.factionrealm.crafts[itemid] = tonumber(enchantid) or true
+				
+				-- Create a list of items we need to create this item
+				if( QuickAuctions.db.factionrealm.craftQueue[itemid] ) then
+					for rID=1, GetTradeSkillNumReagents(i) do
+						local perOne = select(3, GetTradeSkillReagentInfo(i, rID))
+						local link = QuickAuctions:GetSafeLink(GetTradeSkillReagentItemLink(i, rID))
+
+						materials[link] = (materials[link] or 0) + (QuickAuctions.db.factionrealm.craftQueue[itemid] * perOne)
+					end
+				end
+				
+				tradeList[itemid] = true
+			end
+		end
+		
+		if( self.frame and self.frame:IsVisible() ) then
+			self:Update()
+		end
 	end
 end
 
 -- Item we were crafting was created
 function Tradeskill:UNIT_SPELLCAST_SUCCEEDED(event, unit, name)
-	if( unit == "player" and name == creatingItem and QuickAuctionsDB.craftQueue[creatingItemID] ) then
-		QuickAuctionsDB.craftQueue[creatingItemID] = QuickAuctionsDB.craftQueue[creatingItemID] - 1
+	if( unit == "player" and name == creatingItem and QuickAuctions.db.factionrealm.craftQueue[creatingItemID] ) then
+		QuickAuctions.db.factionrealm.craftQueue[creatingItemID] = QuickAuctions.db.factionrealm.craftQueue[creatingItemID] - 1
 
-		if( QuickAuctionsDB.craftQueue[creatingItemID] <= 0 ) then
-			QuickAuctionsDB.craftQueue[creatingItemID] = nil
+		if( QuickAuctions.db.factionrealm.craftQueue[creatingItemID] <= 0 ) then
+			QuickAuctions.db.factionrealm.craftQueue[creatingItemID] = nil
 
 			creatingItem = nil
 			creatingItemID = nil
+			
+			self:StopCastEvents()
 		end
 	end
 end
@@ -262,37 +293,28 @@ function Tradeskill:UNIT_SPELLCAST_INTERRUPTED(event, unit, name)
 	if( unit == "player" and name == creatingItem ) then
 		creatingItem = nil
 		creatingItemID = nil
+		self:StopCastEvents()
 	end
 end
 
-local frame = CreateFrame("Frame")
-frame:RegisterEvent("TRADE_SKILL_UPDATE")
-frame:RegisterEvent("ADDON_LOADED")
-frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
-frame:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
-frame:RegisterEvent("BAG_UPDATE")
-frame:SetScript("OnEvent", function(self, event, ...)
-	Tradeskill[event](Tradeskill, event, ...)
-end)
-
-
-local timeElapsed = 0
-frame:Hide()
-frame:SetScript("OnUpdate", function(self, elapsed)
-	timeElapsed = timeElapsed + elapsed
-	
-	if( timeElapsed >= 0.25 ) then
-		timeElapsed = 0
-		self:Hide()
+do
+	local timeElapsed = 0
+	local frame = CreateFrame("Frame")
+	frame:SetScript("OnUpdate", function(self, elapsed)
+		timeElapsed = timeElapsed + elapsed
 		
-		if( Tradeskill.frame and Tradeskill.frame:IsVisible() ) then
+		if( timeElapsed >= 0.25 ) then
+			timeElapsed = 0
+			self:Hide()
+			
 			Tradeskill:Update()
 		end
-	end
-end)
+	end)
+	frame:Hide()
 
--- Bag updating (With throttlign)
-function Tradeskill:BAG_UPDATE()
-	timeElapsed = 0
-	frame:Show()
+	-- Bag updating (With throttlign)
+	function Tradeskill:BAG_UPDATE()
+		timeElapsed = 0
+		frame:Show()
+	end
 end

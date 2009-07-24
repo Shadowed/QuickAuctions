@@ -23,4 +23,4 @@ modules\post.lua
 modules\split.lua
 modules\summary.lua
 modules\config.lua
-modules\tradeskill.lua
+modules\tradeskills.lua

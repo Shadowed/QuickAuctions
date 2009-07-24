@@ -804,7 +804,7 @@ function Summary:CreateGUI()
 			
 			if( QuickAuctions.Tradeskill.frame and QuickAuctions.Tradeskill.frame:IsVisible() ) then
 				QuickAuctions.Tradeskill:RebuildList()
-				QuickAuctions.Tradeskill:Update()
+				QuickAuctions.Tradeskill:TradeskillUpdate()
 			end
 			
 			return
@@ -817,13 +817,13 @@ function Summary:CreateGUI()
 
 			if( QuickAuctions.Tradeskill.frame and QuickAuctions.Tradeskill.frame:IsVisible() ) then
 				QuickAuctions.Tradeskill:RebuildList()
-				QuickAuctions.Tradeskill:Update()
+				QuickAuctions.Tradeskill:TradeskillUpdate()
 			end
 
 			return
 		-- Backspace, remove previous
 		elseif( key == "BACKSPACE" ) then
-			if( string.len(createQuantity) > 0 ) then
+			if( createQuantity and string.len(createQuantity) > 0 ) then
 				createQuantity = tonumber(string.sub(createQuantity, 0, -2))
 				Summary:Update()
 			end

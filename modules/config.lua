@@ -1062,6 +1062,15 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 		else
 			configFrame:Hide()
 		end
+	-- Tradeskill
+	elseif( cmd == "tradeskill" ) then
+		if( QuickAuctions.Tradeskill.frame and QuickAuctions.Tradeskill.frame:IsVisible() ) then
+			QuickAuctions.Tradeskill.frame:Hide()
+		else
+			QuickAuctions.Tradeskill:CreateFrame()
+			QuickAuctions.Tradeskill.frame:Show()
+		end
+		
 	-- Summary
 	elseif( cmd == "summary" ) then
 		QuickAuctions.Summary:Toggle()
@@ -1069,6 +1078,7 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 		QuickAuctions:Print(L["Slash commands"])
 		QuickAuctions:Echo(L["/qa cancelall <group> - Cancels all active auctions, or cancels auctions in a group if you pass one"])
 		QuickAuctions:Echo(L["/qa summary - Shows the auction summary"])
+		QuickAuctions:Echo(L["/qa tradeskill - Toggles showing the craft queue window for tradeskills"])
 		QuickAuctions:Echo(L["/qa config - Toggles the configuration"])
 	end
 end
