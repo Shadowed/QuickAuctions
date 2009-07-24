@@ -246,6 +246,7 @@ end)
 Scan.scanFrame:Hide()
 
 function Scan:AUCTION_ITEM_LIST_UPDATE()
+	self.scanFrame.timeDelay = BASE_DELAY
 	self.scanFrame.timeElapsed = 0
 	self.scanFrame:Show()
 end
@@ -257,35 +258,41 @@ function Scan:ScanAuctions()
 		
 	-- Check for bad data quickly
 	if( status.retries < 3 ) then
+		-- Blizzard doesn't resolve the GUID -> name of the owner until GetAuctionItemInfo is called for it
+		-- meaning will call it for everything on the list then if we had any bad data will requery
+		local badData
 		for i=1, shown do
 			local name, _, _, _, _, _, _, _, _, _, _, owner = GetAuctionItemInfo("list", i)     
 			if( not name or not owner ) then
-				status.retries = status.retries + 1
-				
-				-- Hard retry
-				if( status.hardRetry ) then
-					self:SendMessage("QA_QUERY_UPDATE", "retry", status.filter, status.page + 1, totalPages, status.retries, 3)
-					self:SendQuery()
-				-- Soft retry
-				else
-					self.scanFrame.timeElapsed = 0
-					self.scanFrame.timeDelay = status.retries * 0.66
-					self.scanFrame:Show()
-					
-					-- QA will wait 0.66 seconds per retry (0.66, 1.32, 1.98 = 3.96 seconds) more during a soft retry
-					-- if that still fails, it will fallback on a hard retry where it will requery 3 times, if the requeries
-					-- fail still, then it will let the data through with an unknown owner
-					if( status.retries >= 3 ) then
-						status.hardRetry = true
-						status.retries = 0
-					end
-				end
-				return
+				badData = true
 			end
 		end
-	end
 		
-	self.scanFrame.timeDelay = BASE_DELAY
+		if( badData ) then
+			status.retries = status.retries + 1
+			
+			-- Hard retry
+			if( status.hardRetry ) then
+				self:SendMessage("QA_QUERY_UPDATE", "retry", status.filter, status.page + 1, totalPages, status.retries, 3)
+				self:SendQuery()
+			-- Soft retry
+			else
+				self.scanFrame.timeElapsed = 0
+				self.scanFrame.timeDelay = status.retries * 0.66
+				self.scanFrame:Show()
+				
+				-- QA will wait 0.66 seconds per retry (0.66, 1.32, 1.98 = 3.96 seconds) more during a soft retry
+				-- if that still fails, it will fallback on a hard retry where it will requery 3 times, if the requeries
+				-- fail still, then it will let the data through with an unknown owner
+				if( status.retries >= 3 ) then
+					status.hardRetry = true
+					status.retries = 0
+				end
+			end
+			return
+		end
+	end
+	
 	status.hardRetry = nil
 	status.retries = 0
 
