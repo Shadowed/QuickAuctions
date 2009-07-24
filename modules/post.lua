@@ -106,8 +106,8 @@ function Post:PostAuction(queue)
 	local quantityText = quantity > 1 and " x " .. quantity or ""
 	
 	-- Increase the bid/buyout based on how many items we're posting
-	bid = bid * quantity
-	buyout = buyout * quantity
+	bid = math.floor(bid * quantity)
+	buyout = math.floor(buyout * quantity)
 	
 	if( not lowestOwner ) then
 		QuickAuctions:Log(string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (No other auctions up)"], name, quantityText, postTotal[link], QuickAuctions.Manage.stats[link] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)), true)
