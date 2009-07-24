@@ -217,7 +217,7 @@ function Scan:GetLowestAuction(link)
 	for _, record in pairs(auctionData[link].records) do
 		if( not record.isPlayer and record.buyout == buyout ) then
 			isPlayer = nil
-			if( not QuickAuctions.db.factionrealm.whitelist[record.owner] ) then
+			if( not QuickAuctions.db.factionrealm.whitelist[string.lower(record.owner)] ) then
 				isWhitelist = nil
 			end
 			
