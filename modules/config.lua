@@ -34,11 +34,11 @@ local function updateTree()
 				table.remove(currentTree[3].children, i)
 			end
 		end
+
+		-- Alphabetizalical the children
+		table.sort(currentTree[3].children, sortChildren)
 	end
-	
-	-- Alphabetizalical the children
-	table.sort(currentTree[3].children, sortChildren)
-		
+			
 	-- Setup the tree
 	categoryTree:SetTree(currentTree)
 end
