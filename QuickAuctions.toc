@@ -17,8 +17,10 @@ libs\AceGUI-3.0\AceGUI-3.0.xml
 localization.enUS.lua
 
 QuickAuctions.lua
-scan.lua
-split.lua
-manage.lua
-config.lua
-post.lua
+modules\scan.lua
+modules\manage.lua
+modules\post.lua
+modules\split.lua
+modules\summary.lua
+modules\config.lua
+modules\tradeskill.lua

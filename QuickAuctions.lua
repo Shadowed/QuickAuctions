@@ -14,6 +14,7 @@ function QuickAuctions:OnInitialize()
 			smartCancel = true,
 			cancelWithBid = true,
 			groups = {},
+			categories = {},
 			undercut = {default = 0},
 			postTime = {default = 12},
 			bidPercent = {default = 1.0},
@@ -23,7 +24,12 @@ function QuickAuctions:OnInitialize()
 			postCap = {default = 4},
 			perAuction = {default = 1},
 		},
-		realm = {
+		global = {
+			summaryItems = {}
+		},
+		factionrealm = {
+			crafts = {},
+			craftQueue = {},
 			player = {},
 			whitelist = {},
 		},
@@ -34,9 +40,11 @@ function QuickAuctions:OnInitialize()
 	self.Manage = self.modules.Manage
 	self.Split = self.modules.Split
 	self.Post = self.modules.Post
+	self.Summary = self.modules.Summary
+	self.Tradeskill = self.modules.Tradeskill
 	
 	-- Add this character to the alt list so it's not undercut by the player
-	self.db.realm.player[UnitName("player")] = true
+	self.db.factionrealm.player[UnitName("player")] = true
 	
 	-- Reset settings
 	if( QuickAuctionsDB.revision ) then
@@ -48,11 +56,11 @@ function QuickAuctions:OnInitialize()
 	end
 
 	-- Wait for auction house to be loaded
-	self:RegisterMessage("SUF_AH_LOADED", "AuctionHouseLoaded")
+	self:RegisterMessage("QA_AH_LOADED", "AuctionHouseLoaded")
 	self:RegisterEvent("ADDON_LOADED", function(event, addon)
 		if( IsAddOnLoaded("Blizzard_AuctionUI") ) then
 			QuickAuctions:UnregisterEvent("ADDON_LOADED")
-			QuickAuctions:SendMessage("SUF_AH_LOADED")
+			QuickAuctions:SendMessage("QA_AH_LOADED")
 		end
 	end)
 end
@@ -87,9 +95,12 @@ function QuickAuctions:UpdateStatusLog()
 end
 
 function QuickAuctions:AuctionHouseLoaded()
+	-- This hides the <player>'s Auctions text
+	AuctionsTitle:Hide()
+	
 	-- Hook auction OnHide to interrupt scans if we have to
 	AuctionFrame:HookScript("OnHide", function(self)
-		QuickAuctions:SendMessage("SUF_AH_CLOSED")
+		QuickAuctions:SendMessage("QA_AH_CLOSED")
 	end)
 
 	-- Block system messages for auctions being removed or posted
@@ -161,6 +172,7 @@ function QuickAuctions:AuctionHouseLoaded()
 	button:SetScript("OnEnter", showTooltip)
 	button:SetScript("OnLeave", hideTooltip) 
 	button:SetScript("OnClick", function(self)
+		QuickAuctions.Summary:Toggle()
 	end)
 	
 	self.buttons.summary = button
@@ -168,7 +180,7 @@ function QuickAuctions:AuctionHouseLoaded()
 	-- Post inventory items
 	local button = CreateFrame("Button", nil, AuctionFrameAuctions, "UIPanelButtonTemplate")
 	button.tooltip = L["Post items from your inventory into the auction house."]
-	button:SetPoint("TOPRIGHT", self.buttons.summary, "TOPLEFT", 0, 0)
+	button:SetPoint("TOPRIGHT", self.buttons.summary, "TOPLEFT", -25, 0)
 	button:SetText(L["Post"])
 	button:SetWidth(80)
 	button:SetHeight(18)
@@ -183,7 +195,7 @@ function QuickAuctions:AuctionHouseLoaded()
 	-- Scan our posted items
 	local button = CreateFrame("Button", nil, AuctionFrameAuctions, "UIPanelButtonTemplate")
 	button.tooltip = L["Cancels any posted auctions that you were undercut on."]
-	button:SetPoint("TOPRIGHT", self.buttons.post, "TOPLEFT", 0, 0)
+	button:SetPoint("TOPRIGHT", self.buttons.post, "TOPLEFT", -10, 0)
 	button:SetText(L["Cancel"])
 	button:SetWidth(80)
 	button:SetHeight(18)
@@ -194,6 +206,22 @@ function QuickAuctions:AuctionHouseLoaded()
 	end)
 	
 	self.buttons.cancel = button
+
+	-- Status scans what items we have in our inventory/auction
+	--[[
+	local button = CreateFrame("Button", nil, AuctionFrameAuctions, "UIPanelButtonTemplate")
+	button.tooltip = L["Does a status scan that helps to identify auctions you can buyout to raise the price of a group your managing.\n\nThis will NOT automatically buy items for you, this just suggests that you might be able to."]
+	button:SetPoint("TOPRIGHT", self.buttons.cancel, "TOPLEFT", -10, 0)
+	button:SetText(L["Status"])
+	button:SetWidth(80)
+	button:SetHeight(18)
+	button:SetScript("OnEnter", showTooltip)
+	button:SetScript("OnLeave", hideTooltip)
+	button:SetScript("OnClick", function(self)
+	end)
+	
+	self.buttons.status = button
+	]]
 end
 
 function QuickAuctions:GetSafeLink(link)
