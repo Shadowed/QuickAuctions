@@ -149,7 +149,7 @@ function Scan:IsLowestAuction(name, buyout, bid)
 	
 	for _, record in pairs(auctionData[link].records) do
 		-- They are on our whitelist, and they undercut us, or they matched our buyout but under bid us.
-		if( QuickAuctions.db.factionrealm.whitelist[record.owner] ) then
+		if( QuickAuctions.db.factionrealm.whitelist[string.lower(record.owner)] ) then
 			if( record.buyout < buyout or ( QuickAuctions.db.profile.bidUndercut and record.buyout == buyout and record.bid < bid ) ) then
 				return false, record.owner, record.quantity, record.buyout, record.bid
 			end
