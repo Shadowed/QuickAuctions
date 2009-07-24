@@ -251,6 +251,7 @@ function QuickAuctions:CreateStatus()
 	frame:SetPoint("TOPLEFT", AuctionsQualitySort, "BOTTOMLEFT", -2, -2)
 	frame:SetPoint("BOTTOMRIGHT", AuctionsCloseButton, "TOPRIGHT", -5, 2)
 	frame:SetScript("OnShow", function() QuickAuctions:UpdateStatusLog() end)
+	frame:EnableMouse(true)
 	frame:Hide()
 
 	frame.rows = {}
@@ -260,6 +261,7 @@ function QuickAuctions:CreateStatus()
 		text:SetWidth(1)
 		text:SetHeight(16)
 		text:SetJustifyH("LEFT")
+		text:SetTextColor(0.90, 0.90, 0.90, 1)
 
 		if( i > 1 ) then
 			text:SetPoint("TOPLEFT", frame.rows[i - 1], "BOTTOMLEFT", 0, 0)
@@ -285,7 +287,7 @@ local COPPER_TEXT = "|cffeda55fc|r"
 function QuickAuctions:FormatTextMoney(money, truncate)
 	local gold = math.floor(money / COPPER_PER_GOLD)
 	local silver = math.floor((money - (gold * COPPER_PER_GOLD)) / COPPER_PER_SILVER)
-	local copper = math.fmod(money, COPPER_PER_SILVER)
+	local copper = math.floor(math.fmod(money, COPPER_PER_SILVER))
 	local text = ""
 	
 	-- Add gold
