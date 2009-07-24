@@ -29,7 +29,8 @@ function Post:Start()
 end
 
 function Post:Stop()
-	QuickAuctions:Log(string.format(L["Finished posting %d items"], overallTotal))
+	QuickAuctions:Log(string.format(L["Finished posting %d items"], overallTotal), true)
+	self:UnregisterEvent("CHAT_MSG_SYSTEM")
 	
 	table.wipe(postQueue)
 	table.wipe(postTotal)
@@ -102,19 +103,25 @@ function Post:PostAuction(queue)
 	end
 	
 	local quantity = select(2, GetContainerItemInfo(bag, slot))
+	local quantityText = quantity > 1 and " x " .. quantity or ""
+	
+	-- Increase the bid/buyout based on how many items we're posting
+	bid = bid * quantity
+	buyout = buyout * quantity
+	
 	if( not lowestOwner ) then
-		QuickAuctions:Log(string.format(L["Posting %s (%d/%d) bid %s, buyout %s (No other auctions up)"], name, postTotal[link], QuickAuctions.Manage.stats[link], QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)), true)
+		QuickAuctions:Log(string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (No other auctions up)"], name, quantityText, postTotal[link], QuickAuctions.Manage.stats[link] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)), true)
 	elseif( buyoutLow ) then
-		QuickAuctions:Log(string.format(L["Posting %s (%d/%d) bid %s, buyout %s (Buyout went below zero, undercut by 1 copper instead)"], name, postTotal[link], QuickAuctions.Manage.stats[link], QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)), true)
+		QuickAuctions:Log(string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (Buyout went below zero, undercut by 1 copper instead)"], name, quantityText, postTotal[link], QuickAuctions.Manage.stats[link] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)), true)
 	elseif( fallbackCap ) then
-		QuickAuctions:Log(string.format(L["Posting %s (%d/%d) bid %s, buyout %s (Forced to fallback cap, lowest price was too high)"], name, postTotal[link], QuickAuctions.Manage.stats[link], QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)), true)
+		QuickAuctions:Log(string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (Forced to fallback cap, lowest price was too high)"], name, quantityText, postTotal[link], QuickAuctions.Manage.stats[link] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)), true)
 	else
-		QuickAuctions:Log(string.format(L["Posting %s (%d/%d) bid %s, buyout %s"], name, postTotal[link], QuickAuctions.Manage.stats[link], QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)), true)
+		QuickAuctions:Log(string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s"], name, quantityText, postTotal[link], QuickAuctions.Manage.stats[link] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)), true)
 	end
 		
 	PickupContainerItem(bag, slot)
 	ClickAuctionSellItemButton()
-	StartAuction(bid * quantity, buyout * quantity, QuickAuctions.Manage:GetConfigValue(link, "postTime") * 60)
+	StartAuction(bid, buyout, QuickAuctions.Manage:GetConfigValue(link, "postTime") * 60)
 end
 
 -- This looks a bit odd I know, not sure if I want to keep it like this (or if I even can) where it posts something as soon as it can
