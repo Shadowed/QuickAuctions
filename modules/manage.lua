@@ -90,7 +90,7 @@ function Manage:CHAT_MSG_SYSTEM(event, msg)
 		totalToCancel = totalToCancel - 1
 		
 		if( totalToCancel <= 0 ) then
-			QuickAuctions:Log(string.format(L["Finished cancelling %d auctions"], totalCancelled), true)
+			QuickAuctions:Log(string.format(L["Finished cancelling %d auctions"], totalCancelled))
 			
 			-- Unlock posting, cancelling doesn't require the auction house to be open meaning we can cancel everything
 			-- then go run to the mailbox while it cancels just fine
@@ -100,7 +100,7 @@ function Manage:CHAT_MSG_SYSTEM(event, msg)
 
 			self:StopCancelling()
 		else
-			QuickAuctions:Log(string.format(L["Cancelled %d of %d"], totalToCancel, totalCancelled), newLine)
+			QuickAuctions:Log(string.format(L["Cancelled %d of %d"], totalCancelled - totalToCancel, totalCancelled), newLine)
 			newLine = nil
 		end
 	end
@@ -162,7 +162,7 @@ function Manage:Cancel()
 			-- The player is the only one with it on the AH and it's below the threshold
 			if( ( not isPlayer and not isWhitelist ) or
 				( isWhitelist and ( buyout > lowestBuyout or ( buyout == lowestBuyout and lowestBid < bid ) ) ) or
-				( QuickAuctions.db.smartCancel and QuickAuctions.Scan:IsPlayerOnly(link) and buyout < fallback ) ) then
+				( QuickAuctions.db.profile.smartCancel and QuickAuctions.Scan:IsPlayerOnly(link) and buyout < fallback ) ) then
 				
 				-- Don't cancel if the buyout is equal, or below our threshold
 				if( QuickAuctions.db.profile.smartCancel and lowestBuyout <= threshold ) then
