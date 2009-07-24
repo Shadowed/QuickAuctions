@@ -105,12 +105,12 @@ function QuickAuctions:AuctionHouseLoaded()
 
 	-- Block system messages for auctions being removed or posted
 	local orig_ChatFrame_SystemEventHandler = ChatFrame_SystemEventHandler
-	ChatFrame_SystemEventHandler = function(self, event, msg)
+	ChatFrame_SystemEventHandler = function(self, event, msg, ...)
 		if( msg == ERR_AUCTION_REMOVED and status.isCancelling or msg == ERR_AUCTION_STARTED and status.isPosting ) then
 			return true
 		end
 		
-		return orig_ChatFrame_SystemEventHandler(self, event, msg)
+		return orig_ChatFrame_SystemEventHandler(self, event, msg, ...)
 	end
 
 	-- Tooltips!
@@ -245,6 +245,7 @@ function QuickAuctions:CreateStatus()
 	frame:SetBackdropColor(0, 0, 0, 0.95)
 	frame:SetBackdropBorderColor(0.60, 0.60, 0.60, 1)
 	frame:SetFrameLevel(30)
+	frame:SetFrameStrata("HIGH")
 	frame:SetHeight(1)
 	frame:SetWidth(1)
 	frame:ClearAllPoints()
