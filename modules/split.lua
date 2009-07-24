@@ -6,6 +6,17 @@ local timeElapsed, splitTimeout, hadSplitFailure = 0, 0
 local eventThrottle = CreateFrame("Frame")
 eventThrottle:Hide()
 
+function Split:OnInitialize()
+	self:RegisterMessage("QA_AH_CLOSED", "AuctionHouseClosed")
+end
+
+function Split:AuctionHouseClosed()
+	if( status.isSplitting ) then
+		self:Stop()
+		QuickAuctions:Print(L["Stopped splitting due to Auction House frame being closed."])
+	end
+end
+
 -- This isn't really the most efficient code for doing splits, but as QA requires the user to not be doing anything else
 -- and splitting in general is a pain I'll take the CPU cost
 function Split:FindEmptySlot(itemFamily)
@@ -68,18 +79,23 @@ function Split:UpdateBags()
 			-- Can't use something that's still locked
 			if( not locked ) then
 				-- Item added, check if we can remove something from the queue
-				if( not bagList[location] and link ) then
+				-- Had to move this away from only checking if the item changed because if you have 5 x Glyph of Rejuvenation
+				-- and want 5 on the Auction House, it would split it 4 times and fail to see the original stack which is now
+				-- valid to post with because that stack never actually leaves the auction house
+				if( link ) then
 					self:CheckQueueMatch(bag, slot, link, quantity)
+					
 				-- This location used to be where a split item was, but as it no longer is we can unflag it
 				elseif( bagList[location] and not link ) then
 					alreadySplit[location] = nil
 					lockedSlot[location] = nil
 				end
+
+				bagList[location] = link
 			else
 				recheck = true
 			end
 			
-			bagList[location] = link
 		end
 	end
 	
@@ -105,7 +121,6 @@ function Split:UpdateBags()
 			local quantity = select(2, GetContainerItemInfo(bag, slot))
 			local splitData = self:FindSplitData(link, quantity)
 			if( splitData ) then
-				
 				-- If we don't have a free slot yet, will wait a second then will check again for a free spot
 				local freeBag, freeSlot = self:FindEmptySlot(GetItemFamily(link))
 				if( not freeBag or not freeSlot ) then
@@ -117,6 +132,7 @@ function Split:UpdateBags()
 						return
 					end
 					
+					-- Wait a second and try again to see if we got room
 					timeElapsed = 1
 					eventThrottle:Show()
 					return
