@@ -169,7 +169,7 @@ function Tradeskill:CreateFrame()
 				self:SetAttribute("type", "macro")
 				self:SetAttribute("macrotext", string.format("/script DoTradeSkill(%d,%d);", i, quantity))
 				
-				self:StartCastEvents()
+				Tradeskill:StartCastEvents()
 			end
 		end
 	end
