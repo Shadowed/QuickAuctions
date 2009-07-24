@@ -2,12 +2,18 @@ local Config = QuickAuctions:NewModule("Config", "AceEvent-3.0")
 local L = QuickAuctionsLocals
 local AceGUI = LibStub("AceGUI-3.0")
 local categoryTree, currentTree, configFrame
+local lastTree = "general"
 local timeTable = {[12] = L["12 hours"], [24] = L["24 hours"], [48] = L["48 hours"]}
 local _G = getfenv(0)
 
 --[[
 	TREE BUILDER
 ]]--
+
+local function sortChildren(a, b)
+	return a.text < b.text
+end
+
 local function updateTree()
 	currentTree = {
 		{ text = L["General"], value = "general" },
@@ -29,6 +35,9 @@ local function updateTree()
 			end
 		end
 	end
+	
+	-- Alphabetizalical the children
+	table.sort(currentTree[3].children, sortChildren)
 		
 	-- Setup the tree
 	categoryTree:SetTree(currentTree)
@@ -957,6 +966,9 @@ local function categorySelected(container, event, selected)
 	container:ReleaseChildren()
 	container:SetLayout("Fill")
 	
+	-- Save last selected group for next time someone opens QA config in this session
+	lastTree = selected
+	
 	local scroll
 	if( selected == "general" or selected == "whitelist" or selected == "groups" ) then
 		scroll = AceGUI:Create("ScrollFrame")
@@ -1005,7 +1017,8 @@ local function createOptions()
 	-- Create the category selection tree
 	categoryTree = AceGUI:Create("TreeGroup")
 	categoryTree:SetCallback("OnGroupSelected", categorySelected)
-	categoryTree:SelectByValue("general")
+	categoryTree:SetStatusTable({groups = {["groups"] = true}})
+	categoryTree:SelectByPath(lastTree)
 	
 	updateTree()
 
