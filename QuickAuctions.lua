@@ -242,7 +242,7 @@ function QuickAuctions:CreateStatus()
 
 	local frame = CreateFrame("Frame", nil, AuctionFrameAuctions)
 	frame:SetBackdrop(backdrop)
-	frame:SetBackdropColor(0, 0, 0, 0.85)
+	frame:SetBackdropColor(0, 0, 0, 0.95)
 	frame:SetBackdropBorderColor(0.60, 0.60, 0.60, 1)
 	frame:SetFrameLevel(30)
 	frame:SetHeight(1)

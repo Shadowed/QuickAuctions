@@ -91,7 +91,7 @@ function Summary:QA_STOP_SCAN(event, interrupted)
 	-- And now let us rescan data if we want
 	self.getDataButton:Enable()
 	self.stopButton:Disable()
-	self.progressBar;SetMinMaxValues(0, 1)
+	self.progressBar:SetMinMaxValues(0, 1)
 	self.progressBar:SetValue(1)
 	isScanning = nil
 	
