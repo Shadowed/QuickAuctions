@@ -169,7 +169,7 @@ function Manage:Cancel()
 					if( not tempList[name] ) then
 						tempList[name] = true
 						
-						QuickAuctions:Log(string.format(L["Undercut on %s by %s, their buyout %s, yours %s (per item), threshold is %s not cancelling"], name, lowestOwner, QuickAuctions:FormatTextMoney(lowestBuyout, true), QuickAuctions:FormatTextMoney(buyout, true), self:FormatTextMoney(threshold, true)), true)
+						QuickAuctions:Log(string.format(L["Undercut on %s by %s, their buyout %s, yours %s (per item), threshold is %s not cancelling"], name, lowestOwner, QuickAuctions:FormatTextMoney(lowestBuyout, true), QuickAuctions:FormatTextMoney(buyout, true), QuickAuctions:FormatTextMoney(threshold, true)), true)
 					end
 				-- Don't cancel an auction if it has a bid and we're set to not cancel those
 				elseif( not QuickAuctions.db.profile.cancelWithBid and activeBid > 0 ) then
