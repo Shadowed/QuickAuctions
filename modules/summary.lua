@@ -2,7 +2,7 @@
 local Summary = QuickAuctions:NewModule("Summary", "AceEvent-3.0")
 local L = QuickAuctionsLocals
 local displayData, createdCats, rowDisplay, usedLinks, activeAuctions = {}, {}, {}, {}, {}
-local createQuantity, focusedLink, isScanning
+local createQuantity, focusedLink, isScanning, startTime
 local MAX_SUMMARY_ROWS = 24
 local ROW_HEIGHT = 20
 
@@ -50,6 +50,7 @@ function Summary:GetData(type)
 	self:RegisterMessage("QA_START_SCAN")
 	self:RegisterMessage("QA_STOP_SCAN")
 	isScanning = true
+	startTime = GetTime()
 	
 	QuickAuctions.Scan:StartCategoryScan(classIndex, subClassList)
 end
@@ -64,6 +65,20 @@ function Summary:QA_QUERY_UPDATE(event, type, filter, ...)
 		local page, totalPages = ...
 		self.progressBar:SetMinMaxValues(0, totalPages)
 		self.progressBar:SetValue(page)
+
+		-- Quick and lazy way of getting me data
+		local text = SecondsToTime(GetTime() - startTime, nil, true)
+		for i=1, 10 do
+			local num = string.match(text, "(%d+) |4")
+			if( not num ) then break end
+			if( tonumber(num) <= 1 ) then
+				text = string.gsub(text, "|4(.-):.-;", "%1")
+			else
+				text = string.gsub(text, "|4.-:(.-);", "%1")
+			end
+		end
+		
+		self.progressBar.text:SetText(text)
 	end
 end
 
@@ -76,6 +91,8 @@ function Summary:QA_STOP_SCAN(event, interrupted)
 	-- And now let us rescan data if we want
 	self.getDataButton:Enable()
 	self.stopButton:Disable()
+	self.progressBar;SetMinMaxValues(0, 1)
+	self.progressBar:SetValue(1)
 	isScanning = nil
 	
 	if( interrupted ) then return end
@@ -545,6 +562,12 @@ function Summary:CreateGUI()
 	self.progressBar:SetMinMaxValues(0, 100)
 	self.progressBar:SetValue(0)
 
+	-- Timer text
+	local path, size = GameFontHighlight:GetFont()
+	self.progressBar.text = self.progressBar:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+	self.progressBar.text:SetFont(path, size, "OUTLINE")
+	self.progressBar.text:SetPoint("CENTER")
+
 	-- Create the select category buttons
 	self.catButtons = {}
 	
@@ -555,9 +578,9 @@ function Summary:CreateGUI()
 			GameTooltip:Show()
 		elseif( self.enchantLink or self.link ) then
 			if( self.button:IsVisible() ) then
-				GameTooltip:SetOwner(self.button, "ANCHOR_LEFT")
+				GameTooltip:SetOwner(self.button, "ANCHOR_TOPLEFT")
 			else
-				GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+				GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
 			end
 			
 			GameTooltip:SetHyperlink(self.enchantLink or self.link)
@@ -704,7 +727,7 @@ function Summary:CreateGUI()
 			self.helpFrame:Show()
 		end
 	end)
-	row:SetPoint("TOPLEFT", self.getDataButton, "BOTTOMLEFT", 0, -4)
+	row:SetPoint("TOPLEFT", self.getDataButton, "BOTTOMLEFT", 0, -10)
 	row.tooltip = L["Shows information on how to use the craft queue"]
 	
 	self.helpCraftQueue = row
@@ -796,16 +819,19 @@ function Summary:CreateGUI()
 		
 	
 		-- Enter pressed, unfocus
-		if( key == "ENTER" and createQuantity ) then
-			QuickAuctions.db.factionrealm.craftQueue[self.baseLink] = tonumber(createQuantity)
+		if( key == "ENTER" ) then
+			if( createQuantity ) then
+				QuickAuctions.db.factionrealm.craftQueue[self.baseLink] = tonumber(createQuantity)
+				
+				if( QuickAuctions.Tradeskill.frame and QuickAuctions.Tradeskill.frame:IsVisible() ) then
+					QuickAuctions.Tradeskill:RebuildList()
+					QuickAuctions.Tradeskill:TradeskillUpdate()
+				end
+			end
+
 			createQuantity = nil
 			focusedLink = nil
 			Summary:Update()
-			
-			if( QuickAuctions.Tradeskill.frame and QuickAuctions.Tradeskill.frame:IsVisible() ) then
-				QuickAuctions.Tradeskill:RebuildList()
-				QuickAuctions.Tradeskill:TradeskillUpdate()
-			end
 			
 			return
 		-- Escape, don't add to list
