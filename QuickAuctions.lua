@@ -3,7 +3,7 @@ QuickAuctions.status = {}
 
 local L = QuickAuctionsLocals
 local status = QuickAuctions.status
-local statusLog, logLine, playerName, playerID = {}
+local statusLog, logLine, logID, lastSeenLogID = {}
 
 -- Addon loaded
 function QuickAuctions:OnInitialize()
@@ -57,6 +57,8 @@ function QuickAuctions:OnInitialize()
 
 	-- Wait for auction house to be loaded
 	self:RegisterMessage("QA_AH_LOADED", "AuctionHouseLoaded")
+	self:RegisterMessage("QA_START_SCAN")
+	self:RegisterMessage("QA_STOP_SCAN")
 	self:RegisterEvent("ADDON_LOADED", function(event, addon)
 		if( IsAddOnLoaded("Blizzard_AuctionUI") ) then
 			QuickAuctions:UnregisterEvent("ADDON_LOADED")
@@ -67,24 +69,43 @@ end
 
 function QuickAuctions:WipeLog()
 	logLine = nil
+	logID = nil
+	lastSeenLogID = 0
+	
 	table.wipe(statusLog)
-
 	self:UpdateStatusLog()
 end
 
--- Doing the new line stuff so I can do live updates and show "X item Page #/#" without adding # new lines
-function QuickAuctions:Log(msg, newLine)
-	if( newLine or not logLine ) then logLine = #(statusLog) + 1 end
-	statusLog[logLine] = msg
+-- If you only pass message, it will assume the next line is going to be a new one
+-- passing an ID will make it use that same line unless the ID changed, pretty much just an automated new line method
+function QuickAuctions:Log(id, msg)
+	if( not msg and id ) then msg = id end
 	
+	if( logID ~= id ) then
+		logLine = #(statusLog) + 1
+		logID = id
+	end
+	
+	statusLog[logLine] = msg
 	self:UpdateStatusLog()
 end
 
 function QuickAuctions:UpdateStatusLog()
-	if( not self.statusFrame or not self.statusFrame:IsVisible() ) then return end
+	if( not self.statusFrame or not self.statusFrame:IsVisible() ) then
+		local waiting = #(statusLog) - lastSeenLogID
+		self.buttons.status:SetFormattedText(L["Log (%d)"], waiting)
+		self.buttons.status.tooltip = string.format(L["%d log messages waiting"], waiting)
+		return
+	else
+		self.buttons.status:SetText(L["Log"])
+		self.buttons.status.tooltip = self.buttons.status.startTooltip
+
+		lastSeenLogID = #(statusLog)
+	end
 	
 	local offset = math.max(0, #(statusLog) - #(self.statusFrame.rows))
 	for id, row in pairs(self.statusFrame.rows) do
+		row.tooltip = statusLog[offset + id]
 		row:SetText(statusLog[offset + id])
 		row:Show()
 	end
@@ -112,25 +133,26 @@ function QuickAuctions:AuctionHouseLoaded()
 		
 		return orig_ChatFrame_SystemEventHandler(self, event, msg, ...)
 	end
+	
+	self.buttons = {}
 
 	-- Tooltips!
 	local function showTooltip(self)
 		GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
-		GameTooltip:SetText(self.tooltip)
+		GameTooltip:SetText(self.tooltip, nil, nil, nil, nil, true)
 		GameTooltip:Show()
 	end
-	
+
 	local function hideTooltip(self)
 		GameTooltip:Hide()
 	end
 	
-	self.buttons = {}
-
 	-- Show status for posting
 	local button = CreateFrame("Button", nil, AuctionFrameAuctions, "UIPanelButtonTemplate")
 	button.tooltip = L["Displays the Quick Auctions log describing what it's currently scanning, posting or cancelling."]
+	button.startTooltip = button.tooltip
 	button:SetPoint("TOPRIGHT", AuctionFrameAuctions, "TOPRIGHT", 51, -15)
-	button:SetWidth(80)
+	button:SetWidth(90)
 	button:SetHeight(18)
 	button:SetText(L["Log"])
 	button:SetScript("OnEnter", showTooltip)
@@ -167,7 +189,7 @@ function QuickAuctions:AuctionHouseLoaded()
 	button.tooltip = L["View a summary of what the highest selling of certain items is."]
 	button:SetPoint("TOPRIGHT", self.buttons.status, "TOPLEFT", 0, 0)
 	button:SetText(L["Summary"])
-	button:SetWidth(80)
+	button:SetWidth(90)
 	button:SetHeight(18)
 	button:SetScript("OnEnter", showTooltip)
 	button:SetScript("OnLeave", hideTooltip) 
@@ -182,13 +204,14 @@ function QuickAuctions:AuctionHouseLoaded()
 	button.tooltip = L["Post items from your inventory into the auction house."]
 	button:SetPoint("TOPRIGHT", self.buttons.summary, "TOPLEFT", -25, 0)
 	button:SetText(L["Post"])
-	button:SetWidth(80)
+	button:SetWidth(90)
 	button:SetHeight(18)
 	button:SetScript("OnEnter", showTooltip)
 	button:SetScript("OnLeave", hideTooltip)
 	button:SetScript("OnClick", function(self)
 		QuickAuctions.Manage:PostScan()
 	end)
+	button.originalText = button:GetText()
 	
 	self.buttons.post = button
 
@@ -197,13 +220,14 @@ function QuickAuctions:AuctionHouseLoaded()
 	button.tooltip = L["Cancels any posted auctions that you were undercut on."]
 	button:SetPoint("TOPRIGHT", self.buttons.post, "TOPLEFT", -10, 0)
 	button:SetText(L["Cancel"])
-	button:SetWidth(80)
+	button:SetWidth(90)
 	button:SetHeight(18)
 	button:SetScript("OnEnter", showTooltip)
 	button:SetScript("OnLeave", hideTooltip)
 	button:SetScript("OnClick", function(self)
 		QuickAuctions.Manage:CancelScan()
 	end)
+	button.originalText = button:GetText()
 	
 	self.buttons.cancel = button
 
@@ -219,6 +243,7 @@ function QuickAuctions:AuctionHouseLoaded()
 	button:SetScript("OnLeave", hideTooltip)
 	button:SetScript("OnClick", function(self)
 	end)
+	button.originalText = button:GetText()
 	
 	self.buttons.status = button
 	]]
@@ -234,18 +259,39 @@ end
 function QuickAuctions:CreateStatus()
 	if( self.statusFrame ) then return end
 	
+	-- Try and stop UIObjects from clipping the status frame
+	local function fixFrame()
+		local frame = QuickAuctions.statusFrame
+		if( AuctionsScrollFrame:IsVisible() ) then
+			frame:SetParent(AuctionsScrollFrame)
+		else
+			frame:SetParent(AuctionFrameAuctions)
+		end
+		
+		frame:SetFrameLevel(frame:GetParent():GetFrameLevel() + 10)
+		for _, row in pairs(frame.rows) do
+			row:SetFrameLevel(frame:GetFrameLevel() + 1)
+		end
+		
+		-- Force it to be visible still
+		if( QuickAuctions.db.profile.showStatus ) then
+			QuickAuctions.statusFrame:Show()
+		end
+	end
+	
+	AuctionsScrollFrame:HookScript("OnHide", fixFrame)
+	AuctionsScrollFrame:HookScript("OnShow", fixFrame)
+
 	local backdrop = {
 		bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
 		edgeFile = "Interface\\ChatFrame\\ChatFrameBackground",
 		edgeSize = 1,
 		insets = {left = 1, right = 1, top = 1, bottom = 1}}
 
-	local frame = CreateFrame("Frame", nil, AuctionFrameAuctions)
+	local frame = CreateFrame("Frame", nil, AuctionsScrollFrame)
 	frame:SetBackdrop(backdrop)
 	frame:SetBackdropColor(0, 0, 0, 0.95)
 	frame:SetBackdropBorderColor(0.60, 0.60, 0.60, 1)
-	frame:SetFrameLevel(30)
-	frame:SetFrameStrata("HIGH")
 	frame:SetHeight(1)
 	frame:SetWidth(1)
 	frame:ClearAllPoints()
@@ -257,26 +303,67 @@ function QuickAuctions:CreateStatus()
 
 	frame.rows = {}
 
-	for i=1, 21 do
-		local text = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-		text:SetWidth(1)
-		text:SetHeight(16)
-		text:SetJustifyH("LEFT")
-		text:SetTextColor(0.90, 0.90, 0.90, 1)
+	-- Tooltips!
+	local function showTooltip(self)
+		GameTooltip:SetOwner(self:GetParent(), "ANCHOR_TOPLEFT")
+		GameTooltip:SetText(self.tooltip, 1, 1, 1, nil, true)
+		GameTooltip:Show()
+	end
 
+	local function hideTooltip(self)
+		GameTooltip:Hide()
+	end
+
+	for i=1, 21 do
+		local button = CreateFrame("Button", nil, frame)
+		button:SetWidth(1)
+		button:SetHeight(16)
+		button:SetPushedTextOffset(0, 0)
+		button:SetScript("OnEnter", showTooltip)
+		button:SetScript("OnLeave", hideTooltip)
+		
+		local text = button:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+		text:SetAllPoints(button)
+		text:SetJustifyH("LEFT")
+		text:SetTextColor(0.95, 0.95, 0.95, 1)
+		button:SetFontString(text)
+		
 		if( i > 1 ) then
-			text:SetPoint("TOPLEFT", frame.rows[i - 1], "BOTTOMLEFT", 0, 0)
-			text:SetPoint("TOPRIGHT", frame.rows[i - 1], "BOTTOMRIGHT", 0, 0)
+			button:SetPoint("TOPLEFT", frame.rows[i - 1], "BOTTOMLEFT", 0, 0)
+			button:SetPoint("TOPRIGHT", frame.rows[i - 1], "BOTTOMRIGHT", 0, 0)
 		else
-			text:SetPoint("TOPLEFT", frame, "TOPLEFT", 2, 0)
-			text:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -4, 0)
+			button:SetPoint("TOPLEFT", frame, "TOPLEFT", 2, 0)
+			button:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -4, 0)
 		end
 
-		frame.rows[i] = text
+		frame.rows[i] = button
 	end
 	
-	
 	self.statusFrame = frame
+	
+	fixFrame()
+end
+
+function QuickAuctions:QA_START_SCAN()
+	self.buttons.post:Disable()
+	self.buttons.cancel:Disable()
+end
+
+function QuickAuctions:QA_STOP_SCAN()
+	self.buttons.post:Enable()
+	self.buttons.cancel:Enable()
+end
+
+function QuickAuctions:SetButtonProgress(type, current, total)
+	if( current >= total ) then
+		self.buttons[type]:SetText(self.buttons[type].originalText)
+		self.buttons.post:Enable()
+		self.buttons.cancel:Enable()
+	else
+		self.buttons[type]:SetFormattedText("%d/%d", current, total)
+		self.buttons.post:Disable()
+		self.buttons.cancel:Disable()
+	end
 end
 
 -- Stolen from Tekkub!
