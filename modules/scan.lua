@@ -101,7 +101,7 @@ function Scan:SendQuery()
 	if( not status.queued ) then
 		self.frame:Hide()
 
-		QueryAuctionItems(status.filter, nil, nil, 0, status.classIndex, status.subClassIndex, status.page, 0, 0)
+		QueryAuctionItems(status.filter or "", nil, nil, 0, status.classIndex or 0, status.subClassIndex or 0, status.page, 0, 0)
 	else
 		self.frame:Show()
 	end
