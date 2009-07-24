@@ -103,13 +103,13 @@ function Post:PostAuction(queue)
 	
 	local quantity = select(2, GetContainerItemInfo(bag, slot))
 	if( not lowestOwner ) then
-		QuickAuctions:Log(string.format(L["Posted %s (%d/%d) bid %s, buyout %s (No other auctions up)"], name, postTotal[link], QuickAuctions.Manage.stats[link], QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)), true)
+		QuickAuctions:Log(string.format(L["Posting %s (%d/%d) bid %s, buyout %s (No other auctions up)"], name, postTotal[link], QuickAuctions.Manage.stats[link], QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)), true)
 	elseif( buyoutLow ) then
-		QuickAuctions:Log(string.format(L["Posted %s (%d/%d) bid %s, buyout %s (Buyout went below zero, undercut by 1 copper instead)"], name, postTotal[link], QuickAuctions.Manage.stats[link], QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)), true)
+		QuickAuctions:Log(string.format(L["Posting %s (%d/%d) bid %s, buyout %s (Buyout went below zero, undercut by 1 copper instead)"], name, postTotal[link], QuickAuctions.Manage.stats[link], QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)), true)
 	elseif( fallbackCap ) then
-		QuickAuctions:Log(string.format(L["Posted %s (%d/%d) bid %s, buyout %s (Forced to fallback cap, lowest price was too high)"], name, postTotal[link], QuickAuctions.Manage.stats[link], QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)), true)
+		QuickAuctions:Log(string.format(L["Posting %s (%d/%d) bid %s, buyout %s (Forced to fallback cap, lowest price was too high)"], name, postTotal[link], QuickAuctions.Manage.stats[link], QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)), true)
 	else
-		QuickAuctions:Log(string.format(L["Posted %s (%d/%d) bid %s, buyout %s"], name, postTotal[link], QuickAuctions.Manage.stats[link], QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)), true)
+		QuickAuctions:Log(string.format(L["Posting %s (%d/%d) bid %s, buyout %s"], name, postTotal[link], QuickAuctions.Manage.stats[link], QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)), true)
 	end
 		
 	PickupContainerItem(bag, slot)
