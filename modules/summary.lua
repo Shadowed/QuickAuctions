@@ -578,9 +578,9 @@ function Summary:CreateGUI()
 			GameTooltip:Show()
 		elseif( self.enchantLink or self.link ) then
 			if( self.button:IsVisible() ) then
-				GameTooltip:SetOwner(self.button, "ANCHOR_TOPLEFT")
+				GameTooltip:SetOwner(self.button, "ANCHOR_LEFT")
 			else
-				GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
+				GameTooltip:SetOwner(self, "ANCHOR_LEFT")
 			end
 			
 			GameTooltip:SetHyperlink(self.enchantLink or self.link)
