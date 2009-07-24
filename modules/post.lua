@@ -22,6 +22,8 @@ function Post:Start()
 		overallTotal = 0
 		status.isPosting = true
 		self:RegisterEvent("CHAT_MSG_SYSTEM")
+		
+		frame.timeElapsed = POST_TIMEOUT
 		frame:Show()
 	end
 end
@@ -41,9 +43,7 @@ frame.timeElapsed = 0
 frame:SetScript("OnUpdate", function(self, elapsed)
 	self.timeElapsed = self.timeElapsed - elapsed
 	if( self.timeElapsed <= 0 ) then
-		print("Timed out")
 		self:Hide()
-		
 		Post:Stop()
 	end
 end)
@@ -51,8 +51,9 @@ end)
 -- Check if an auction was posted and move on if so
 function Post:CHAT_MSG_SYSTEM(event, msg)
 	if( msg == ERR_AUCTION_STARTED ) then
-		print("Auction started")
-		self:PostAuction(table.remove(postQueue, 1))
+		-- Also set our timeout so it knows if it can fully stop
+		frame.timeElapsed = POST_TIMEOUT
+		frame:Show()
 	end
 end
 
@@ -66,10 +67,6 @@ function Post:PostAuction(queue)
 	postTotal[link] = (postTotal[link] or 0) + 1
 	overallTotal = overallTotal + 1
 	
-	-- Also set our timeout so it knows if it can fully stop
-	frame.timeElapsed = POST_TIMEOUT
-	frame:Show()
-
 	-- Set our initial costs
 	local buyout = lowestBuyout or QuickAuctions.Manage:GetConfigValue(link, "fallback")
 	local bid = lowestBid or buyout * QuickAuctions.Manage:GetConfigValue(link, "bidPercent")
@@ -120,9 +117,11 @@ function Post:PostAuction(queue)
 	StartAuction(bid * quantity, buyout * quantity, QuickAuctions.Manage:GetConfigValue(link, "postTime") * 60)
 end
 
+-- This looks a bit odd I know, not sure if I want to keep it like this (or if I even can) where it posts something as soon as it can
+-- I THINK it will work fine, but if it doesn't I'm going to change it back to post once, wait for event, post again, repeat
 function Post:QueueItem(link, bag, slot)
 	table.insert(postQueue, {link = link, bag = bag, slot = slot})
-
+	
 	self:Start()
 	self:PostAuction(table.remove(postQueue, 1))
 end
