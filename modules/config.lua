@@ -871,6 +871,32 @@ addItemToGroup = function(widget)
 	updateAddGroupList(widget:GetUserData("container"))
 end
 
+local function addByFilter(widget, event, value)
+	value = string.trim(string.lower(value))
+	
+	local added = true
+	for bag=4, 0, -1 do
+		if( QuickAuctions:IsValidBag(bag) ) then
+			for slot=1, GetContainerNumSlots(bag) do
+				local link = GetContainerItemLink(bag, slot)
+				if( link and not isSoulbound(bag, slot) and not isAlreadyGrouped(itemID) ) then
+					local name = string.lower(GetItemInfo(link))
+					if( string.match(name, value) ) then
+						QuickAuctions.db.profile.groups[widget:GetUserData("id")][QuickAuctions:GetSafeLink(link)] = true
+						added = true
+					end
+				end
+			end
+		end
+	end
+	
+	widget:SetText(nil)
+	
+	if( added ) then
+		updateAddGroupList(widget:GetUserData("container"))
+	end
+end
+
 local function groupAddConfig(container)
 	-- Help
 	local help = AceGUI:Create("InlineGroup")
@@ -880,9 +906,27 @@ local function groupAddConfig(container)
 	container:AddChild(help)
 	
 	local helpText = AceGUI:Create("Label")
-	helpText:SetText(L["Click an item to add it to this group, you cannot add an item that is already in another group."])
+	helpText:SetText(L["Click an item to add it to this group, you cannot add an item that is already in another group.\n\nYou can enter a search and it will automatically add any item from your inventory that matches the filter."])
 	helpText:SetFullWidth(true)
 	help:AddChild(helpText)
+	
+	-- Add all matching filter
+	local filterContainer = AceGUI:Create("InlineGroup")
+	filterContainer:SetTitle(L["Add items matching filter"])
+	filterContainer:SetLayout("Flow")
+	filterContainer:SetFullWidth(true)
+	container:AddChild(filterContainer)
+	
+	local add = AceGUI:Create("EditBox")
+	add:SetUserData("name", L["Add items matching filter"]) 
+	add:SetUserData("desc", L["Items in your inventory (and only your inventory) that match the filter will be added to this group."])
+	add:SetUserData("id", container:GetUserData("id"))
+	add:SetCallback("OnEnter", showTooltip)
+	add:SetCallback("OnLeave", hideTooltip)
+	add:SetRelativeWidth(0.50)
+	add:SetCallback("OnEnterPressed", addByFilter)
+	add:SetText(nil)
+	filterContainer:AddChild(add)
 	
 	-- Do item list
 	local items = AceGUI:Create("InlineGroup")
@@ -891,6 +935,8 @@ local function groupAddConfig(container)
 	items:SetLayout("Flow")
 	items:SetUserData("id", container:GetUserData("id"))
 	container:AddChild(items)
+	
+	add:SetUserData("container", items)
 	
 	updateAddGroupList(items)
 end
