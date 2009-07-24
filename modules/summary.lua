@@ -2,7 +2,7 @@
 local Summary = QuickAuctions:NewModule("Summary", "AceEvent-3.0")
 local L = QuickAuctionsLocals
 local displayData, createdCats, rowDisplay, usedLinks, activeAuctions = {}, {}, {}, {}, {}
-local createQuantity, focusedLink, isScanning, startTime
+local createQuantity, focusedLink, isScanning, startTime, selectedSummary, summaryCats
 local MAX_SUMMARY_ROWS = 24
 local ROW_HEIGHT = 20
 

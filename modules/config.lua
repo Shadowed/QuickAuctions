@@ -884,8 +884,6 @@ local function groupAddConfig(container)
 	updateAddGroupList(items)
 end
 
-debugTbl = {}
-
 -- Tabs for group selection
 local function groupTabSelected(container, event, selected)
 	container:ReleaseChildren()
