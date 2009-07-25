@@ -93,8 +93,13 @@ end
 function QuickAuctions:UpdateStatusLog()
 	if( not self.statusFrame or not self.statusFrame:IsVisible() ) then
 		local waiting = #(statusLog) - lastSeenLogID
-		self.buttons.status:SetFormattedText(L["Log (%d)"], waiting)
-		self.buttons.status.tooltip = string.format(L["%d log messages waiting"], waiting)
+		if( waiting > 0 ) then
+			self.buttons.status:SetFormattedText(L["Log (%d)"], waiting)
+			self.buttons.status.tooltip = string.format(L["%d log messages waiting"], waiting)
+		else
+			self.buttons.status:SetText(L["Log"])
+			self.buttons.status.tooltip = self.buttons.status.startTooltip
+		end
 		return
 	else
 		self.buttons.status:SetText(L["Log"])
@@ -402,7 +407,7 @@ function QuickAuctions:IsValidBag(bag)
 	
 	-- family 0 = bag with no type, family 1/2/4 are special bags that can only hold certain types of items
 	local itemFamily = GetItemFamily(GetInventoryItemLink("player", ContainerIDToInventoryID(bag)))
-	return itemFamily == 0 or itemFamily > 4
+	return itemFamily and ( itemFamily == 0 or itemFamily > 4 )
 end
 
 function QuickAuctions:Print(msg)
