@@ -458,7 +458,7 @@ local function generalConfig(container)
 	undercut:SetCallback("OnLeave", hideTooltip)
 	undercut:SetCallback("OnValueChanged", valueChanged)
 	undercut:SetLabel(undercut:GetUserData("name"))
-	undercut:SetValue(QuickAuctions.db.profile[cancel:GetUserData("config")])
+	undercut:SetValue(QuickAuctions.db.profile[undercut:GetUserData("config")])
 	
 	general:AddChild(undercut)
 
