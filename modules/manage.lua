@@ -107,6 +107,7 @@ function Manage:CHAT_MSG_SYSTEM(event, msg)
 end
 
 function Manage:CancelAll(group)
+	QuickAuctions:WipeLog()
 	self:RegisterEvent("CHAT_MSG_SYSTEM")
 	status.isCancelling = true
 	table.wipe(tempList)
@@ -142,7 +143,6 @@ function Manage:CancelAll(group)
 end
 
 function Manage:Cancel()
-	QuickAuctions:WipeLog()
 	table.wipe(tempList)
 	
 	for i=1, GetNumAuctionItems("owner") do
