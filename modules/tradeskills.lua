@@ -7,7 +7,6 @@ local itemList, rowDisplay, materials, tradeList = {}, {}, {}, {}
 local professions = {[GetSpellInfo(2259)] = "Alchemy", [GetSpellInfo(2018)] = "Blacksmith", [GetSpellInfo(33359)] = "Cook", [GetSpellInfo(2108)] = "Leatherworker", [GetSpellInfo(7411)] = "Enchanter", [GetSpellInfo(4036)] = "Engineer", [GetSpellInfo(51311)] = "Jewelcrafter", [GetSpellInfo(3908)] = "Tailor", [GetSpellInfo(45357)] = "Scribe"}
 
 function Tradeskill:OnInitialize()
-	self:RegisterEvent("ADDON_LOADED")
 	self:RegisterEvent("TRADE_SKILL_SHOW")
 	self:RegisterEvent("TRADE_SKILL_UPDATE")
 	self:RegisterEvent("TRADE_SKILL_CLOSE")
@@ -194,15 +193,9 @@ function Tradeskill:CreateFrame()
 	end
 end
 
-function Tradeskill:ADDON_LOADED(event, addon)
-	if( addon == "Blizzard_TradeSkillUI" ) then
-		self:CreateFrame()
-		self:UnregisterEvent("ADDON_LOADED")
-	end
-end
-
 function Tradeskill:TRADE_SKILL_SHOW()
 	self:RegisterEvent("BAG_UPDATE")
+	self:CreateFrame()
 	self:TradeskillUpdate()
 end
 
