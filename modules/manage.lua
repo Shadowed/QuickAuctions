@@ -142,6 +142,7 @@ function Manage:CancelAll(group)
 end
 
 function Manage:Cancel()
+	QuickAuctions:WipeLog()
 	table.wipe(tempList)
 	
 	for i=1, GetNumAuctionItems("owner") do
@@ -169,11 +170,11 @@ function Manage:Cancel()
 					if( not tempList[name] ) then
 						tempList[name] = true
 						
-						QuickAuctions:Log(name .. "notcancel", string.format(L["Undercut on %s by %s, their buyout %s, yours %s (per item), threshold is %s not cancelling"], itemLink, lowestOwner, QuickAuctions:FormatTextMoney(lowestBuyout, true), QuickAuctions:FormatTextMoney(buyout, true), QuickAuctions:FormatTextMoney(threshold, true)))
+						QuickAuctions:Log(name .. "notcancel", string.format(L["Undercut on %s by |cfffed000%s|r, their buyout %s, yours %s (per item), threshold is %s not cancelling"], itemLink, lowestOwner, QuickAuctions:FormatTextMoney(lowestBuyout, true), QuickAuctions:FormatTextMoney(buyout, true), QuickAuctions:FormatTextMoney(threshold, true)))
 					end
 				-- Don't cancel an auction if it has a bid and we're set to not cancel those
 				elseif( not QuickAuctions.db.profile.cancelWithBid and activeBid > 0 ) then
-					QuickAuctions:Log(name .. "bid", string.format(L["Undercut on %s by %s, but %s placed a bid of %s so not cancelling"], itemLink, lowestOwner, highBidder, QuickAuctions:FormatTextMoney(activeBid, true)))
+					QuickAuctions:Log(name .. "bid", string.format(L["Undercut on %s by |cfffed000%s|r, but %s placed a bid of %s so not cancelling"], itemLink, lowestOwner, highBidder, QuickAuctions:FormatTextMoney(activeBid, true)))
 				else
 					if( not tempList[name] ) then
 						tempList[name] = true
