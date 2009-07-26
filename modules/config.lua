@@ -1093,11 +1093,22 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 	-- Mass cancel
 	if( cmd == "cancelall" ) then
 		if( AuctionFrame and AuctionFrame:IsVisible() ) then
-			local group = string.trim(string.lower(arg or ""))
-			local groupName
-			if( group ~= "" ) then
+			local parsedArg = string.trim(string.lower(arg or ""))
+			
+			local groupName, cancelTime
+			if( tonumber(parsedArg) ) then
+				parsedArg = tonumber(parsedArg)
+				if( parsedArg ~= 12 and parsedArg ~= 2 ) then
+					QuickAuctions:Print(string.format(L["Invalid time entered, should either be 12 or 2 you entered \"%s\""], parsedArg))
+					return
+				end
+				
+				cancelTime = parsedArg == 12 and 3 or 2
+				--1 = <30 minutes, 2 = <2 hours, 3 = <12 hours, 4 = <13 hours
+				
+			elseif( parsedArg ~= "" ) then
 				for name in pairs(QuickAuctions.db.profile.groups) do
-					if( string.lower(name) == group ) then
+					if( string.lower(name) == parsedArg ) then
 						groupName = name
 						break
 					end
@@ -1109,7 +1120,7 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 				end
 			end
 			
-			QuickAuctions.Manage:CancelAll(groupName)
+			QuickAuctions.Manage:CancelAll(groupName, cancelTime)
 		else
 			QuickAuctions:Print(L["Cannot cancel auctions without the Auction House window open."])
 		end
@@ -1135,7 +1146,7 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 		QuickAuctions.Summary:Toggle()
 	else
 		QuickAuctions:Print(L["Slash commands"])
-		QuickAuctions:Echo(L["/qa cancelall <group> - Cancels all active auctions, or cancels auctions in a group if you pass one"])
+		QuickAuctions:Echo(L["/qa cancelall <group/12/2> - Cancels all active auctions, or cancels auctions in a group if you pass one, or cancels auctions with less than 12 or 2 hours left."])
 		QuickAuctions:Echo(L["/qa summary - Shows the auction summary"])
 		QuickAuctions:Echo(L["/qa tradeskill - Toggles showing the craft queue window for tradeskills"])
 		QuickAuctions:Echo(L["/qa config - Toggles the configuration"])
