@@ -160,7 +160,7 @@ function Summary:UpdateItemData(summaryData, name, quantity, link, itemLevel, it
 	if( summaryData.groupedBy ~= "parent" and type(QuickAuctions.db.factionrealm.crafts[link]) == "number" ) then
 		enchantLink = string.format("enchant:%d", QuickAuctions.db.factionrealm.crafts[link])
 	end
-	
+		
 	local row = displayData[index]
 	local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = QuickAuctions.Scan:GetLowestAuction(link)
 	row.enabled = true
@@ -817,6 +817,8 @@ function Summary:CreateGUI()
 			return
 		end
 		
+		-- Number paduses NUMPAD# instead of just # so strip out the NUMPAD portion
+		key = string.gsub(key, "NUMPAD", "")
 	
 		-- Enter pressed, unfocus
 		if( key == "ENTER" ) then
