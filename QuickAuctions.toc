@@ -2,10 +2,6 @@
 ## Title: Quick Auctions 2
 ## Notes: Makes it easier to manage large quantities of items in the auction house.
 ## Author: Mayen
-## LoadManagers: AddonLoader
-## X-LoadOn-Slash: /qa, /quickauction, /quickauctions
-## X-LoadOn-AuctionHouse: true
-## X-LoadOn-Crafting: true
 ## SavedVariables: QuickAuctionsDB
 
 libs\LibStub-1.0\LibStub-1.0.xml
