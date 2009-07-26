@@ -98,8 +98,8 @@ function Post:PostAuction(queue)
 			buyoutTooLow = true
 		end
 		
-		bid = math.floor(bid * QuickAuctions.Manage:GetConfigValue(itemID, "bidPercent"))
-
+		bid = math.floor(buyout * QuickAuctions.Manage:GetConfigValue(itemID, "bidPercent"))
+		
 		-- Check if we're posting something too high
 		local fallback = QuickAuctions.Manage:GetConfigValue(itemID, "fallback")
 		if( buyout > (fallback * QuickAuctions.Manage:GetConfigValue(itemID, "fallbackCap")) ) then
