@@ -60,11 +60,16 @@ function QuickAuctions:OnInitialize()
 	self:RegisterMessage("QA_START_SCAN")
 	self:RegisterMessage("QA_STOP_SCAN")
 	self:RegisterEvent("ADDON_LOADED", function(event, addon)
-		if( IsAddOnLoaded("Blizzard_AuctionUI") ) then
+		if( addon == "Blizzard_AuctionUI" ) then
 			QuickAuctions:UnregisterEvent("ADDON_LOADED")
 			QuickAuctions:SendMessage("QA_AH_LOADED")
 		end
 	end)
+	
+	if( IsAddOnLoaded("Blizzard_AuctionUI") ) then
+		self:UnregisterEvent("ADDON_LOADED")
+		self:SendMessage("QA_AH_LOADED")
+	end
 end
 
 function QuickAuctions:WipeLog()
