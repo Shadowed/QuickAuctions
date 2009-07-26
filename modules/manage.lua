@@ -13,7 +13,7 @@ end
 function Manage:AuctionHouseClosed()
 	if( status.isManaging and not status.isScanning ) then
 		self:StopPosting()
-		QuickAuctions:Print(L["Posting interrupted due to Auction House being closed."])
+		QuickAuctions:Print(L["Posting interrupted due to Auction House being closed"])
 	end
 end
 
@@ -106,7 +106,7 @@ function Manage:CHAT_MSG_SYSTEM(event, msg)
 	end
 end
 
-function Manage:CancelAll(group)
+function Manage:CancelAll(group, duration)
 	QuickAuctions:WipeLog()
 	self:RegisterEvent("CHAT_MSG_SYSTEM")
 	status.isCancelling = true
@@ -114,7 +114,9 @@ function Manage:CancelAll(group)
 	
 	updateReverseLookup()
 	
-	if( group ) then
+	if( duration ) then
+		QuickAuctions:Log("masscancel", string.format(L["Mass cancelling posted items with less than %d hours left"], duration == 3 and 12 or 2))
+	elseif( group ) then
 		QuickAuctions:Log("masscancel", string.format(L["Mass cancelling posted items in the group |cfffed000%s|r"], group))
 	else
 		QuickAuctions:Log("masscancel", L["Mass cancelling posted items"])
@@ -122,9 +124,10 @@ function Manage:CancelAll(group)
 	
 	for i=1, GetNumAuctionItems("owner") do
 		local name, _, _, _, _, _, _, _, _, _, _, _, wasSold = GetAuctionItemInfo("owner", i)     
+		local timeLeft = GetAuctionItemTimeLeft("owner", i)
 		local itemLink = GetAuctionItemLink("owner", i)
 		local itemID = QuickAuctions:GetSafeLink(itemLink)
-		if( wasSold == 0 and ( group and reverseLookup[itemID] == group or not group ) ) then
+		if( wasSold == 0 and ( group and reverseLookup[itemID] == group or not group ) and ( duration and timeLeft <= duration or not duration ) ) then
 			if( not tempList[name] ) then
 				tempList[name] = true
 				QuickAuctions:Log(name, string.format(L["Cancelled %s"], itemLink))
@@ -234,7 +237,7 @@ function Manage:PostScan()
 	
 	table.sort(postQueue, sortByStack)
 	if( #(postQueue) == 0 ) then
-		QuickAuctions:Log("poststatus", L["You do not have any items to post."])
+		QuickAuctions:Log("poststatus", L["You do not have any items to post"])
 		return
 	end
 		
@@ -304,7 +307,12 @@ function Manage:PostItems(itemID)
 		QuickAuctions:Log(name .. "query", string.format(L["Skipped %s posted |cff20ff20%d|r of |cff20ff20%d|r already"], itemLink, activeAuctions, postCap))
 		return
 	end
-		
+	
+	-- Warn that they don't have enough to post
+	if( perPost < postCap ) then
+		QuickAuctions:Log(name .. "query", string.format(L["Queued %s to be posted (Cap is |cffff2020%d|r, only can post |cffff2020%d|r need to restock)"], itemLink, postCap, perPost))
+	end
+
 	-- The splitter will automatically pass items to the post queuer, meaning if an item doesn't even stack it will handle that just fine
 	for i=1, auctionsCreated do
 		stats[itemID] = (stats[itemID] or 0) + 1
