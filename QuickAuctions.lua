@@ -57,8 +57,9 @@ function QuickAuctions:OnInitialize()
 
 	-- Wait for auction house to be loaded
 	self:RegisterMessage("QA_AH_LOADED", "AuctionHouseLoaded")
-	self:RegisterMessage("QA_START_SCAN")
-	self:RegisterMessage("QA_STOP_SCAN")
+	self:RegisterMessage("QA_START_SCAN", "LockButtons")
+	self:RegisterMessage("QA_STOP_SCAN", "UnlockButtons")
+	self:RegisterMessage("QA_AH_CLOSED", "UnlockButtons")
 	self:RegisterEvent("ADDON_LOADED", function(event, addon)
 		if( addon == "Blizzard_AuctionUI" ) then
 			QuickAuctions:UnregisterEvent("ADDON_LOADED")
@@ -354,12 +355,12 @@ function QuickAuctions:CreateStatus()
 	fixFrame()
 end
 
-function QuickAuctions:QA_START_SCAN()
+function QuickAuctions:LockButtons()
 	self.buttons.post:Disable()
 	self.buttons.cancel:Disable()
 end
 
-function QuickAuctions:QA_STOP_SCAN()
+function QuickAuctions:UnlockButtons()
 	self.buttons.post:Enable()
 	self.buttons.cancel:Enable()
 end
@@ -390,17 +391,17 @@ function QuickAuctions:FormatTextMoney(money, truncate)
 	
 	-- Add gold
 	if( gold > 0 ) then
-		text = gold .. GOLD_TEXT .. " "
+		text = string.format("%d%s ", gold, GOLD_TEXT)
 	end
 	
 	-- Add silver
 	if( silver > 0 and ( not truncate or gold < 100 ) ) then
-		text = text .. silver .. SILVER_TEXT .. " "
+		text = string.format("%s%d%s ", text, silver, SILVER_TEXT)
 	end
 	
 	-- Add copper if we have no silver/gold found, or if we actually have copper
 	if( text == "" or ( copper > 0 and ( not truncate or gold <= 10 ) ) ) then
-		text = text .. copper .. COPPER_TEXT
+		text = string.format("%s%d%s ", text, copper, COPPER_TEXT)
 	end
 	
 	return string.trim(text)
