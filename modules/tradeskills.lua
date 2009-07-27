@@ -10,6 +10,10 @@ function Tradeskill:OnInitialize()
 	self:RegisterEvent("TRADE_SKILL_SHOW")
 	self:RegisterEvent("TRADE_SKILL_UPDATE")
 	self:RegisterEvent("TRADE_SKILL_CLOSE")
+	
+	if( GetTradeSkillLine() and professions[GetTradeSkillLine()] ) then
+		self:TRADE_SKILL_SHOW()
+	end
 end
 
 function Tradeskill:StartCastEvents()

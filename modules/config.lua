@@ -1083,6 +1083,9 @@ local function createOptions()
 	configFrame = frame
 end
 
+SLASH_QA1 = nil
+SLASH_QUICKAUCTION1 = nil
+
 SLASH_QUICKAUCTIONS1 = "/qa"
 SLASH_QUICKAUCTIONS2 = "/quickauction"
 SLASH_QUICKAUCTIONS3 = "/quickauctions"
