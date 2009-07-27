@@ -75,6 +75,7 @@ QuickAuctionsLocals = {
 	["How much auctions should be undercut."] = "How much auctions should be undercut.",
 	["If someone posts an item at a percentage higher than the fallback, it will automatically use the fallback price instead.\n\nFor example, fallback is 100g, fallback after is set to 50% if someone posts an item at 160g it will fallback to 100g."] = "If someone posts an item at a percentage higher than the fallback, it will automatically use the fallback price instead.\n\nFor example, fallback is 100g, fallback after is set to 50% if someone posts an item at 160g it will fallback to 100g.",
 	["Invalid money format entered for \"%s\""] = "Invalid money format entered for \"%s\"",
+	["Invalid time entered, should either be 12 or 2 you entered \"%s\""] = "Invalid time entered, should either be 12 or 2 you entered \"%s\"",
 	["Item Enhancement"] = "Item Enhancement",
 	["Item data not found, you will need to see this item before the name is shown."] = "Item data not found, you will need to see this item before the name is shown.",
 	["Item groups"] = "Item groups",
