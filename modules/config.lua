@@ -304,7 +304,7 @@ local function createAuctionSettings(container, group)
 	
 	local bidPercent = AceGUI:Create("Slider")
 	bidPercent:SetUserData("name", L["Bid percent"]) 
-	bidPercent:SetUserData("desc", L["Percentage of the buyout the bid will be set t, if the buyout is 100g and set you set this to 90%, then the buyout will be 90g."])
+	bidPercent:SetUserData("desc", L["Percentage of the buyout the bid will be set at, if the buyout is 100g and set you set this to 90%, then the bid will be 90g."])
 	bidPercent:SetUserData("group", "bidPercent")
 	bidPercent:SetUserData("key", group)
 	bidPercent:SetCallback("OnEnter", showTooltip)
