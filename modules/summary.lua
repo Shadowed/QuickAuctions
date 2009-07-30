@@ -824,6 +824,9 @@ function Summary:CreateGUI()
 		if( key == "ENTER" ) then
 			if( createQuantity ) then
 				QuickAuctions.db.factionrealm.craftQueue[self.baseLink] = tonumber(createQuantity)
+				if( QuickAuctions.db.factionrealm.craftQueue[self.baseLink] <= 0 ) then
+					QuickAuctions.db.factionrealm.craftQueue[self.baseLink] = nil
+				end
 				
 				if( QuickAuctions.Tradeskill.frame and QuickAuctions.Tradeskill.frame:IsVisible() ) then
 					QuickAuctions.Tradeskill:RebuildList()

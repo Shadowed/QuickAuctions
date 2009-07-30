@@ -2,7 +2,7 @@ local Post = QuickAuctions:NewModule("Post", "AceEvent-3.0")
 local L = QuickAuctionsLocals
 local status = QuickAuctions.status
 local postQueue, postTotal, overallTotal = {}, {}, 0
-local POST_TIMEOUT = 5
+local POST_TIMEOUT = 20
 local frame = CreateFrame("Frame")
 frame:Hide()
 
@@ -77,8 +77,8 @@ function Post:PostAuction(queue)
 	postTotal[itemID] = (postTotal[itemID] or 0) + 1
 	
 	-- Set our initial costs
-	local buyout = lowestBuyout or QuickAuctions.Manage:GetConfigValue(itemID, "fallback")
-	local bid = lowestBid or buyout * QuickAuctions.Manage:GetConfigValue(itemID, "bidPercent")
+	local buyout = lowestBuyout
+	local bid = lowestBid
 	local fallbackCap, buyoutTooLow, bidTooLow
 	
 	-- We got undercut :(
@@ -113,6 +113,9 @@ function Post:PostAuction(queue)
 			bid = threshold
 			bidTooLow = true
 		end
+	else
+		buyout = QuickAuctions.Manage:GetConfigValue(itemID, "fallback")
+		bid = buyout * QuickAuctions.Manage:GetConfigValue(itemID, "bidPercent")
 	end
 	
 	local quantity = select(2, GetContainerItemInfo(bag, slot))
