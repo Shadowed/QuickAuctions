@@ -88,6 +88,7 @@ end
 -- Scan delay if we can't send a query just yet
 Scan.frame = CreateFrame("Frame")
 Scan.frame.timeElapsed = 0
+Scan.frame:Hide()
 Scan.frame:SetScript("OnUpdate", function(self, elapsed)
 	self.timeElapsed = self.timeElapsed + elapsed
 	if( self.timeElapsed >= 0.15 ) then
