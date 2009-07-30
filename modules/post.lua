@@ -113,7 +113,7 @@ function Post:PostAuction(queue)
 			bid = threshold
 			bidTooLow = true
 		end
-	else
+	elseif( not lowestOwner ) then
 		buyout = QuickAuctions.Manage:GetConfigValue(itemID, "fallback")
 		bid = buyout * QuickAuctions.Manage:GetConfigValue(itemID, "bidPercent")
 	end
