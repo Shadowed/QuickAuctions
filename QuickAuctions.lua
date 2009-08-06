@@ -58,9 +58,11 @@ function QuickAuctions:OnInitialize()
 	end
 
 	-- Move the craft list from factionrealm to realm
-	self.db.factionrealm.craftQueue = nil
-	self.db.realm.crafts = CopyTable(self.db.factionrealm.crafts)
-	self.db.factionrealm.crafts = nil
+	if( self.db.factionrealm.crafts ) then
+		self.db.factionrealm.craftQueue = nil
+		self.db.realm.crafts = CopyTable(self.db.factionrealm.crafts)
+		self.db.factionrealm.crafts = nil
+	end
 	
 	-- Wait for auction house to be loaded
 	self:RegisterMessage("QA_AH_LOADED", "AuctionHouseLoaded")
