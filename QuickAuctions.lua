@@ -27,9 +27,11 @@ function QuickAuctions:OnInitialize()
 		global = {
 			summaryItems = {}
 		},
-		factionrealm = {
+		realm = {
 			crafts = {},
 			craftQueue = {},
+		},
+		factionrealm = {
 			player = {},
 			whitelist = {},
 		},
@@ -55,6 +57,11 @@ function QuickAuctions:OnInitialize()
 		end
 	end
 
+	-- Move the craft list from factionrealm to realm
+	self.db.factionrealm.craftQueue = nil
+	self.db.realm.crafts = CopyTable(self.db.factionrealm.crafts)
+	self.db.factionrealm.crafts = nil
+	
 	-- Wait for auction house to be loaded
 	self:RegisterMessage("QA_AH_LOADED", "AuctionHouseLoaded")
 	self:RegisterMessage("QA_START_SCAN", "LockButtons")
