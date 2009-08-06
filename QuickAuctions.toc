@@ -1,4 +1,4 @@
-## Interface: 30100
+## Interface: 30200
 ## Title: Quick Auctions 2
 ## Notes: Makes it easier to manage large quantities of items in the auction house.
 ## Author: Mayen
