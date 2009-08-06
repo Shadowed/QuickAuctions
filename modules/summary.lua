@@ -157,8 +157,8 @@ function Summary:UpdateItemData(summaryData, name, quantity, link, itemLevel, it
 	
 	local enchantLink
 	-- Don't show this for things grouped by parents, because we already know what they take
-	if( summaryData.groupedBy ~= "parent" and type(QuickAuctions.db.factionrealm.crafts[link]) == "number" ) then
-		enchantLink = string.format("enchant:%d", QuickAuctions.db.factionrealm.crafts[link])
+	if( summaryData.groupedBy ~= "parent" and type(QuickAuctions.db.realm.crafts[link]) == "number" ) then
+		enchantLink = string.format("enchant:%d", QuickAuctions.db.realm.crafts[link])
 	end
 		
 	local row = displayData[index]
@@ -400,8 +400,8 @@ function Summary:Update()
 				end
 				
 				local craftQuantity = ""
-				if( QuickAuctions.db.factionrealm.craftQueue[data.link] ) then
-					craftQuantity = string.format("%s%d|r x ", GREEN_FONT_COLOR_CODE, QuickAuctions.db.factionrealm.craftQueue[data.link])
+				if( QuickAuctions.db.realm.craftQueue[data.link] ) then
+					craftQuantity = string.format("%s%d|r x ", GREEN_FONT_COLOR_CODE, QuickAuctions.db.realm.craftQueue[data.link])
 				end
 				
 				local colorCode = ""
@@ -760,8 +760,8 @@ function Summary:CreateGUI()
 	row:SetScript("OnEnter", showTooltip)
 	row:SetScript("OnLeave", hideTooltip)
 	row:SetScript("OnClick", function()
-		for k in pairs(QuickAuctions.db.factionrealm.craftQueue) do
-			QuickAuctions.db.factionrealm.craftQueue[k] = nil
+		for k in pairs(QuickAuctions.db.realm.craftQueue) do
+			QuickAuctions.db.realm.craftQueue[k] = nil
 		end
 		
 		Summary:Update()
@@ -823,9 +823,9 @@ function Summary:CreateGUI()
 		-- Enter pressed, unfocus
 		if( key == "ENTER" ) then
 			if( createQuantity ) then
-				QuickAuctions.db.factionrealm.craftQueue[self.baseLink] = tonumber(createQuantity)
-				if( QuickAuctions.db.factionrealm.craftQueue[self.baseLink] <= 0 ) then
-					QuickAuctions.db.factionrealm.craftQueue[self.baseLink] = nil
+				QuickAuctions.db.realm.craftQueue[self.baseLink] = tonumber(createQuantity)
+				if( QuickAuctions.db.realm.craftQueue[self.baseLink] <= 0 ) then
+					QuickAuctions.db.realm.craftQueue[self.baseLink] = nil
 				end
 				
 				if( QuickAuctions.Tradeskill.frame and QuickAuctions.Tradeskill.frame:IsVisible() ) then
@@ -843,7 +843,7 @@ function Summary:CreateGUI()
 		elseif( key == "ESCAPE" ) then
 			focusedLink = nil
 			createQuantity = nil
-			QuickAuctions.db.factionrealm.craftQueue[self.baseLink] = nil
+			QuickAuctions.db.realm.craftQueue[self.baseLink] = nil
 			Summary:Update()
 
 			if( QuickAuctions.Tradeskill.frame and QuickAuctions.Tradeskill.frame:IsVisible() ) then
@@ -936,11 +936,11 @@ function Summary:CreateCategoryData()
 			text = L["Gems"],
 			itemType = L["Gem"],
 			canCraft = function(link, name) 
-				if( not QuickAuctions.db.factionrealm.crafts.Jewelcrafter ) then return true end
+				if( not QuickAuctions.db.realm.crafts.Jewelcrafter ) then return true end
 				if( string.match(name, L["Perfect (.+)"]) ) then 
 					return true
 				else 
-					return QuickAuctions.db.factionrealm.crafts[link]
+					return QuickAuctions.db.realm.crafts[link]
 				end
 			end,
 			notSubType = L["Simple"],
@@ -960,14 +960,14 @@ function Summary:CreateCategoryData()
 		["Flasks"] = {
 			text = L["Flasks"],
 			subType = L["Flask"],
-			canCraft = function(link, name) if( not QuickAuctions.db.factionrealm.crafts.Alchemy ) then return true else return QuickAuctions.db.factionrealm.crafts[link] end end,
+			canCraft = function(link, name) if( not QuickAuctions.db.realm.crafts.Alchemy ) then return true else return QuickAuctions.db.realm.crafts[link] end end,
 			groupedBy = "itemLevel",
 			auctionClass = L["Consumable"],
 			auctionSubClass = {[L["Flask"]] = true},
 		},
 		["Elixirs"] = {
 			text = L["Elixirs"],
-			canCraft = function(link, name) if( not QuickAuctions.db.factionrealm.crafts.Alchemy ) then return true else return QuickAuctions.db.factionrealm.crafts[link] end end,
+			canCraft = function(link, name) if( not QuickAuctions.db.realm.crafts.Alchemy ) then return true else return QuickAuctions.db.realm.crafts[link] end end,
 			subType = L["Elixir"],
 			groupedBy = "itemLevel",
 			auctionClass = L["Consumable"],
@@ -975,7 +975,7 @@ function Summary:CreateCategoryData()
 		},
 		["Food"] = {
 			text = L["Food"],
-			canCraft = function(link, name) if( not QuickAuctions.db.factionrealm.crafts.Cook ) then return true else return QuickAuctions.db.factionrealm.crafts[link] end end,
+			canCraft = function(link, name) if( not QuickAuctions.db.realm.crafts.Cook ) then return true else return QuickAuctions.db.realm.crafts[link] end end,
 			subType = L["Food & Drink"],
 			groupedBy = "itemLevel",
 			auctionClass = L["Consumable"],
@@ -1005,7 +1005,7 @@ function Summary:CreateCategoryData()
 		["Glyphs"] = {
 			text = L["Glyphs"],
 			itemType = L["Glyph"],
-			canCraft = function(link, name) if( not QuickAuctions.db.factionrealm.crafts.Scribe ) then return true else return QuickAuctions.db.factionrealm.crafts[link] end end,
+			canCraft = function(link, name) if( not QuickAuctions.db.realm.crafts.Scribe ) then return true else return QuickAuctions.db.realm.crafts[link] end end,
 			groupedBy = "subType",
 			auctionClass = L["Glyph"],
 		},

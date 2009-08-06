@@ -35,7 +35,7 @@ function Tradeskill:Update()
 	
 	-- Build our display list
 	for id, itemid in pairs(itemList) do
-		if( tradeList[itemid] and QuickAuctions.db.factionrealm.craftQueue[itemid] ) then
+		if( tradeList[itemid] and QuickAuctions.db.realm.craftQueue[itemid] ) then
 			table.insert(rowDisplay, id)
 		end
 	end
@@ -68,7 +68,7 @@ function Tradeskill:Update()
 			local row = self.rows[displayIndex]
 			if( type(data) == "number" ) then	
 				local itemid = itemList[data]
-				row:SetFormattedText("%s [%d]", (GetItemInfo(itemid)), QuickAuctions.db.factionrealm.craftQueue[itemid])
+				row:SetFormattedText("%s [%d]", (GetItemInfo(itemid)), QuickAuctions.db.realm.craftQueue[itemid])
 				row.itemID = itemid
 			else
 				row:SetText(data)
@@ -87,7 +87,7 @@ end
 
 function Tradeskill:RebuildList()
 	for i=#(itemList), 1, -1 do table.remove(itemList, i) end
-	for itemid in pairs(QuickAuctions.db.factionrealm.craftQueue) do
+	for itemid in pairs(QuickAuctions.db.realm.craftQueue) do
 		if( tradeList[itemid] ) then
 			table.insert(itemList, itemid)
 		end
@@ -157,9 +157,9 @@ function Tradeskill:CreateFrame()
 				
 		for i=1, GetNumTradeSkills() do
 			local itemid = QuickAuctions:GetSafeLink(GetTradeSkillItemLink(i))
-			if( itemid == self.itemID and QuickAuctions.db.factionrealm.craftQueue[itemid] ) then
+			if( itemid == self.itemID and QuickAuctions.db.realm.craftQueue[itemid] ) then
 				-- Make sure we don't wait for it to create more than we can
-				local quantity = QuickAuctions.db.factionrealm.craftQueue[itemid]
+				local quantity = QuickAuctions.db.realm.craftQueue[itemid]
 				local name = GetItemInfo(itemid)
 				local createCap = select(3, GetTradeSkillInfo(i))
 				if( quantity > createCap ) then
@@ -235,7 +235,7 @@ do
 		end
 		
 		-- This way we know we have data for this profession and can show if we can/cannot make it
-		QuickAuctions.db.factionrealm.crafts[professions[GetTradeSkillLine()]] = true
+		QuickAuctions.db.realm.crafts[professions[GetTradeSkillLine()]] = true
 				
 		-- Reset materials list
 		for k in pairs(materials) do materials[k] = nil end
@@ -247,15 +247,15 @@ do
 			local itemid = QuickAuctions:GetSafeLink(GetTradeSkillItemLink(i))
 			if( itemid ) then
 				local enchantid = string.match(GetTradeSkillRecipeLink(i), "enchant:([0-9]+)")
-				QuickAuctions.db.factionrealm.crafts[itemid] = tonumber(enchantid) or true
+				QuickAuctions.db.realm.crafts[itemid] = tonumber(enchantid) or true
 				
 				-- Create a list of items we need to create this item
-				if( QuickAuctions.db.factionrealm.craftQueue[itemid] ) then
+				if( QuickAuctions.db.realm.craftQueue[itemid] ) then
 					for rID=1, GetTradeSkillNumReagents(i) do
 						local perOne = select(3, GetTradeSkillReagentInfo(i, rID))
 						local link = QuickAuctions:GetSafeLink(GetTradeSkillReagentItemLink(i, rID))
 
-						materials[link] = (materials[link] or 0) + (QuickAuctions.db.factionrealm.craftQueue[itemid] * perOne)
+						materials[link] = (materials[link] or 0) + (QuickAuctions.db.realm.craftQueue[itemid] * perOne)
 					end
 				end
 				
@@ -271,11 +271,11 @@ end
 
 -- Item we were crafting was created
 function Tradeskill:UNIT_SPELLCAST_SUCCEEDED(event, unit, name)
-	if( unit == "player" and name == creatingItem and QuickAuctions.db.factionrealm.craftQueue[creatingItemID] ) then
-		QuickAuctions.db.factionrealm.craftQueue[creatingItemID] = QuickAuctions.db.factionrealm.craftQueue[creatingItemID] - 1
+	if( unit == "player" and name == creatingItem and QuickAuctions.db.realm.craftQueue[creatingItemID] ) then
+		QuickAuctions.db.realm.craftQueue[creatingItemID] = QuickAuctions.db.realm.craftQueue[creatingItemID] - 1
 
-		if( QuickAuctions.db.factionrealm.craftQueue[creatingItemID] <= 0 ) then
-			QuickAuctions.db.factionrealm.craftQueue[creatingItemID] = nil
+		if( QuickAuctions.db.realm.craftQueue[creatingItemID] <= 0 ) then
+			QuickAuctions.db.realm.craftQueue[creatingItemID] = nil
 
 			creatingItem = nil
 			creatingItemID = nil
