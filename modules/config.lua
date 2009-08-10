@@ -126,7 +126,7 @@ local function groupMoneyValueChanged(widget, event, text)
 end
 
 local function groupValueChanged(widget, event, value)
-	QuickAuctions.db.profile[widget:GetUserData("group")][widget:GetUserData("key")] = value and true or false
+	QuickAuctions.db.profile[widget:GetUserData("group")][widget:GetUserData("key")] = value
 end
 
 --[[
