@@ -20,6 +20,9 @@
 -- the profile related APIs are not available. Only `:RegisterDefaults` and `:ResetProfile` are available on child-databases.
 --
 -- For more details on how to use AceDB-3.0, see the [[AceDB-3.0 Tutorial]].
+--
+-- You may also be interested in [[libdualspec-1-0|LibDualSpec-1.0]] to do profile switching automatically when switching specs.
+--
 -- @usage
 -- MyAddon = LibStub("AceAddon-3.0"):NewAddon("DBExample")
 --
@@ -36,11 +39,13 @@
 -- end
 -- @class file
 -- @name AceDB-3.0.lua
--- @release $Id: AceDB-3.0.lua 799 2009-04-09 05:00:05Z kaelten $
-local ACEDB_MAJOR, ACEDB_MINOR = "AceDB-3.0", 13
+-- @release $Id: AceDB-3.0.lua 813 2009-07-06 21:36:37Z kaelten $
+local ACEDB_MAJOR, ACEDB_MINOR = "AceDB-3.0", 15
 local AceDB, oldminor = LibStub:NewLibrary(ACEDB_MAJOR, ACEDB_MINOR)
 
 if not AceDB then return end -- No upgrade needed
+
+local _G = getfenv(0)
 
 local type = type
 local pairs, next = pairs, next
@@ -648,7 +653,7 @@ end
 function AceDB:New(tbl, defaults, defaultProfile)
 	if type(tbl) == "string" then
 		local name = tbl
-		tbl = getglobal(name)
+		tbl = _G[name]
 		if not tbl then
 			tbl = {}
 			setglobal(name, tbl)
