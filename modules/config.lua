@@ -61,6 +61,10 @@ local function valueChanged(widget, event, value)
 	QuickAuctions.db.profile[widget:GetUserData("config")] = value
 end
 
+local function setBankName(widget, event, value)
+	QuickAuctions.db.factionrealm[widget:GetUserData("config")] = value
+end
+
 local function groupValueChanged(widget, event, value)
 	QuickAuctions.db.profile[widget:GetUserData("group")][widget:GetUserData("key")] = value
 end
@@ -121,6 +125,10 @@ local function groupMoneyValueChanged(widget, event, text)
 	QuickAuctions.db.profile[widget:GetUserData("group")][widget:GetUserData("key")] = copper or 0
 end
 
+local function groupValueChanged(widget, event, value)
+	QuickAuctions.db.profile[widget:GetUserData("group")][widget:GetUserData("key")] = value and true or false
+end
+
 --[[
 	AUCTION SETTINGS
 ]]--
@@ -151,7 +159,52 @@ end
 
 local function createAuctionSettings(container, group)
 	local WIDGET_WIDTH = 0.45
+		
+	local mail = AceGUI:Create("CheckBox")
+	mail:SetUserData("name", L["Enable auto mail"])
+	mail:SetUserData("desc", L["Automatically mails items to your banker if you set a bank name.\n\n[WARNING!] There is no confirmation once it starts mailing, if you enter the wrong banker name it's your own fault."])
+	mail:SetUserData("group", "mail")
+	mail:SetUserData("key", group)
+	mail:SetCallback("OnEnter", showTooltip)
+	mail:SetCallback("OnLeave", hideTooltip)
+	mail:SetCallback("OnValueChanged", groupValueChanged)
+	mail:SetLabel(mail:GetUserData("name"))
+	mail:SetRelativeWidth(WIDGET_WIDTH)
 	
+	if( group == "default" ) then
+		mail:SetValue(QuickAuctions.db.profile[mail:GetUserData("group")].default)
+
+		container:AddChild(mail)
+
+		local sep = AceGUI:Create("Label")
+		sep:SetFullWidth(true)
+		container:AddChild(sep)
+	else
+		local val = QuickAuctions.db.profile[mail:GetUserData("group")][mail:GetUserData("key")]
+		if( val == nil ) then
+			mail:SetValue(QuickAuctions.defaults.profile[mail:GetUserData("group")].default)
+		else
+			mail:SetValue(val)
+		end
+		
+		local enable = AceGUI:Create("CheckBox")
+		enable:SetUserData("name", L["Override auto mail"])
+		enable:SetUserData("desc", L["Allows you to override the default auto mailer settings."])
+		enable:SetUserData("group", "mail")
+		enable:SetUserData("key", group)
+		enable:SetUserData("parent", mail)
+		enable:SetLabel(enable:GetUserData("name"))
+		enable:SetCallback("OnValueChanged", overrideSettings)
+		enable:SetCallback("OnEnter", showTooltip)
+		enable:SetCallback("OnLeave", hideTooltip)
+		enable:SetValue(QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")] ~= nil and true or false)
+		enable:SetRelativeWidth(WIDGET_WIDTH)
+		mail:SetDisabled(QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")] == nil)
+		
+		container:AddChild(enable)
+		container:AddChild(mail)
+	end
+
 	local undercut = AceGUI:Create("EditBox")
 	undercut:SetUserData("name", L["Undercut by"])
 	undercut:SetUserData("desc", L["How much auctions should be undercut."])
@@ -435,6 +488,24 @@ local function generalConfig(container)
 	general:SetFullWidth(true)
 	container:AddChild(general)
 
+	-- Banker name
+	local bank = AceGUI:Create("EditBox")
+	bank:SetUserData("name", L["Banker name"])
+	bank:SetUserData("desc", L["Name of your banker on this realm/faction, this is where items will be mailed if you have any items to auto mail."])
+	bank:SetUserData("config", "bank")
+	bank:SetCallback("OnEnter", showTooltip)
+	bank:SetCallback("OnLeave", hideTooltip)
+	bank:SetCallback("OnEnterPressed", setBankName)
+	bank:SetLabel(bank:GetUserData("name"))
+	bank:SetText(QuickAuctions.db.factionrealm[bank:GetUserData("config")])
+	bank:SetRelativeWidth(0.35)
+	
+	general:AddChild(bank)
+
+	local seperator = AceGUI:Create("Label")
+	seperator:SetRelativeWidth(0.11)
+	general:AddChild(seperator)
+	
 	-- Cancel items with bids
 	local cancel = AceGUI:Create("CheckBox")
 	cancel:SetUserData("name", L["Cancel auctions with bids"])
@@ -445,10 +516,9 @@ local function generalConfig(container)
 	cancel:SetCallback("OnValueChanged", valueChanged)
 	cancel:SetLabel(cancel:GetUserData("name"))
 	cancel:SetValue(QuickAuctions.db.profile[cancel:GetUserData("config")])
-	cancel:SetFullWidth(true)
 	
 	general:AddChild(cancel)
-	
+			
 	-- Smart Undercut
 	local undercut = AceGUI:Create("CheckBox")
 	undercut:SetUserData("name", L["Smart undercutting"])
