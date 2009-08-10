@@ -15,6 +15,7 @@ function QuickAuctions:OnInitialize()
 			cancelWithBid = true,
 			groups = {},
 			categories = {},
+			mail = {default = false},
 			undercut = {default = 0},
 			postTime = {default = 12},
 			bidPercent = {default = 1.0},
