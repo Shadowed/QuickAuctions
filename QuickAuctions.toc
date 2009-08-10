@@ -6,6 +6,7 @@
 ## X-LoadOn-Slash: /qa, /quickauction, /quickauctions
 ## X-LoadOn-AuctionHouse: true
 ## X-LoadOn-Crafting: true
+## X-LoadOn-Mailbox: true
 ## SavedVariables: QuickAuctionsDB
 
 libs\LibStub-1.0\LibStub-1.0.xml
@@ -25,3 +26,4 @@ modules\split.lua
 modules\summary.lua
 modules\config.lua
 modules\tradeskills.lua
+modules\mail.lua
