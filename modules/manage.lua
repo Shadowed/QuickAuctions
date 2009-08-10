@@ -4,6 +4,7 @@ local status = QuickAuctions.status
 local reverseLookup, postQueue, scanList, tempList, stats = {}, {}, {}, {}, {}
 local totalToCancel, totalCancelled, totalQueued = 0, 0, 0
 
+Manage.reverseLookup = reverseLookup
 Manage.stats = stats
 
 function Manage:OnInitialize()
@@ -17,11 +18,20 @@ function Manage:AuctionHouseClosed()
 	end
 end
 
+function Manage:GetBoolConfigValue(itemID, key)
+	local val = reverseLookup[itemID] and QuickAuctions.db.profile[key][reverseLookup[itemID]]
+	if( val ~= nil ) then
+		return val
+	end
+	
+	return QuickAuctions.db.profile[key].default
+end
+
 function Manage:GetConfigValue(itemID, key)
 	return reverseLookup[itemID] and QuickAuctions.db.profile[key][reverseLookup[itemID]] or QuickAuctions.db.profile[key].default
 end
 
-local function updateReverseLookup()
+function Manage:UpdateReverseLookup()
 	table.wipe(reverseLookup)
 	
 	for group, items in pairs(QuickAuctions.db.profile.groups) do
@@ -59,7 +69,7 @@ function Manage:CancelScan()
 	table.wipe(scanList)
 	table.wipe(tempList)
 	
-	updateReverseLookup()
+	self:UpdateReverseLookup()
 	
 	-- Add a scan based on items in the AH that match
 	for i=1, GetNumAuctionItems("owner") do
@@ -112,7 +122,7 @@ function Manage:CancelAll(group, duration)
 	status.isCancelling = true
 	table.wipe(tempList)
 	
-	updateReverseLookup()
+	self:UpdateReverseLookup()
 	
 	if( duration ) then
 		QuickAuctions:Log("masscancel", string.format(L["Mass cancelling posted items with less than %d hours left"], duration == 3 and 12 or 2))
@@ -218,7 +228,7 @@ function Manage:PostScan()
 	table.wipe(scanList)
 	table.wipe(tempList)
 
-	updateReverseLookup()
+	self:UpdateReverseLookup()
 	
 	for bag=0, 4 do
 		if( QuickAuctions:IsValidBag(bag) ) then
