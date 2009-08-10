@@ -11,7 +11,6 @@ function Mail:OnInitialize()
 		GameTooltip:SetText(self.tooltip, 1, 1, 1, nil, true)
 		GameTooltip:Show()
 	end
-
 	local function hideTooltip(self)
 		GameTooltip:Hide()
 	end
@@ -67,7 +66,7 @@ function Mail:Stop()
 	
 	timeElapsed = nil
 	itemTimer = nil
-	eventFrame:Hide()
+	eventThrottle:Hide()
 end
 
 function Mail:FindTotalUnlocked()
