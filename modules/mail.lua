@@ -93,6 +93,7 @@ function Mail:SendMail()
 	-- Make absolutely damn sure bank name is set
 	SendMailNameEditBox:SetText(QuickAuctions.db.factionrealm.bank)
 	SendMailFrame_SendMail()
+	SendMailNameEditBox:ClearFocus()
 	
 	itemTimer = nil
 end
