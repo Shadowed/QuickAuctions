@@ -138,7 +138,7 @@ function Manage:CancelAll(group, duration)
 		local itemLink = GetAuctionItemLink("owner", i)
 		local itemID = QuickAuctions:GetSafeLink(itemLink)
 		if( wasSold == 0 and ( group and reverseLookup[itemID] == group or not group ) and ( duration and timeLeft <= duration or not duration ) ) then
-			if( not tempList[name] ) then
+			if( name and not tempList[name] ) then
 				tempList[name] = true
 				QuickAuctions:Log(name, string.format(L["Cancelled %s"], itemLink))
 			end
