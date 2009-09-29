@@ -3,7 +3,8 @@ QuickAuctions.status = {}
 
 local L = QuickAuctionsLocals
 local status = QuickAuctions.status
-local statusLog, logLine, logID, lastSeenLogID = {}
+local statusLog, logLine, logID = {}
+local lastSeenLogID = 0
 
 -- Addon loaded
 function QuickAuctions:OnInitialize()
