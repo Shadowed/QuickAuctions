@@ -360,6 +360,7 @@ end
 function Manage:QA_START_SCAN(event, type, total)
 	QuickAuctions:WipeLog()
 	QuickAuctions:Log("scanstatus", string.format(L["Scanning |cfffed000%d|r items..."], total))
+	QuickAuctions.Split:Stop()
 	
 	totalQueued = 0
 	table.wipe(stats)

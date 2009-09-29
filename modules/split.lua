@@ -175,7 +175,6 @@ function Split:Start()
 	table.wipe(lockedSlot)
 	table.wipe(alreadySplit)
 	table.wipe(alreadyFound)
-	table.wipe(splitQueue)
 	
 	self:RegisterEvent("BAG_UPDATE")
 	self:UpdateBags()
