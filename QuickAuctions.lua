@@ -3,7 +3,8 @@ QuickAuctions.status = {}
 
 local L = QuickAuctionsLocals
 local status = QuickAuctions.status
-local statusLog, logLine, logID, lastSeenLogID = {}
+local statusLog, logIDs, lastSeenLogID = {}, {}
+local SCROLL_TIMEOUT = 10
 
 -- Addon loaded
 function QuickAuctions:OnInitialize()
@@ -84,12 +85,16 @@ function QuickAuctions:OnInitialize()
 end
 
 function QuickAuctions:WipeLog()
-	logLine = nil
-	logID = nil
 	lastSeenLogID = 0
 	
-	table.wipe(statusLog)
-	self:UpdateStatusLog()
+	-- This will force it to create new rows for any new logs without having to wipe all of them
+	table.wipe(logIDs)
+	
+	if( #(statusLog) > 0 ) then
+		self:Log("-------------------------------")
+	else
+		self:UpdateStatusLog()
+	end
 end
 
 -- If you only pass message, it will assume the next line is going to be a new one
@@ -97,18 +102,27 @@ end
 function QuickAuctions:Log(id, msg)
 	if( not msg and id ) then msg = id end
 	
-	if( logID ~= id ) then
-		logLine = #(statusLog) + 1
-		logID = id
+	if( not logIDs[id] ) then
+		logIDs[id] = #(statusLog) + 1
 	end
 	
-	statusLog[logLine] = msg
-	self:UpdateStatusLog()
+	statusLog[logIDs[id]] = msg
+	
+	-- Force the scroll bar to the bottom while posting, assuming they haven't scrolled within 10 seconds
+	local scrollBar = QALogScrollFrameScrollBar
+	local maxValue = select(2, scrollBar:GetMinMaxValues())
+	if( scrollBar:GetValue() < maxValue ) then
+		scrollBar:SetValue(maxValue)
+	else
+		self:UpdateStatusLog()
+	end
 end
 
 function QuickAuctions:UpdateStatusLog()
+	local self = QuickAuctions
+	local totalLogs = #(statusLog)
 	if( not self.statusFrame or not self.statusFrame:IsVisible() ) then
-		local waiting = #(statusLog) - lastSeenLogID
+		local waiting = totalLogs - lastSeenLogID
 		if( waiting > 0 ) then
 			self.buttons.status:SetFormattedText(L["Log (%d)"], waiting)
 			self.buttons.status.tooltip = string.format(L["%d log messages waiting"], waiting)
@@ -121,17 +135,19 @@ function QuickAuctions:UpdateStatusLog()
 		self.buttons.status:SetText(L["Log"])
 		self.buttons.status.tooltip = self.buttons.status.startTooltip
 
-		lastSeenLogID = #(statusLog)
+		lastSeenLogID = totalLogs
 	end
 	
-	local offset = math.max(0, #(statusLog) - #(self.statusFrame.rows))
+	FauxScrollFrame_Update(self.statusFrame.scroll, totalLogs, #(self.statusFrame.rows) - 1, 16)
+	
+	local offset = FauxScrollFrame_GetOffset(self.statusFrame.scroll)
 	for id, row in pairs(self.statusFrame.rows) do
 		row.tooltip = statusLog[offset + id]
-		row:SetText(statusLog[offset + id])
+		row:SetText(row.tooltip)
 		row:Show()
 	end
 	
-	for i=#(statusLog) + 1, #(self.statusFrame.rows) do
+	for i=totalLogs + 1, #(self.statusFrame.rows) do
 		self.statusFrame.rows[i]:Hide()
 	end
 end
@@ -322,13 +338,20 @@ function QuickAuctions:CreateStatus()
 	frame:EnableMouse(true)
 	frame:Hide()
 
+	frame.scroll = CreateFrame("ScrollFrame", "QALogScrollFrame", frame, "FauxScrollFrameTemplate")
+	frame.scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, -1)
+	frame.scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -24, 1)
+	frame.scroll:SetScript("OnVerticalScroll", function(self, value) FauxScrollFrame_OnVerticalScroll(self, value, 16, QuickAuctions.UpdateStatusLog) end)
+
 	frame.rows = {}
 
 	-- Tooltips!
 	local function showTooltip(self)
-		GameTooltip:SetOwner(self:GetParent(), "ANCHOR_TOPLEFT")
-		GameTooltip:SetText(self.tooltip, 1, 1, 1, nil, true)
-		GameTooltip:Show()
+		if( self.tooltip ) then
+			GameTooltip:SetOwner(self:GetParent(), "ANCHOR_TOPLEFT")
+			GameTooltip:SetText(self.tooltip, 1, 1, 1, nil, true)
+			GameTooltip:Show()
+		end
 	end
 
 	local function hideTooltip(self)
@@ -353,8 +376,8 @@ function QuickAuctions:CreateStatus()
 			button:SetPoint("TOPLEFT", frame.rows[i - 1], "BOTTOMLEFT", 0, 0)
 			button:SetPoint("TOPRIGHT", frame.rows[i - 1], "BOTTOMRIGHT", 0, 0)
 		else
-			button:SetPoint("TOPLEFT", frame, "TOPLEFT", 2, 0)
-			button:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -4, 0)
+			button:SetPoint("TOPLEFT", frame.scroll, "TOPLEFT", 2, 0)
+			button:SetPoint("TOPRIGHT", frame.scroll, "TOPRIGHT", 0, 0)
 		end
 
 		frame.rows[i] = button
