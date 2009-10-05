@@ -298,6 +298,10 @@ function QuickAuctions:GetSafeLink(link)
 	return link and string.gsub(link, ":0:0:0:0:0:0", "")
 end
 
+function QuickAuctions:GetEnchantLink(link)
+	return link and tonumber(string.match(link, "enchant:(%d+)"))
+end
+
 function QuickAuctions:CreateStatus()
 	if( self.statusFrame ) then return end
 	

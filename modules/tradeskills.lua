@@ -68,7 +68,8 @@ function Tradeskill:Update()
 			local row = self.rows[displayIndex]
 			if( type(data) == "number" ) then	
 				local itemid = itemList[data]
-				row:SetFormattedText("%s [%d]", (GetItemInfo(itemid)), QuickAuctions.db.realm.craftQueue[itemid])
+				local itemName = GetItemInfo(itemid) or GetSpellInfo(itemid)
+				row:SetFormattedText("%s [%d]", itemName, QuickAuctions.db.realm.craftQueue[itemid])
 				row.itemID = itemid
 			else
 				row:SetText(data)
@@ -156,15 +157,12 @@ function Tradeskill:CreateFrame()
 		end
 				
 		for i=1, GetNumTradeSkills() do
-			local itemid = QuickAuctions:GetSafeLink(GetTradeSkillItemLink(i))
+			local itemid = QuickAuctions:GetSafeLink(GetTradeSkillItemLink(i)) or QuickAuctions:GetEnchantLink(GetTradeSkillItemLink(i))
 			if( itemid == self.itemID and QuickAuctions.db.realm.craftQueue[itemid] ) then
 				-- Make sure we don't wait for it to create more than we can
-				local quantity = QuickAuctions.db.realm.craftQueue[itemid]
-				local name = GetItemInfo(itemid)
 				local createCap = select(3, GetTradeSkillInfo(i))
-				if( quantity > createCap ) then
-					quantity = createCap
-				end
+				local quantity = math.max(QuickAuctions.db.realm.craftQueue[itemid], createCap)
+				local name = GetItemInfo(itemid) or GetSpellInfo(itemid)
 
 				creatingItem = name
 				creatingItemID = itemid
@@ -244,8 +242,8 @@ do
 		
 		-- Record list
 		for i=1, GetNumTradeSkills() do
-			local itemid = QuickAuctions:GetSafeLink(GetTradeSkillItemLink(i))
-			if( itemid ) then
+			local itemid = QuickAuctions:GetSafeLink(GetTradeSkillItemLink(i)) or QuickAuctions:GetEnchantLink(GetTradeSkillItemLink(i))
+			if( itemid) then
 				local enchantid = string.match(GetTradeSkillRecipeLink(i), "enchant:([0-9]+)")
 				QuickAuctions.db.realm.crafts[itemid] = tonumber(enchantid) or true
 				

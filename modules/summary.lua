@@ -393,6 +393,7 @@ function Summary:Update()
 				row.link = link
 				row.enchantLink = data.enchantLink
 				row.baseLink = data.link
+				row.subType = data.subType
 
 				local createTag = ""
 				if( summaryData.canCraft and not summaryData.canCraft(data.link, itemName) ) then
@@ -400,8 +401,9 @@ function Summary:Update()
 				end
 				
 				local craftQuantity = ""
-				if( QuickAuctions.db.realm.craftQueue[data.link] ) then
-					craftQuantity = string.format("%s%d|r x ", GREEN_FONT_COLOR_CODE, QuickAuctions.db.realm.craftQueue[data.link])
+				local craftData = QuickAuctions.db.realm.craftQueue[data.link] or QuickAuctions.db.realm.craftQueue[data.enchantLink]
+				if( craftData ) then
+					craftQuantity = string.format("%s%d|r x ", GREEN_FONT_COLOR_CODE, raftData)
 				end
 				
 				local colorCode = ""
@@ -792,13 +794,15 @@ function Summary:CreateGUI()
 		elseif( not self.baseLink ) then
 			toggleCategory(self)
 		elseif( mouseButton == "LeftButton" and self.baseLink and not IsModifierKeyDown() ) then
-			QuickAuctions.db.realm.craftQueue[self.baseLink] = (QuickAuctions.db.realm.craftQueue[self.baseLink] or 0) + 1
+			local craftLink = self.subType == L["Item Enhancement"] and self.enchantLink or self.baseLink
+			QuickAuctions.db.realm.craftQueue[craftLink] = (QuickAuctions.db.realm.craftQueue[craftLink] or 0) + 1
 			Summary:Update()
 		elseif( mouseButton == "RightButton" and self.baseLink and not IsModifierKeyDown() ) then
-			if( QuickAuctions.db.realm.craftQueue[self.baseLink] and QuickAuctions.db.realm.craftQueue[self.baseLink] > 1 ) then
-				QuickAuctions.db.realm.craftQueue[self.baseLink] = QuickAuctions.db.realm.craftQueue[self.baseLink] - 1
+			local craftLink = self.subType == L["Item Enhancement"] and self.enchantLink or self.baseLink
+			if( QuickAuctions.db.realm.craftQueue[craftLink] and QuickAuctions.db.realm.craftQueue[craftLink] > 1 ) then
+				QuickAuctions.db.realm.craftQueue[craftLink] = QuickAuctions.db.realm.craftQueue[craftLink] - 1
 			else
-				QuickAuctions.db.realm.craftQueue[self.baseLink] = nil
+				QuickAuctions.db.realm.craftQueue[craftLink] = nil
 			end
 			Summary:Update()
 		end
