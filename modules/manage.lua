@@ -179,7 +179,7 @@ function Manage:Cancel()
 				( QuickAuctions.db.profile.smartCancel and QuickAuctions.Scan:IsPlayerOnly(itemID) and buyout < fallback ) ) then
 				
 				-- Don't cancel if the buyout is equal, or below our threshold
-				if( QuickAuctions.db.profile.smartCancel and lowestBuyout <= threshold ) then
+				if( QuickAuctions.db.profile.smartCancel and lowestBuyout <= threshold and not QuickAuctions.Scan:IsPlayerOnly(itemID)) then
 					if( not tempList[name] ) then
 						tempList[name] = true
 						
