@@ -403,7 +403,7 @@ function Summary:Update()
 				local craftQuantity = ""
 				local craftData = QuickAuctions.db.realm.craftQueue[data.link] or QuickAuctions.db.realm.craftQueue[data.enchantLink]
 				if( craftData ) then
-					craftQuantity = string.format("%s%d|r x ", GREEN_FONT_COLOR_CODE, raftData)
+					craftQuantity = string.format("%s%d|r x ", GREEN_FONT_COLOR_CODE, craftData)
 				end
 				
 				local colorCode = ""
@@ -810,17 +810,18 @@ function Summary:CreateGUI()
 	
 	-- Set this row as focused
 	local function OnDoubleClick(self)
-		if( not IsShiftKeyDown() or not self.baseLink ) then return end
+		local craftLink = self.subType == L["Item Enhancement"] and self.enchantLink or self.baseLink
+		if( not IsShiftKeyDown() or not craftLink ) then return end
 		
-		if( focusedLink == self.baseLink ) then
+		if( focusedLink == craftLink ) then
 			focusedLink = nil
 			createQuantity = nil
 			Summary:Update()
 			return
 		end
 			
-		createQuantity = QuickAuctions.db.realm.craftQueue[self.baseLink]
-		focusedLink = self.baseLink
+		createQuantity = QuickAuctions.db.realm.craftQueue[craftLink]
+		focusedLink = craftLink
 		Summary:Update()
 	end
 	
