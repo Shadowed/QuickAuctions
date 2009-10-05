@@ -46,6 +46,7 @@ function QuickAuctions:OnInitialize()
 	self.Post = self.modules.Post
 	self.Summary = self.modules.Summary
 	self.Tradeskill = self.modules.Tradeskill
+	self.Status = self.modules.Status
 	
 	-- Add this character to the alt list so it's not undercut by the player
 	self.db.factionrealm.player[UnitName("player")] = true
@@ -124,16 +125,16 @@ function QuickAuctions:UpdateStatusLog()
 	if( not self.statusFrame or not self.statusFrame:IsVisible() ) then
 		local waiting = totalLogs - lastSeenLogID
 		if( waiting > 0 ) then
-			self.buttons.status:SetFormattedText(L["Log (%d)"], waiting)
-			self.buttons.status.tooltip = string.format(L["%d log messages waiting"], waiting)
+			self.buttons.log:SetFormattedText(L["Log (%d)"], waiting)
+			self.buttons.log.tooltip = string.format(L["%d log messages waiting"], waiting)
 		else
-			self.buttons.status:SetText(L["Log"])
-			self.buttons.status.tooltip = self.buttons.status.startTooltip
+			self.buttons.log:SetText(L["Log"])
+			self.buttons.log.tooltip = self.buttons.log.startTooltip
 		end
 		return
 	else
-		self.buttons.status:SetText(L["Log"])
-		self.buttons.status.tooltip = self.buttons.status.startTooltip
+		self.buttons.log:SetText(L["Log"])
+		self.buttons.log.tooltip = self.buttons.log.startTooltip
 
 		lastSeenLogID = totalLogs
 	end
@@ -175,7 +176,7 @@ function QuickAuctions:AuctionHouseLoaded()
 
 	-- Tooltips!
 	local function showTooltip(self)
-		GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
+		GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
 		GameTooltip:SetText(self.tooltip, nil, nil, nil, nil, true)
 		GameTooltip:Show()
 	end
@@ -184,7 +185,7 @@ function QuickAuctions:AuctionHouseLoaded()
 		GameTooltip:Hide()
 	end
 	
-	-- Show status for posting
+	-- Show log for posting
 	local button = CreateFrame("Button", nil, AuctionFrameAuctions, "UIPanelButtonTemplate")
 	button.tooltip = L["Displays the Quick Auctions log describing what it's currently scanning, posting or cancelling."]
 	button.startTooltip = button.tooltip
@@ -219,12 +220,12 @@ function QuickAuctions:AuctionHouseLoaded()
 		end
 	end)
 	
-	self.buttons.status = button
+	self.buttons.log = button
 	
 	-- Scan our posted items
 	local button = CreateFrame("Button", nil, AuctionFrameAuctions, "UIPanelButtonTemplate")
 	button.tooltip = L["View a summary of what the highest selling of certain items is."]
-	button:SetPoint("TOPRIGHT", self.buttons.status, "TOPLEFT", 0, 0)
+	button:SetPoint("TOPRIGHT", self.buttons.log, "TOPLEFT", 0, 0)
 	button:SetText(L["Summary"])
 	button:SetWidth(90)
 	button:SetHeight(18)
@@ -269,9 +270,8 @@ function QuickAuctions:AuctionHouseLoaded()
 	self.buttons.cancel = button
 
 	-- Status scans what items we have in our inventory/auction
-	--[[
 	local button = CreateFrame("Button", nil, AuctionFrameAuctions, "UIPanelButtonTemplate")
-	button.tooltip = L["Does a status scan that helps to identify auctions you can buyout to raise the price of a group your managing.\n\nThis will NOT automatically buy items for you, this just suggests that you might be able to."]
+	button.tooltip = L["Does a status scan that helps to identify auctions you can buyout to raise the price of a group your managing.\n\nThis will NOT automatically buy items for you, all it tells you is the lowest price and how many are posted."]
 	button:SetPoint("TOPRIGHT", self.buttons.cancel, "TOPLEFT", -10, 0)
 	button:SetText(L["Status"])
 	button:SetWidth(80)
@@ -279,11 +279,16 @@ function QuickAuctions:AuctionHouseLoaded()
 	button:SetScript("OnEnter", showTooltip)
 	button:SetScript("OnLeave", hideTooltip)
 	button:SetScript("OnClick", function(self)
+		-- Temporary, because people like to not restart and then complain :|
+		if( QuickAuctions.Status ) then
+			QuickAuctions.Status:Scan()
+		else
+			QuickAuctions.Status:Print("[WARNING!] You need to restart your game to use the status scan.")
+		end
 	end)
 	button.originalText = button:GetText()
 	
 	self.buttons.status = button
-	]]
 end
 
 function QuickAuctions:GetSafeLink(link)
@@ -391,22 +396,22 @@ end
 function QuickAuctions:LockButtons()
 	self.buttons.post:Disable()
 	self.buttons.cancel:Disable()
+	self.buttons.status:Disable()
 end
 
 function QuickAuctions:UnlockButtons()
 	self.buttons.post:Enable()
 	self.buttons.cancel:Enable()
+	self.buttons.status:Enable()
 end
 
 function QuickAuctions:SetButtonProgress(type, current, total)
 	if( current >= total ) then
 		self.buttons[type]:SetText(self.buttons[type].originalText)
-		self.buttons.post:Enable()
-		self.buttons.cancel:Enable()
+		self:UnlockButtons()
 	else
 		self.buttons[type]:SetFormattedText("%d/%d", current, total)
-		self.buttons.post:Disable()
-		self.buttons.cancel:Disable()
+		self:LockButtons()
 	end
 end
 
