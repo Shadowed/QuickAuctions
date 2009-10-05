@@ -111,8 +111,8 @@ function QuickAuctions:Log(id, msg)
 	
 	-- Force the scroll bar to the bottom while posting, assuming they haven't scrolled within 10 seconds
 	local scrollBar = QALogScrollFrameScrollBar
-	local maxValue = select(2, scrollBar:GetMinMaxValues())
-	if( scrollBar:GetValue() < maxValue ) then
+	local maxValue = scrollBar and select(2, scrollBar:GetMinMaxValues())
+	if( scrollBar and scrollBar:GetValue() < maxValue ) then
 		scrollBar:SetValue(maxValue)
 	else
 		self:UpdateStatusLog()
