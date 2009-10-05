@@ -24,8 +24,8 @@
 -- f:AddChild(btn)
 -- @class file
 -- @name AceGUI-3.0
--- @release $Id: AceGUI-3.0.lua 815 2009-07-08 20:58:17Z nevcairiel $
-local ACEGUI_MAJOR, ACEGUI_MINOR = "AceGUI-3.0", 25
+-- @release $Id: AceGUI-3.0.lua 847 2009-09-25 11:51:36Z nevcairiel $
+local ACEGUI_MAJOR, ACEGUI_MINOR = "AceGUI-3.0", 28
 local AceGUI, oldminor = LibStub:NewLibrary(ACEGUI_MAJOR, ACEGUI_MINOR)
 
 if not AceGUI then return end -- No upgrade needed
@@ -264,7 +264,7 @@ end
 		:OnHeightSet(height) - Called when the height of the widget is changed
 			Widgets should not use the OnSizeChanged events of thier frame or content members, use these methods instead
 			AceGUI already sets a handler to the event
-		:OnLayoutFinished(width, height) - called after a layout has finished, the width and height will be the width and height of the
+		:LayoutFinished(width, height) - called after a layout has finished, the width and height will be the width and height of the
 			area used for controls. These can be nil if the layout used the existing size to layout the controls.
 
 ]]
@@ -729,6 +729,11 @@ AceGUI:RegisterLayout("Flow",
 			local frameheight = frame.height or frame:GetHeight() or 0
 			local framewidth = frame.width or frame:GetWidth() or 0
 			lastframeoffset = frameoffset
+			-- HACK: Why did we set a frameoffset of (frameheight / 2) ? 
+			-- That was moving all widgets half the widgets size down, is that intended?
+			-- Actually, it seems to be neccessary for many cases, we'll leave it in for now.
+			-- If widgets seem to anchor weirdly with this, provide a valid alignoffset for them.
+			-- TODO: Investigate moar!
 			frameoffset = child.alignoffset or (frameheight / 2)
 			
 			if child.width == "relative" then
@@ -752,6 +757,11 @@ AceGUI:RegisterLayout("Flow",
 				-- if there isn't available width for the control start a new row
 				-- if a control is "fill" it will be on a row of its own full width
 				if usedwidth == 0 or ((framewidth) + usedwidth > width) or child.width == "fill" then
+					if isfullheight then
+						-- a previous row has already filled the entire height, there's nothing we can usefully do anymore
+						-- (maybe error/warn about this?)
+						break
+					end
 					--anchor the previous row, we will now know its height and offset
 					rowstart:SetPoint("TOPLEFT",content,"TOPLEFT",0,-(height+(rowoffset-rowstartoffset)+3))
 					height = height + rowheight + 3
@@ -773,6 +783,7 @@ AceGUI:RegisterLayout("Flow",
 					rowoffset = math.max(rowoffset, frameoffset)
 					
 					rowheight = math.max(rowheight,rowoffset+(frameheight/2))
+					--print("type:", child.type, "offset:",frameoffset-lastframeoffset)
 					frame:SetPoint("TOPLEFT",children[i-1].frame,"TOPRIGHT",0,frameoffset-lastframeoffset)
 					usedwidth = framewidth + usedwidth
 				end
@@ -814,7 +825,6 @@ AceGUI:RegisterLayout("Flow",
 			if child.height == "fill" then
 				frame:SetPoint("BOTTOM",content,"BOTTOM")
 				isfullheight = true
-				break
 			end
 		end
 		
