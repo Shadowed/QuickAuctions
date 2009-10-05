@@ -8,6 +8,19 @@ local _G = getfenv(0)
 
 --[[
 	TREE BUILDER
+		AceDialog = AceDialog or LibStub("AceConfigDialog-3.0")
+	AceRegistry = AceRegistry or LibStub("AceConfigRegistry-3.0")
+	
+	if( not registered ) then
+		loadOptions()
+		
+		LibStub("AceConfig-3.0"):RegisterOptionsTable("ShadowedUF", options)
+		AceDialog:SetDefaultSize("ShadowedUF", 835, 525)
+		registered = true
+	end
+	
+	AceDialog:Open("ShadowedUF")
+
 ]]--
 
 local function sortChildren(a, b)
@@ -351,7 +364,7 @@ local function createAuctionSettings(container, group)
 	postCap:SetCallback("OnLeave", hideTooltip)
 	postCap:SetCallback("OnValueChanged", groupValueChanged)
 	postCap:SetLabel(postCap:GetUserData("name"))
-	postCap:SetSliderValues(1, 40, 1)
+	postCap:SetSliderValues(1, 1000, 1)
 	postCap:SetValue(QuickAuctions.db.profile[postCap:GetUserData("group")][postCap:GetUserData("key")] or QuickAuctions.defaults.profile[postCap:GetUserData("group")].default)
 	postCap:SetRelativeWidth(WIDGET_WIDTH)
 	
@@ -421,7 +434,7 @@ local function createAuctionSettings(container, group)
 	perAuction:SetCallback("OnValueChanged", groupSliderChanged)
 	perAuction:SetCallback("OnMouseUp", groupSliderChanged)
 	perAuction:SetLabel(perAuction:GetUserData("name"))
-	perAuction:SetSliderValues(1, 40, 1)
+	perAuction:SetSliderValues(1, 1000, 1)
 	perAuction:SetValue(QuickAuctions.db.profile[perAuction:GetUserData("group")][perAuction:GetUserData("key")] or QuickAuctions.defaults.profile[perAuction:GetUserData("group")].default)
 	perAuction:SetRelativeWidth(WIDGET_WIDTH)
 
