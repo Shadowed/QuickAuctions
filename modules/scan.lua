@@ -178,6 +178,10 @@ function Scan:GetItemQuantity(link, buyout, bid)
 	return 0
 end
 
+function Scan:GetTotalItemQuantity(link)
+	return auctionData[link] and auctionData[link].quantity or nil
+end
+
 function Scan:GetPlayerItemQuantity(link)
 	if( not auctionData[link] ) then return 0 end
 	
