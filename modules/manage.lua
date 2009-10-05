@@ -359,7 +359,7 @@ end
 
 function Manage:QA_START_SCAN(event, type, total)
 	QuickAuctions:WipeLog()
-	QuickAuctions:Log("scanstatus", string.format(L["Scanning |cfffed000%d|r items..."], total))
+	QuickAuctions:Log("scanstatus", string.format(L["Scanning |cfffed000%d|r items..."], total or 0))
 	
 	totalQueued = 0
 	table.wipe(stats)
@@ -373,7 +373,7 @@ function Manage:QA_STOP_SCAN(event, interrupted)
 		return
 	end
 
-	QuickAuctions:Log("scanstatus", L["Scan finished!"], true)
+	QuickAuctions:Log("scandone", L["Scan finished!"], true)
 
 	if( status.isManaging ) then
 		status.isManaging = nil
