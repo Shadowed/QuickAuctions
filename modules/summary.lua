@@ -40,7 +40,7 @@ function Summary:GetData(type)
 	local data = summaryCats[type]
 	local classIndex = self:GetCategoryIndex(data.auctionClass)
 	if( not classIndex ) then
-		QuickAuctions:Print(L["Cannot find class index, localization issue perhaps?"])
+		QuickAuctions:Print(string.format(L["Cannot find class index. QA still needs to be localized into %s for this feature to work."], GetLocale()))
 		return
 	end
 	
