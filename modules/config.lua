@@ -172,7 +172,23 @@ end
 
 local function createAuctionSettings(container, group)
 	local WIDGET_WIDTH = 0.45
-		
+
+	if( group ~= "default" ) then
+		local noCancel = AceGUI:Create("CheckBox")
+		noCancel:SetUserData("name", L["Disable cancelling"])
+		noCancel:SetUserData("desc", L["Disables automatically cancelling items if they are undercut and in this group."])
+		noCancel:SetUserData("group", "noCancel")
+		noCancel:SetUserData("key", group)
+		noCancel:SetCallback("OnEnter", showTooltip)
+		noCancel:SetCallback("OnLeave", hideTooltip)
+		noCancel:SetCallback("OnValueChanged", groupValueChanged)
+		noCancel:SetLabel(noCancel:GetUserData("name"))
+		noCancel:SetRelativeWidth(1)
+	
+		noCancel:SetValue(QuickAuctions.db.profile[noCancel:GetUserData("group")][noCancel:GetUserData("key")])
+		container:AddChild(noCancel)
+	end
+			
 	local mail = AceGUI:Create("CheckBox")
 	mail:SetUserData("name", L["Enable auto mail"])
 	mail:SetUserData("desc", L["Automatically mails items to your banker if you set a bank name.\n\n[WARNING!] There is no confirmation once it starts mailing, if you enter the wrong banker name it's your own fault."])
@@ -186,7 +202,6 @@ local function createAuctionSettings(container, group)
 	
 	if( group == "default" ) then
 		mail:SetValue(QuickAuctions.db.profile[mail:GetUserData("group")].default)
-
 		container:AddChild(mail)
 
 		local sep = AceGUI:Create("Label")
