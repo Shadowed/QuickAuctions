@@ -161,7 +161,7 @@ function Tradeskill:CreateFrame()
 			if( itemid == self.itemID and QuickAuctions.db.realm.craftQueue[itemid] ) then
 				-- Make sure we don't wait for it to create more than we can
 				local createCap = select(3, GetTradeSkillInfo(i))
-				local quantity = math.max(QuickAuctions.db.realm.craftQueue[itemid], createCap)
+				local quantity = math.min(QuickAuctions.db.realm.craftQueue[itemid], createCap)
 				local name = GetItemInfo(itemid) or GetSpellInfo(itemid)
 
 				creatingItem = name
