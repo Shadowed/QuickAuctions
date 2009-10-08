@@ -794,15 +794,13 @@ function Summary:CreateGUI()
 		elseif( not self.baseLink ) then
 			toggleCategory(self)
 		elseif( mouseButton == "LeftButton" and self.baseLink and not IsModifierKeyDown() ) then
-			local craftLink = self.subType == L["Item Enhancement"] and self.enchantLink or self.baseLink
-			QuickAuctions.db.realm.craftQueue[craftLink] = (QuickAuctions.db.realm.craftQueue[craftLink] or 0) + 1
+			QuickAuctions.db.realm.craftQueue[self.baseLink] = (QuickAuctions.db.realm.craftQueue[self.baseLink] or 0) + 1
 			Summary:Update()
 		elseif( mouseButton == "RightButton" and self.baseLink and not IsModifierKeyDown() ) then
-			local craftLink = self.subType == L["Item Enhancement"] and self.enchantLink or self.baseLink
-			if( QuickAuctions.db.realm.craftQueue[craftLink] and QuickAuctions.db.realm.craftQueue[craftLink] > 1 ) then
-				QuickAuctions.db.realm.craftQueue[craftLink] = QuickAuctions.db.realm.craftQueue[craftLink] - 1
+			if( QuickAuctions.db.realm.craftQueue[self.baseLink] and QuickAuctions.db.realm.craftQueue[self.baseLink] > 1 ) then
+				QuickAuctions.db.realm.craftQueue[self.baseLink] = QuickAuctions.db.realm.craftQueue[self.baseLink] - 1
 			else
-				QuickAuctions.db.realm.craftQueue[craftLink] = nil
+				QuickAuctions.db.realm.craftQueue[self.baseLink] = nil
 			end
 			Summary:Update()
 		end
@@ -810,18 +808,17 @@ function Summary:CreateGUI()
 	
 	-- Set this row as focused
 	local function OnDoubleClick(self)
-		local craftLink = self.subType == L["Item Enhancement"] and self.enchantLink or self.baseLink
-		if( not IsShiftKeyDown() or not craftLink ) then return end
+		if( not IsShiftKeyDown() or not self.baseLink ) then return end
 		
-		if( focusedLink == craftLink ) then
+		if( focusedLink == self.baseLink ) then
 			focusedLink = nil
 			createQuantity = nil
 			Summary:Update()
 			return
 		end
 			
-		createQuantity = QuickAuctions.db.realm.craftQueue[craftLink]
-		focusedLink = craftLink
+		createQuantity = QuickAuctions.db.realm.craftQueue[self.baseLink]
+		focusedLink = self.baseLink
 		Summary:Update()
 	end
 	
