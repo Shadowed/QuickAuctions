@@ -945,10 +945,11 @@ function Summary:CreateCategoryData()
 			itemType = L["Gem"],
 			canCraft = function(link, name) 
 				if( not QuickAuctions.db.realm.crafts.Jewelcrafter ) then return true end
-				if( string.match(name, L["Perfect (.+)"]) ) then 
+				
+				if( QuickAuctions.db.realm.crafts[link] ) then
 					return true
-				else 
-					return QuickAuctions.db.realm.crafts[link]
+				elseif( string.match(name, L["Perfect (.+)"]) or ( L["ALTER_PERFECT"] ~= "ALERT_PERFECT" and string.match(name, L["ALTER_PERFECT"]) ) ) then 
+					return true
 				end
 			end,
 			notSubType = L["Simple"],
