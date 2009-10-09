@@ -9,6 +9,7 @@ QuickAuctionsLocals = {
 	["12 hours"] = "12 hours",
 	["24 hours"] = "24 hours",
 	["48 hours"] = "48 hours",
+	["ALTER_PERFECT"] = "ALTER_PERFECT",
 	["Add items"] = "Add items",
 	["Add items matching filter"] = "Add items matching filter",
 	["Add new group"] = "Add new group",
