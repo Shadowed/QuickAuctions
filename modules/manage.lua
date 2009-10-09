@@ -304,7 +304,7 @@ function Manage:PostItems(itemID)
 		if( QuickAuctions.db.profile.smartUndercut and testBuyout > COPPER_PER_GOLD ) then
 			testBuyout = math.floor(buyout / COPPER_PER_GOLD) * COPPER_PER_GOLD
 		else
-			testBuyout = testBuyout - QuickAuctions.Manage:GetConfigValue(link, "undercut")
+			testBuyout = testBuyout - self:GetConfigValue(itemID, "undercut")
 		end
 		
 		if( testBuyout < threshold ) then
