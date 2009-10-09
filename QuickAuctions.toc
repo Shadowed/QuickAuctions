@@ -18,6 +18,7 @@ libs\AceGUI-3.0\AceGUI-3.0.xml
 libs\AceConfig-3.0\AceConfig-3.0.xml
 
 localization.enUS.lua
+localization.deDE.lua
 
 QuickAuctions.lua
 modules\scan.lua
