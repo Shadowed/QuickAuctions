@@ -164,7 +164,15 @@ function Manage:Cancel()
 		local itemID = QuickAuctions:GetSafeLink(itemLink)
 				
 		local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = QuickAuctions.Scan:GetLowestAuction(itemID)
-		if( wasSold == 0 and lowestOwner ) then
+		
+		-- The item is in a group that's not supposed to be cancelled
+		if( wasSold == 0 and lowestOwner and self:GetBoolConfigValue(itemID, "noCancel") ) then
+			if( not tempList[name] ) then
+					QuickAuctions:Log(name .. "notcancel", string.format(L["Skipped cancelling %s flagged to not be canelled."], itemLink))
+				tempList[name] = true
+			end	
+		-- It is supposed to be cancelled!
+		elseif( wasSold == 0 and lowestOwner ) then
 			buyout = buyout / quantity
 			bid = bid / quantity
 			

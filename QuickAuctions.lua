@@ -17,6 +17,7 @@ function QuickAuctions:OnInitialize()
 			groups = {},
 			categories = {},
 			mail = {default = false},
+			noCancel = {default = false},
 			undercut = {default = 0},
 			postTime = {default = 12},
 			bidPercent = {default = 1.0},
@@ -296,6 +297,10 @@ function QuickAuctions:GetSafeLink(link)
 	
 	-- If the link just has trailing zeros, then we don't need to store that data
 	return link and string.gsub(link, ":0:0:0:0:0:0", "")
+end
+
+function QuickAuctions:GetEnchantLink(link)
+	return link and tonumber(string.match(link, "enchant:(%d+)"))
 end
 
 function QuickAuctions:CreateStatus()

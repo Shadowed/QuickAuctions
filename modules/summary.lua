@@ -393,6 +393,7 @@ function Summary:Update()
 				row.link = link
 				row.enchantLink = data.enchantLink
 				row.baseLink = data.link
+				row.subType = data.subType
 
 				local createTag = ""
 				if( summaryData.canCraft and not summaryData.canCraft(data.link, itemName) ) then
@@ -400,8 +401,9 @@ function Summary:Update()
 				end
 				
 				local craftQuantity = ""
-				if( QuickAuctions.db.realm.craftQueue[data.link] ) then
-					craftQuantity = string.format("%s%d|r x ", GREEN_FONT_COLOR_CODE, QuickAuctions.db.realm.craftQueue[data.link])
+				local craftData = QuickAuctions.db.realm.craftQueue[data.link] or QuickAuctions.db.realm.craftQueue[data.enchantLink]
+				if( craftData ) then
+					craftQuantity = string.format("%s%d|r x ", GREEN_FONT_COLOR_CODE, craftData)
 				end
 				
 				local colorCode = ""

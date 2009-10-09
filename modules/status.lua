@@ -11,7 +11,7 @@ function Status:OutputResults()
 			local quantity = QuickAuctions.Scan:GetTotalItemQuantity(itemID)
 			local playerQuantity = QuickAuctions.Scan:GetPlayerItemQuantity(itemID)
 			
-			QuickAuctions:Log(itemID .. "statusres", string.format(L["%s lowest buyout %s, total posted |cfffed000%d|r (%d by you)"], itemLink, QuickAuctions:FormatTextMoney(lowestBuyout, true), quantity, playerQuantity))
+			QuickAuctions:Log(itemID .. "statusres", string.format(L["%s lowest buyout %s (threshold %s), total posted |cfffed000%d|r (%d by you)"], itemLink, QuickAuctions:FormatTextMoney(lowestBuyout, true), QuickAuctions:FormatTextMoney(QuickAuctions.Manage:GetConfigValue(itemID, "threshold"), true), quantity, playerQuantity))
 		else
 			QuickAuctions:Log(itemID .. "statusres", string.format(L["Cannot find data for %s."], itemLink or itemID))
 		end
