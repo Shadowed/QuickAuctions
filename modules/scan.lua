@@ -163,6 +163,23 @@ function Scan:IsLowestAuction(name, buyout, bid)
 	return true
 end
 
+-- This gets how many auctions are posted specifically on this tier, it does not get how many of the items they up at this tier
+-- but purely the number of auctions
+function Scan:GetPlayerAuctionCount(link, buyout, bid)
+	if( not auctionData[link] ) then
+		return 0
+	end
+	
+	local quantity = 0
+	for _, record in pairs(auctionData[link].records) do
+		if( record.isPlayer and record.buyout == buyout and record.bid == bid ) then
+			quantity = quantity + 1
+		end
+	end
+	
+	return quantity
+end
+
 -- Searches the item data to find out how many we have on the provided item info
 function Scan:GetItemQuantity(link, buyout, bid)
 	if( not auctionData[link] ) then

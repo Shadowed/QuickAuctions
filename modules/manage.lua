@@ -315,7 +315,7 @@ function Manage:PostItems(itemID)
 	
 	-- Either the player or a whitelist person is the lowest teir so use this tiers quantity of items
 	if( isPlayer or isWhitelist ) then
-		activeAuctions = QuickAuctions.Scan:GetItemQuantity(itemID, buyout, bid)
+		activeAuctions = QuickAuctions.Scan:GetPlayerAuctionCount(itemID, buyout, bid)
 	end
 	
 	-- If we have a post cap of 20, and 10 active auctions, but we can only have 5 of the item then this will only let us create 5 auctions
