@@ -165,14 +165,12 @@ end
 
 -- This gets how many auctions are posted specifically on this tier, it does not get how many of the items they up at this tier
 -- but purely the number of auctions
-function Scan:GetPlayerAuctionCount(link, buyout, bid)
-	if( not auctionData[link] ) then
-		return 0
-	end
-	
+function Scan:GetPlayerAuctionCount(link, findBuyout, findBid)
 	local quantity = 0
-	for _, record in pairs(auctionData[link].records) do
-		if( record.isPlayer and record.buyout == buyout and record.bid == bid ) then
+	for i=1, GetNumAuctionItems("owner") do
+		local name, _, _, _, _, _, bid, _, buyout, _, _, _, wasSold = GetAuctionItemInfo("owner", i)     
+		local itemID = QuickAuctions:GetSafeLink(GetAuctionItemLink("owner", i))
+		if( wasSold == 0 and itemID == link and findBuyout == buyout and findBid == bid ) then
 			quantity = quantity + 1
 		end
 	end
