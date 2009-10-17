@@ -377,6 +377,7 @@ function QuickAuctions:CreateStatus()
 		button:SetScript("OnLeave", hideTooltip)
 		
 		local text = button:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+		text:SetFont(GameFontHighlight:GetFont(), 11)
 		text:SetAllPoints(button)
 		text:SetJustifyH("LEFT")
 		text:SetTextColor(0.95, 0.95, 0.95, 1)
