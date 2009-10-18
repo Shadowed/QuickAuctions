@@ -1,4 +1,8 @@
-QuickAuctionsLocals = {
+if( GetLocale() ~= "deDE" ) then
+	return
+end
+ 
+QuickAuctionsLocals = setmetatable({
 	["%d (max %d) posted by yourself (%s)"] = "%d (max. %d) von Dir (%s) im Auktioshaus",
 	["%d log messages waiting"] = "%d Protokoll Meldungen",
 	["%s lowest buyout %s (threshold %s), total posted |cfffed000%d|r (%d by you)"] = "%s tiefster SK %s (Schwellwert %s), insgesamt im AH |cfffed000%d|r (%d von Dir)",
@@ -199,4 +203,4 @@ QuickAuctionsLocals = {
 	["\n\n%d in inventory\n%d on the Auction House"] = "\n\n%d im Inventar\n%d im AH",
 	["lowest price"] = "Tiefster Preis",
 	["undercut"] = "Unterbieten",
-}
+}, {__index = QuickAuctionsLocals}) 
