@@ -175,6 +175,7 @@ function Summary:UpdateItemData(summaryData, name, quantity, link, itemLevel, it
 	row.parent = parent
 	row.subType = subType
 	row.itemLevel = itemLevel
+	row.disableCraftQueue = summaryData.disableCraftQueue
 
 	-- Create the category row now
 	if( row.parent and not createdCats[row.parent] ) then
@@ -259,6 +260,7 @@ end
 
 function Summary:Update()
 	local self = Summary
+	local summaryData = summaryCats[selectedSummary]
 	
 	-- Reset
 	for i=#(rowDisplay), 1, -1 do table.remove(rowDisplay, i) end
@@ -276,7 +278,9 @@ function Summary:Update()
 			if( not QuickAuctions.db.profile.categories[data.name] ) then
 				for index, childData in pairs(displayData) do
 					if( childData.enabled and not childData.isParent and childData.parent == data.name ) then
-						table.insert(rowDisplay, index)
+						if( not summaryData.canCraft or not QuickAuctions.db.profile.hideUncraft or summaryData.canCraft(childData.link, (GetItemInfo(childData.link)) or "") ) then
+							table.insert(rowDisplay, index)
+						end
 					end
 				end
 			end
@@ -298,7 +302,6 @@ function Summary:Update()
 	end
 			
 	-- Now display
-	local summaryData = summaryCats[selectedSummary]
 	local offset = FauxScrollFrame_GetOffset(self.middleFrame.scroll)
 	local displayIndex = 0
 	
@@ -361,6 +364,7 @@ function Summary:Update()
 				row.parent = data.name
 				row.link = link
 				row.baseLink = nil
+				row.disableCraftQueue = data.disableCraftQueue
 				
 				row:SetText(link or data.name)
 
@@ -394,7 +398,8 @@ function Summary:Update()
 				row.enchantLink = data.enchantLink
 				row.baseLink = data.link
 				row.subType = data.subType
-
+				row.disableCraftQueue = data.disableCraftQueue
+			
 				local createTag = ""
 				if( summaryData.canCraft and not summaryData.canCraft(data.link, itemName) ) then
 					createTag = string.format("|T%s:18:18:-1:0|t", READY_CHECK_NOT_READY_TEXTURE)
@@ -682,6 +687,26 @@ function Summary:CreateGUI()
 	row:SetNormalFontObject(GameFontNormalSmall)
 	row:SetHighlightFontObject(GameFontHighlightSmall)
 	row:SetDisabledFontObject(GameFontDisableSmall)
+	row:SetText(QuickAuctions.db.profile.hideUncraft and L["Show uncraftables"] or L["Hide uncraftables"])
+	row:SetScript("OnEnter", showTooltip)
+	row:SetScript("OnLeave", hideTooltip)
+	row:SetScript("OnClick", function(self)
+		QuickAuctions.db.profile.hideUncraft = not QuickAuctions.db.profile.hideUncraft
+		self:SetText(QuickAuctions.db.profile.hideUncraft and L["Show uncraftables"] or L["Hide uncraftables"])
+		Summary:Update()
+	end)
+	row:SetPoint("TOPLEFT", self.getDataButton, "BOTTOMLEFT", 0, -10)
+	row.tooltip = L["Toggles hiding items you cannot craft in the summary window."]
+	
+	self.hideUncraft = row
+	
+	-- Craft queue help
+	local row = CreateFrame("Button", nil, self.leftFrame, "UIPanelButtonTemplate")
+	row:SetHeight(16)
+	row:SetWidth(130)
+	row:SetNormalFontObject(GameFontNormalSmall)
+	row:SetHighlightFontObject(GameFontHighlightSmall)
+	row:SetDisabledFontObject(GameFontDisableSmall)
 	row:SetText(L["Craft queue help"])
 	row:SetScript("OnEnter", showTooltip)
 	row:SetScript("OnLeave", hideTooltip)
@@ -722,14 +747,14 @@ function Summary:CreateGUI()
 			self.helpFrame.text:SetJustifyV("TOP")
 			
 			-- I feel sorry for the person who translates this
-			self.helpFrame.text:SetText(L["The craft queue in Quick Auctions is a way of letting you queue up a list of items that can then be seen in that professions Tradeskill window, or through /qa tradeskill with a tradeskill open.\n\n\nThe craft queue is setup through the summary window by holding SHIFT + double clicking an item in the summary.\n\nFor example: If you want to cut 20 |cff0070dd[Insightful Earthsiege Diamond]|r you SHIFT + double click the |cff0070dd[Insightful Earthsiege Diamond]|r text in the summary window, it will then show\n\n|cfffed0000 x|r Insightful Earthsiege Diamond|r\n\nThis tells you that it is ready and you can input how many you want, once you are done setting how many you want to make hit ENTER. If you were to enter 20 it will now look like\n\n0 x |cff20ff202Insightful Earthsiege Diamond|r\nAnd you're done! Once you open the Jewelcrafting Tradeskill window you will see a frame pop up with\n\n|cff0070dd[Insightful Earthsiege Diamond]|r [20]\n\nIf you click that text you will create 20 |cff0070dd[Insightful Earthsiege Diamond]|r providing you have the materials"])
+			self.helpFrame.text:SetText(L["The craft queue in Quick Auctions is a way of letting you queue up a list of items that can then be seen in that professions Tradeskill window, or through /qa tradeskill with a tradeskill open.\n\n|cffff2020**NOTE**|r This does not work with the enchant scroll category.\nQueues are setup through the summary window by holding SHIFT + double clicking an item in the summary.\n\nFor example: If you want to cut 20 |cff0070dd[Insightful Earthsiege Diamond]|r you SHIFT + double click the |cff0070dd[Insightful Earthsiege Diamond]|r text in the summary window, it will then show\n\n|cfffed0000 x|r Insightful Earthsiege Diamond|r\n\nThis tells you that it is ready and you can input how many you want, once you are done setting how many you want to make hit ENTER. If you were to enter 20 it will now look like\n\n0 x |cff20ff202Insightful Earthsiege Diamond|r\nAnd you're done! Once you open the Jewelcrafting Tradeskill window you will see a frame pop up with\n\n|cff0070dd[Insightful Earthsiege Diamond]|r [20]\n\nIf you click that text you will create 20 |cff0070dd[Insightful Earthsiege Diamond]|r providing you have the materials"])
 		elseif( self.helpFrame:IsVisible() ) then
 			self.helpFrame:Hide()
 		else
 			self.helpFrame:Show()
 		end
 	end)
-	row:SetPoint("TOPLEFT", self.getDataButton, "BOTTOMLEFT", 0, -10)
+	row:SetPoint("TOPLEFT", self.hideUncraft, "BOTTOMLEFT", 0, -6)
 	row.tooltip = L["Shows information on how to use the craft queue"]
 	
 	self.helpCraftQueue = row
@@ -793,10 +818,10 @@ function Summary:CreateGUI()
 			AuctionFrameTab_OnClick(AuctionFrameTab1)
 		elseif( not self.baseLink ) then
 			toggleCategory(self)
-		elseif( mouseButton == "LeftButton" and self.baseLink and not IsModifierKeyDown() ) then
+		elseif( not self.disableCraftQueue and mouseButton == "LeftButton" and self.baseLink and not IsModifierKeyDown() ) then
 			QuickAuctions.db.realm.craftQueue[self.baseLink] = (QuickAuctions.db.realm.craftQueue[self.baseLink] or 0) + 1
 			Summary:Update()
-		elseif( mouseButton == "RightButton" and self.baseLink and not IsModifierKeyDown() ) then
+		elseif( not self.disableCraftQueue and mouseButton == "RightButton" and self.baseLink and not IsModifierKeyDown() ) then
 			if( QuickAuctions.db.realm.craftQueue[self.baseLink] and QuickAuctions.db.realm.craftQueue[self.baseLink] > 1 ) then
 				QuickAuctions.db.realm.craftQueue[self.baseLink] = QuickAuctions.db.realm.craftQueue[self.baseLink] - 1
 			else
@@ -808,7 +833,7 @@ function Summary:CreateGUI()
 	
 	-- Set this row as focused
 	local function OnDoubleClick(self)
-		if( not IsShiftKeyDown() or not self.baseLink ) then return end
+		if( self.disableCraftQueue or not IsShiftKeyDown() or not self.baseLink ) then return end
 		
 		if( focusedLink == self.baseLink ) then
 			focusedLink = nil
@@ -824,7 +849,7 @@ function Summary:CreateGUI()
 	
 	-- They typed a quantity in
 	local function OnKeyDown(self, key)
-		if( not self.baseLink ) then
+		if( not self.baseLink or not self.disableCraftQueue ) then
 			return
 		end
 		
@@ -967,6 +992,7 @@ function Summary:CreateCategoryData()
 			match = function(name, itemType, subType) local type = string.match(name, L["Scroll of Enchant (.+) %- .+"]) if( type == L["Bracer"] ) then return L["Bracers"] end return type end,
 			auctionClass = L["Consumable"],
 			auctionSubClass = {[L["Item Enhancement"]] = true},
+			disableCraftQueue = true,
 		},
 		["Flasks"] = {
 			text = L["Flasks"],
