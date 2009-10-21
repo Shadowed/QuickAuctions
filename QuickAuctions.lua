@@ -4,7 +4,6 @@ QuickAuctions.status = {}
 local L = QuickAuctionsLocals
 local status = QuickAuctions.status
 local statusLog, logIDs, lastSeenLogID = {}, {}
-local SCROLL_TIMEOUT = 10
 
 -- Addon loaded
 function QuickAuctions:OnInitialize()
@@ -14,10 +13,12 @@ function QuickAuctions:OnInitialize()
 			smartUndercut = false,
 			smartCancel = true,
 			cancelWithBid = true,
+			hideUncraft = false,
 			groups = {},
 			categories = {},
 			mail = {default = false},
 			noCancel = {default = false},
+			autoFallback = {default = false},
 			undercut = {default = 0},
 			postTime = {default = 12},
 			bidPercent = {default = 1.0},
