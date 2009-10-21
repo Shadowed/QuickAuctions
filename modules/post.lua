@@ -35,6 +35,7 @@ function Post:Stop()
 	table.wipe(postQueue)
 	table.wipe(postTotal)
 	
+	overallTotal = 0
 	status.isPosting = nil
 	frame:Hide()
 end
@@ -77,19 +78,32 @@ function Post:PostAuction(queue)
 	postTotal[itemID] = (postTotal[itemID] or 0) + 1
 	
 	-- Set our initial costs
-	local buyout = lowestBuyout
-	local bid = lowestBid
-	local fallbackCap, buyoutTooLow, bidTooLow
+	local fallbackCap, buyoutTooLow, bidTooLow, autoFallback, bid, buyout
+	local fallback = QuickAuctions.Manage:GetConfigValue(itemID, "fallback")
+	local threshold = QuickAuctions.Manage:GetConfigValue(itemID, "threshold")
 	
+	-- No other auctions up, default to fallback
+	if( not lowestOwner ) then
+		buyout = QuickAuctions.Manage:GetConfigValue(itemID, "fallback")
+		bid = buyout * QuickAuctions.Manage:GetConfigValue(itemID, "bidPercent")
+	-- Item goes below the threshold price, default it to fallback
+	elseif( QuickAuctions.Manage:GetBoolConfigValue(itemID, "autoFallback") and lowestBuyout <= threshold ) then
+		autoFallback = true
+		buyout = QuickAuctions.Manage:GetConfigValue(itemID, "fallback")
+		bid = buyout * QuickAuctions.Manage:GetConfigValue(itemID, "bidPercent")
+	-- Either we already have one up or someone on the whitelist does
+	elseif( isPlayer or isWhitelist ) then
+		buyout = lowestBuyout
+		bid = lowestBid
 	-- We got undercut :(
-	if( lowestOwner and not isPlayer and not isWhitelist ) then
-		local goldTotal = buyout / COPPER_PER_GOLD
+	else
+		local goldTotal = lowestBuyout / COPPER_PER_GOLD
 		-- Smart undercutting is enabled, and the auction is for at least 1 gold, round it down to the nearest gold piece
 		-- the math.floor(blah) == blah check is so we only do a smart undercut if the price isn't a whole gold piece and not a partial
 		if( QuickAuctions.db.profile.smartUndercut and lowestBuyout > COPPER_PER_GOLD and goldTotal ~= math.floor(goldTotal) ) then
 			buyout = math.floor(goldTotal) * COPPER_PER_GOLD
 		else
-			buyout = buyout - QuickAuctions.Manage:GetConfigValue(itemID, "undercut")
+			buyout = lowestBuyout - QuickAuctions.Manage:GetConfigValue(itemID, "undercut")
 		end
 		
 		-- Mostly for protection, if the buyout is removed then it will default to undercutting by a copper
@@ -99,7 +113,6 @@ function Post:PostAuction(queue)
 		end
 		
 		-- Check if we're posting something too high
-		local fallback = QuickAuctions.Manage:GetConfigValue(itemID, "fallback")
 		if( buyout > (fallback * QuickAuctions.Manage:GetConfigValue(itemID, "fallbackCap")) ) then
 			buyout = fallback
 			fallbackCap = true
@@ -108,14 +121,10 @@ function Post:PostAuction(queue)
 		bid = math.floor(buyout * QuickAuctions.Manage:GetConfigValue(itemID, "bidPercent"))
 		
 		-- Check if the bid is too low
-		local threshold = QuickAuctions.Manage:GetConfigValue(itemID, "threshold")
 		if( bid < threshold ) then
 			bid = threshold
 			bidTooLow = true
 		end
-	elseif( not lowestOwner ) then
-		buyout = QuickAuctions.Manage:GetConfigValue(itemID, "fallback")
-		bid = buyout * QuickAuctions.Manage:GetConfigValue(itemID, "bidPercent")
 	end
 	
 	local quantity = select(2, GetContainerItemInfo(bag, slot))
@@ -127,10 +136,12 @@ function Post:PostAuction(queue)
 	
 	if( not lowestOwner ) then
 		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (No other auctions up)"], itemLink, quantityText, postTotal[itemID], QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
+	elseif( autoFallback ) then
+		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (Forced to fallback price, market below threshold)"], itemLink, quantityText, postTotal[itemID], QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
 	elseif( buyoutTooLow ) then
 		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (Buyout went below zero, undercut by 1 copper instead)"], itemLink, quantityText, postTotal[itemID], QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
 	elseif( fallbackCap ) then
-		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (Forced to fallback cap, lowest price was too high)"], itemLink, quantityText, postTotal[itemID], QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
+		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (Forced to fallback price, lowest price was too high)"], itemLink, quantityText, postTotal[itemID], QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
 	elseif( bidTooLow ) then
 		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (Increased bid price due to going below thresold)"], itemLink, quantityText, postTotal[itemID], QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
 	else

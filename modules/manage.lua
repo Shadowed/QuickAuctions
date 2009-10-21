@@ -168,9 +168,14 @@ function Manage:Cancel()
 		-- The item is in a group that's not supposed to be cancelled
 		if( wasSold == 0 and lowestOwner and self:GetBoolConfigValue(itemID, "noCancel") ) then
 			if( not tempList[name] ) then
-					QuickAuctions:Log(name .. "notcancel", string.format(L["Skipped cancelling %s flagged to not be canelled."], itemLink))
+				QuickAuctions:Log(name .. "notcancel", string.format(L["Skipped cancelling %s flagged to not be canelled."], itemLink))
 				tempList[name] = true
-			end	
+			end
+		elseif( wasSold == 0 and lowestOwner and self:GetBoolConfigValue(itemID, "autoFallback") and lowestBuyout <= self:GetConfigValue(itemID, "threshold") ) then
+			if( not tempList[name] ) then
+				QuickAuctions:Log(name .. "notcancel", string.format(L["Skipped cancelling %s flagged to post at fallback when market is below threshold."], itemLink))
+				tempList[name] = true
+			end
 		-- It is supposed to be cancelled!
 		elseif( wasSold == 0 and lowestOwner ) then
 			buyout = buyout / quantity
@@ -298,7 +303,7 @@ function Manage:PostItems(itemID)
 	local buyout, bid, _, isPlayer, isWhitelist = QuickAuctions.Scan:GetLowestAuction(itemID)
 	
 	-- Check if we're going to go below the threshold
-	if( buyout ) then
+	if( buyout and not self:GetBoolConfigValue(itemID, "autoFallback") ) then
 		-- Smart undercutting is enabled, and the auction is for at least 1 gold, round it down to the nearest gold piece
 		local testBuyout = buyout
 		if( QuickAuctions.db.profile.smartUndercut and testBuyout > COPPER_PER_GOLD ) then
