@@ -8,19 +8,6 @@ local _G = getfenv(0)
 
 --[[
 	TREE BUILDER
-		AceDialog = AceDialog or LibStub("AceConfigDialog-3.0")
-	AceRegistry = AceRegistry or LibStub("AceConfigRegistry-3.0")
-	
-	if( not registered ) then
-		loadOptions()
-		
-		LibStub("AceConfig-3.0"):RegisterOptionsTable("ShadowedUF", options)
-		AceDialog:SetDefaultSize("ShadowedUF", 835, 525)
-		registered = true
-	end
-	
-	AceDialog:Open("ShadowedUF")
-
 ]]--
 
 local function sortChildren(a, b)
@@ -200,13 +187,23 @@ local function createAuctionSettings(container, group)
 	mail:SetLabel(mail:GetUserData("name"))
 	mail:SetRelativeWidth(WIDGET_WIDTH)
 	
+	local autoFallback = AceGUI:Create("CheckBox")
+	autoFallback:SetUserData("name", L["Enable auto fallback"])
+	autoFallback:SetUserData("desc", L["Automatically posts auctions at the fallback price if the lowest item in the auction house is below the threshold price."])
+	autoFallback:SetUserData("group", "autoFallback")
+	autoFallback:SetUserData("key", group)
+	autoFallback:SetCallback("OnEnter", showTooltip)
+	autoFallback:SetCallback("OnLeave", hideTooltip)
+	autoFallback:SetCallback("OnValueChanged", groupValueChanged)
+	autoFallback:SetLabel(autoFallback:GetUserData("name"))
+	autoFallback:SetRelativeWidth(WIDGET_WIDTH)
+	
 	if( group == "default" ) then
 		mail:SetValue(QuickAuctions.db.profile[mail:GetUserData("group")].default)
 		container:AddChild(mail)
 
-		local sep = AceGUI:Create("Label")
-		sep:SetFullWidth(true)
-		container:AddChild(sep)
+		autoFallback:SetValue(QuickAuctions.db.profile[autoFallback:GetUserData("group")].default)
+		container:AddChild(autoFallback)
 	else
 		local val = QuickAuctions.db.profile[mail:GetUserData("group")][mail:GetUserData("key")]
 		if( val == nil ) then
@@ -231,6 +228,30 @@ local function createAuctionSettings(container, group)
 		
 		container:AddChild(enable)
 		container:AddChild(mail)
+
+		local val = QuickAuctions.db.profile[autoFallback:GetUserData("group")][autoFallback:GetUserData("key")]
+		if( val == nil ) then
+			autoFallback:SetValue(QuickAuctions.defaults.profile[autoFallback:GetUserData("group")].default)
+		else
+			autoFallback:SetValue(val)
+		end
+		
+		local enable = AceGUI:Create("CheckBox")
+		enable:SetUserData("name", L["Override auto fallback"])
+		enable:SetUserData("desc", L["Allows you to override the default auto fallback settings."])
+		enable:SetUserData("group", "autoFallback")
+		enable:SetUserData("key", group)
+		enable:SetUserData("parent", autoFallback)
+		enable:SetLabel(enable:GetUserData("name"))
+		enable:SetCallback("OnValueChanged", overrideSettings)
+		enable:SetCallback("OnEnter", showTooltip)
+		enable:SetCallback("OnLeave", hideTooltip)
+		enable:SetValue(QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")] ~= nil and true or false)
+		enable:SetRelativeWidth(WIDGET_WIDTH)
+		autoFallback:SetDisabled(QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")] == nil)
+		
+		container:AddChild(enable)
+		container:AddChild(autoFallback)
 	end
 
 	local undercut = AceGUI:Create("EditBox")
@@ -564,7 +585,7 @@ local function generalConfig(container)
 	-- Smart Cancel
 	local cancel = AceGUI:Create("CheckBox")
 	cancel:SetUserData("name", L["Smart cancelling"])
-	cancel:SetUserData("desc", L["Your auctions will not be cancelled if the price goes below your threshold."])
+	cancel:SetUserData("desc", L["Disables cancelling of auctions with a market price below the threshold, also will cancel auctions if you are the only one with that item up and you can relist it for more."])
 	cancel:SetUserData("config", "smartCancel")
 	cancel:SetCallback("OnEnter", showTooltip)
 	cancel:SetCallback("OnLeave", hideTooltip)
