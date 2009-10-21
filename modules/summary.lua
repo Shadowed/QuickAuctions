@@ -849,7 +849,7 @@ function Summary:CreateGUI()
 	
 	-- They typed a quantity in
 	local function OnKeyDown(self, key)
-		if( not self.baseLink or not self.disableCraftQueue ) then
+		if( not self.baseLink or self.disableCraftQueue ) then
 			return
 		end
 		
