@@ -3,7 +3,13 @@ local L = QuickAuctionsLocals
 local status = QuickAuctions.status
 local statusList, scanList, tempList = {}, {}, {}
 
+local function sortByGroup(a, b)
+	return QuickAuctions.Manage.reverseLookup[a] < QuickAuctions.Manage.reverseLookup[b]
+end
+
 function Status:OutputResults()
+	table.sort(statusList, sortByGroup)
+	
 	for _, itemID in pairs(statusList) do
 		local itemLink = select(2, GetItemInfo(itemID))
 		local lowestBuyout, lowestBid, lowestOwner = QuickAuctions.Scan:GetLowestAuction(itemID)
