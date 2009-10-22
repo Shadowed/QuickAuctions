@@ -317,9 +317,16 @@ function Manage:PostItems(itemID)
 			return
 		end
 	end
-	
+
+	-- Auto fallback is on, and lowest buyout is below threshold, instead of posting them all
+	-- use the post count of the fallback tier
+	if( self:GetBoolConfigValue(itemID, "autoFallback") and buyout <= threshold ) then	
+		local fallbackBuyout = QuickAuctions.Manage:GetConfigValue(itemID, "fallback")
+		local fallbackBid = fallbackBuyout * QuickAuctions.Manage:GetConfigValue(itemID, "bidPercent")
+		activeAuctions = QuickAuctions.Scan:GetPlayerAuctionCount(itemID, fallbackBuyout, fallbackBid)
+			
 	-- Either the player or a whitelist person is the lowest teir so use this tiers quantity of items
-	if( isPlayer or isWhitelist ) then
+	elseif( isPlayer or isWhitelist ) then
 		activeAuctions = QuickAuctions.Scan:GetPlayerAuctionCount(itemID, buyout, bid)
 	end
 	
