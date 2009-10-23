@@ -992,7 +992,6 @@ function Summary:CreateCategoryData()
 			match = function(name, itemType, subType) local type = string.match(name, L["Scroll of Enchant (.+) %- .+"]) if( type == L["Bracer"] ) then return L["Bracers"] end return type end,
 			auctionClass = L["Consumable"],
 			auctionSubClass = {[L["Item Enhancement"]] = true},
-			disableCraftQueue = true,
 		},
 		["Flasks"] = {
 			text = L["Flasks"],
