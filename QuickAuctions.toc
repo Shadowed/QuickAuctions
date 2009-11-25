@@ -1,6 +1,6 @@
 ## Interface: 30200
 ## Title: Quick Auctions 2
-## Notes: Makes it easier to manage large quantities of items in the auction house.
+## Notes: Because causing internet debates as to the merits of QA are amusing!
 ## Author: Shadowed
 ## LoadManagers: AddonLoader
 ## X-LoadOn-Slash: /qa, /quickauction, /quickauctions

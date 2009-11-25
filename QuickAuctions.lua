@@ -9,7 +9,7 @@ local statusLog, logIDs, lastSeenLogID = {}, {}
 function QuickAuctions:OnInitialize()
 	self.defaults = {
 		profile = {
-			showStatus = true,
+			showStatus = false,
 			smartUndercut = false,
 			smartCancel = true,
 			cancelWithBid = true,
