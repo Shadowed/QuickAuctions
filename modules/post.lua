@@ -78,9 +78,17 @@ function Post:PostAuction(queue)
 	postTotal[itemID] = (postTotal[itemID] or 0) + 1
 	
 	-- Set our initial costs
-	local fallbackCap, buyoutTooLow, bidTooLow, autoFallback, bid, buyout
+	local fallbackCap, buyoutTooLow, bidTooLow, autoFallback, bid, buyout, differencedPrice
 	local fallback = QuickAuctions.Manage:GetConfigValue(itemID, "fallback")
 	local threshold = QuickAuctions.Manage:GetConfigValue(itemID, "threshold")
+	local priceThreshold = QuickAuctions.Manage:GetConfigValue(itemID, "priceThreshold")
+	local priceDifference = QuickAuctions.Scan:CompareLowestToSecond(itemID, lowestBuyout)
+	
+	-- Difference between lowest that we have and second lowest is too high, undercut second lowest instead
+	if( isPlayer and priceDifference and priceDifference >= priceThreshold ) then
+		differencedPrice = true
+		lowestBuyout, lowestBid = QuickAuctions.Scan:GetSecondLowest(itemID, lowestBuyout)
+	end
 	
 	-- No other auctions up, default to fallback
 	if( not lowestOwner ) then
@@ -92,7 +100,7 @@ function Post:PostAuction(queue)
 		buyout = QuickAuctions.Manage:GetConfigValue(itemID, "fallback")
 		bid = buyout * QuickAuctions.Manage:GetConfigValue(itemID, "bidPercent")
 	-- Either we already have one up or someone on the whitelist does
-	elseif( isPlayer or isWhitelist ) then
+	elseif( ( isPlayer or isWhitelist ) and not differencedPrice ) then
 		buyout = lowestBuyout
 		bid = lowestBid
 	-- We got undercut :(
@@ -138,6 +146,8 @@ function Post:PostAuction(queue)
 		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (No other auctions up)"], itemLink, quantityText, postTotal[itemID], QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
 	elseif( autoFallback ) then
 		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (Forced to fallback price, market below threshold)"], itemLink, quantityText, postTotal[itemID], QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
+	elseif( differencedPrice ) then
+		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (Price difference too high, used second lowest price intead)"], itemLink, quantityText, postTotal[itemID], QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
 	elseif( buyoutTooLow ) then
 		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (Buyout went below zero, undercut by 1 copper instead)"], itemLink, quantityText, postTotal[itemID], QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
 	elseif( fallbackCap ) then

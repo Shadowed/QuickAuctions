@@ -218,12 +218,36 @@ function Scan:IsPlayerOnly(link)
 	return auctionData[link] and auctionData[link].onlyPlayer
 end
 
+-- Check what the second lowest auction is and returns the difference as a percent
+function Scan:CompareLowestToSecond(link, lowestBuyout)
+	if( not auctionData[link] ) then return end
+	
+	local buyout, bid, owner
+	for _, record in pairs(auctionData[link].records) do
+		if( ( not buyout or record.buyout < buyout ) and record.buyout > lowestBuyout ) then
+			buyout, bid, owner = record.buyout, record.bid, record.owner
+		end
+	end
+	
+	return buyout and (buyout - lowestBuyout) / buyout or 0
+end
+
+function Scan:GetSecondLowest(link, lowestBuyout)
+	if( not auctionData[link] ) then return end
+	
+	local buyout, bid, owner
+	for _, record in pairs(auctionData[link].records) do
+		if( ( not buyout or record.buyout < buyout ) and record.buyout > lowestBuyout ) then
+			buyout, bid, owner = record.buyout, record.bid, record.owner
+		end
+	end
+	
+	return buyout, bid, owner
+end
+
 -- Find out the lowest price for this auction
 function Scan:GetLowestAuction(link)
-	-- No data on it
-	if( not auctionData[link] ) then
-		return nil
-	end
+	if( not auctionData[link] ) then return end
 		
 	-- Find lowest
 	local buyout, bid, owner

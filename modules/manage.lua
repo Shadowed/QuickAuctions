@@ -183,11 +183,28 @@ function Manage:Cancel()
 			
 			local threshold = self:GetConfigValue(itemID, "threshold")
 			local fallback = self:GetConfigValue(itemID, "fallback")
-						
+			local priceDifference = QuickAuctions.Scan:CompareLowestToSecond(itemID, lowestBuyout)
+			local priceThreshold = self:GetConfigValue(itemID, "priceThreshold")
+			
+			-- Lowest is the player, and the difference between the players lowest and the second lowest are too far apart
+			if( isPlayer and priceDifference and priceDifference >= priceThreshold ) then
+				-- The item that the difference is too high is actually on the tier that was too high as well
+				-- so cancel it, the reason this check is done here is so it doesn't think it undercut itself.
+				if( math.floor(lowestBuyout) == math.floor(buyout) ) then
+					if( not tempList[name] ) then
+						tempList[name] = true
+						QuickAuctions:Log(name .. "diffcancel", string.format(L["Price threshold on %s at %s, second lowest is |cfffed000%d%%|r higher and above the |cfffed000%d%%|r threshold, cancelling"], itemLink, QuickAuctions:FormatTextMoney(lowestBuyout, true), priceDifference * 100, priceThreshold * 100))
+					end
+	
+					totalToCancel = totalToCancel + 1
+					totalCancelled = totalCancelled + 1
+					CancelAuction(i)
+				end
+				
 			-- They aren't us (The player posting), or on our whitelist so easy enough
 			-- They are on our white list, but they undercut us, OR they matched us but the bid is lower
 			-- The player is the only one with it on the AH and it's below the threshold
-			if( ( not isPlayer and not isWhitelist ) or
+			elseif( ( not isPlayer and not isWhitelist ) or
 				( isWhitelist and ( buyout > lowestBuyout or ( buyout == lowestBuyout and lowestBid < bid ) ) ) or
 				( QuickAuctions.db.profile.smartCancel and QuickAuctions.Scan:IsPlayerOnly(itemID) and buyout < fallback ) ) then
 				
