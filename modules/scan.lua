@@ -166,11 +166,14 @@ end
 -- This gets how many auctions are posted specifically on this tier, it does not get how many of the items they up at this tier
 -- but purely the number of auctions
 function Scan:GetPlayerAuctionCount(link, findBuyout, findBid)
+	findBuyout = math.floor(findBuyout)
+	findBid = math.floor(findBid)
+	
 	local quantity = 0
 	for i=1, GetNumAuctionItems("owner") do
-		local name, _, stack, _, _, _, bid, _, buyout, _, _, _, wasSold = GetAuctionItemInfo("owner", i)     
+		local name, _, stack, _, _, _, bid, _, buyout, _, _, _, wasSold = GetAuctionItemInfo("owner", i)
 		local itemID = QuickAuctions:GetSafeLink(GetAuctionItemLink("owner", i))
-		if( wasSold == 0 and itemID == link and findBuyout == (buyout / stack) and findBid == (bid / stack) ) then
+		if( wasSold == 0 and itemID == link and findBuyout == math.floor(buyout / stack) and findBid == math.floor(bid / stack) ) then
 			quantity = quantity + 1
 		end
 	end
