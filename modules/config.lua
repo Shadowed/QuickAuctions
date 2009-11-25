@@ -603,7 +603,7 @@ local function generalConfig(container)
 	container:AddChild(help)
 	
 	local helpText = AceGUI:Create("Label")
-	helpText:SetText(L["You can set the fallback settings to use for items that do not have one set specifically for their group, or per item.\n\nMoney values should be entered as \"#g#s#c\". For example, \"50g20s\" is entered as 50 gold, 20 silver."])
+	helpText:SetText(L["You can set the fallback settings to use for items that do not have one set specifically for their group, or per item.\n\nMoney values should be entered as \"#g#s#c\". For example, \"50g20s\" is entered as 50 gold, 20 silver.\n\nAll sliders can have their values entered manually, use the middle number below the slider bar."])
 	helpText:SetFullWidth(true)
 	help:AddChild(helpText)
 	
