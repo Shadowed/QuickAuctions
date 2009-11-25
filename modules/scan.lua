@@ -168,9 +168,9 @@ end
 function Scan:GetPlayerAuctionCount(link, findBuyout, findBid)
 	local quantity = 0
 	for i=1, GetNumAuctionItems("owner") do
-		local name, _, _, _, _, _, bid, _, buyout, _, _, _, wasSold = GetAuctionItemInfo("owner", i)     
+		local name, _, stack, _, _, _, bid, _, buyout, _, _, _, wasSold = GetAuctionItemInfo("owner", i)     
 		local itemID = QuickAuctions:GetSafeLink(GetAuctionItemLink("owner", i))
-		if( wasSold == 0 and itemID == link and findBuyout == buyout and findBid == bid ) then
+		if( wasSold == 0 and itemID == link and findBuyout == (buyout / stack) and findBid == (bid / stack) ) then
 			quantity = quantity + 1
 		end
 	end
