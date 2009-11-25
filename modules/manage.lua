@@ -288,14 +288,14 @@ function Manage:PostItems(itemID)
 	
 	local name, itemLink, _, _, _, _, _, stackCount = GetItemInfo(itemID)
 	local perAuction = math.min(stackCount, self:GetConfigValue(itemID, "perAuction"))
-	local perPost = math.floor(GetItemCount(itemID) / perAuction)
+	local maxCanPost = math.floor(GetItemCount(itemID) / perAuction)
 	local postCap = self:GetConfigValue(itemID, "postCap")
 	local threshold = self:GetConfigValue(itemID, "threshold")
 	local auctionsCreated, activeAuctions = 0, 0
 	
 	QuickAuctions:Log(name .. "query", string.format(L["Queued %s to be posted"], itemLink))
 	
-	if( perPost == 0 ) then
+	if( maxCanPost == 0 ) then
 		QuickAuctions:Log(name .. "query", string.format(L["Skipped %s need |cff20ff20%d|r for a single post, have |cffff2020%d|r"], itemLink, perAuction, GetItemCount(itemID)))
 		return
 	end
@@ -332,14 +332,14 @@ function Manage:PostItems(itemID)
 	
 	-- If we have a post cap of 20, and 10 active auctions, but we can only have 5 of the item then this will only let us create 5 auctions
 	-- however, if we have 20 of the item it will let us post another 10
-	auctionsCreated = math.min(postCap - activeAuctions, perPost)
+	auctionsCreated = math.min(postCap - activeAuctions, maxCanPost)
 	if( auctionsCreated <= 0 ) then
 		QuickAuctions:Log(name .. "query", string.format(L["Skipped %s posted |cff20ff20%d|r of |cff20ff20%d|r already"], itemLink, activeAuctions, postCap))
 		return
 	end
 	
 	-- Warn that they don't have enough to post
-	if( perPost < postCap ) then
+	if( maxCanPost < postCap ) then
 		QuickAuctions:Log(name .. "query", string.format(L["Queued %s to be posted (Cap is |cffff2020%d|r, only can post |cffff2020%d|r need to restock)"], itemLink, postCap, perPost))
 	end
 
