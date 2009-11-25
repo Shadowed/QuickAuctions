@@ -901,7 +901,7 @@ local function isSoulbound(bag, slot)
 	
 	for id=1, scanTooltip:NumLines() do
 		local text = _G["QuickAuctionsScanTooltipTextLeft" .. id]
-		if( text and text:GetText() and text:GetText() == ITEM_SOULBOUND ) then
+		if( text and text:GetText() and string.match(text:GetText(), ITEM_SOULBOUND) ) then
 			return true
 		end
 	end
