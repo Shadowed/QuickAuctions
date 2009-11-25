@@ -27,6 +27,7 @@ function QuickAuctions:OnInitialize()
 			threshold = {default = 0},
 			postCap = {default = 4},
 			perAuction = {default = 1},
+			priceThreshold = {default = 10},
 		},
 		global = {
 			summaryItems = {}

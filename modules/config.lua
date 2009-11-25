@@ -390,6 +390,41 @@ local function createAuctionSettings(container, group)
 	
 	container:AddChild(fallback)
 	container:AddChild(fallbackCap)
+
+	local priceThreshold = AceGUI:Create("Slider")
+	priceThreshold:SetUserData("name", L["Price threshold"]) 
+	priceThreshold:SetUserData("desc", L["How much of a difference between auction prices should be allowed before posting at the second highest value.\n\nFor example. If Apple is posting Runed Scarlet Ruby at 50g, Orange posts one at 30g and you post one at 29g, then Oranges expires. If you set price threshold to 30% then it will cancel yours at 29g and post it at 49g next time because the difference in price is 42% and above the allowed threshold."])
+	priceThreshold:SetUserData("group", "priceThreshold")
+	priceThreshold:SetUserData("key", group)
+	priceThreshold:SetCallback("OnEnter", showTooltip)
+	priceThreshold:SetCallback("OnLeave", hideTooltip)
+	priceThreshold:SetCallback("OnValueChanged", groupSliderChanged)
+	priceThreshold:SetCallback("OnMouseUp", groupSliderChanged)
+	priceThreshold:SetLabel(priceThreshold:GetUserData("name"))
+	priceThreshold:SetSliderValues(0.10, 10, 0.05)
+	priceThreshold:SetValue(QuickAuctions.db.profile[priceThreshold:GetUserData("group")][priceThreshold:GetUserData("key")] or QuickAuctions.defaults.profile[priceThreshold:GetUserData("group")].default)
+	priceThreshold:SetIsPercent(true)
+	priceThreshold:SetRelativeWidth(WIDGET_WIDTH)
+
+	if( group ~= "default" ) then
+		local enable = AceGUI:Create("CheckBox")
+		enable:SetUserData("name", L["Override price threshold after"])
+		enable:SetUserData("desc", L["Allows you to override the default price threshold settings."])
+		enable:SetUserData("group", "priceThreshold")
+		enable:SetUserData("key", group)
+		enable:SetUserData("parent", priceThreshold)
+		enable:SetLabel(enable:GetUserData("name"))
+		enable:SetCallback("OnValueChanged", overrideSettings)
+		enable:SetCallback("OnEnter", showTooltip)
+		enable:SetCallback("OnLeave", hideTooltip)
+		enable:SetValue(QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")] and true or false)
+		enable:SetRelativeWidth(WIDGET_WIDTH)
+		priceThreshold:SetDisabled(not QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")])
+	
+		container:AddChild(enable)
+	end
+	
+	container:AddChild(priceThreshold)
 	
 	local postCap = AceGUI:Create("Slider")
 	postCap:SetUserData("name", L["Post cap"]) 
