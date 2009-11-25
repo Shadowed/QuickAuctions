@@ -340,7 +340,7 @@ function Manage:PostItems(itemID)
 	
 	-- Warn that they don't have enough to post
 	if( maxCanPost < postCap ) then
-		QuickAuctions:Log(name .. "query", string.format(L["Queued %s to be posted (Cap is |cffff2020%d|r, only can post |cffff2020%d|r need to restock)"], itemLink, postCap, perPost))
+		QuickAuctions:Log(name .. "query", string.format(L["Queued %s to be posted (Cap is |cffff2020%d|r, only can post |cffff2020%d|r need to restock)"], itemLink, postCap, maxCanPost))
 	end
 
 	-- The splitter will automatically pass items to the post queuer, meaning if an item doesn't even stack it will handle that just fine
