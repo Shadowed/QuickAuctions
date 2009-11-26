@@ -392,7 +392,7 @@ local function createAuctionSettings(container, group)
 	container:AddChild(fallbackCap)
 
 	local priceThreshold = AceGUI:Create("Slider")
-	priceThreshold:SetUserData("name", L["Price threshold"]) 
+	priceThreshold:SetUserData("name", L["Maximum price gap"]) 
 	priceThreshold:SetUserData("desc", L["How much of a difference between auction prices should be allowed before posting at the second highest value.\n\nFor example. If Apple is posting Runed Scarlet Ruby at 50g, Orange posts one at 30g and you post one at 29g, then Oranges expires. If you set price threshold to 30% then it will cancel yours at 29g and post it at 49g next time because the difference in price is 42% and above the allowed threshold."])
 	priceThreshold:SetUserData("group", "priceThreshold")
 	priceThreshold:SetUserData("key", group)
