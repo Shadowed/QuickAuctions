@@ -14,6 +14,9 @@ function QuickAuctions:OnInitialize()
 			smartCancel = true,
 			cancelWithBid = true,
 			hideUncraft = false,
+			playSound = true,
+			screenHook = false,
+			cancelBinding = "",
 			groups = {},
 			categories = {},
 			mail = {default = false},
@@ -86,6 +89,53 @@ function QuickAuctions:OnInitialize()
 		self:UnregisterEvent("ADDON_LOADED")
 		self:SendMessage("QA_AH_LOADED")
 	end
+	
+	self:ShowInfoPanel()
+end
+
+function QuickAuctions:ShowInfoPanel()
+	if( QuickAuctions.db.global.warned ) then return end
+
+	local frame = CreateFrame("Frame", nil, UIParent)
+	frame:SetClampedToScreen(true)
+	frame:SetFrameStrata("HIGH")
+	frame:SetToplevel(true)
+	frame:SetWidth(400)
+	frame:SetHeight(285)
+	frame:SetBackdrop({
+		  bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+		  edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+		  edgeSize = 26,
+		  insets = {left = 9, right = 9, top = 9, bottom = 9},
+	})
+	frame:SetBackdropColor(0, 0, 0, 0.85)
+	frame:SetPoint("CENTER", UIParent, "CENTER", 0, 100)
+
+	frame.titleBar = frame:CreateTexture(nil, "ARTWORK")
+	frame.titleBar:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Header")
+	frame.titleBar:SetPoint("TOP", 0, 8)
+	frame.titleBar:SetWidth(225)
+	frame.titleBar:SetHeight(45)
+
+	frame.title = frame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+	frame.title:SetPoint("TOP", 0, 0)
+	frame.title:SetText("Quick Auctions")
+
+	frame.text = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	frame.text:SetText(L["Read me, important information below!\n\nAs of 3.3 Blizzard requires that you use a hardware event (key press or mouse click) to cancel auctions, currently there is a loophole that allows you to get around this by letting you cancel as many auctions as you need for one hardware event.\n\nOdds are this loophole will be closed eventually making it impossible to smart cancle, but for the time being the workaround has been implemented into this version of Quick Auctions, see /qa config for a few options related to this change.\n\nFrom now on, you will have to do a cancel scan then another hardware action to actually cancel auctions after it finishes scanning. Posting has not changed and still can be done automatically without your interaction.\n\nThe /qa cancelall slash command will continuing working as is without any special changes, provided you are using a key press to active and not some form of automated macro like /in # /qa cancelall\n\nYou will only see this message once."])
+	frame.text:SetPoint("TOPLEFT", 12, -22)
+	frame.text:SetWidth(frame:GetWidth() - 20)
+	frame.text:SetJustifyH("LEFT")
+
+	frame.hide = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+	frame.hide:SetText(L["Ok"])
+	frame.hide:SetHeight(20)
+	frame.hide:SetWidth(100)
+	frame.hide:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 6, 8)
+	frame.hide:SetScript("OnClick", function(self)
+		QuickAuctions.db.global.warned = true
+		self:GetParent():Hide()
+	end)
 end
 
 function QuickAuctions:WipeLog()
