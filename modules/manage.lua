@@ -14,7 +14,15 @@ end
 function Manage:AuctionHouseClosed()
 	if( status.isManaging and not status.isScanning ) then
 		self:StopPosting()
-		QuickAuctions:Print(L["Posting interrupted due to Auction House being closed"])
+		QuickAuctions:Print(L["Posting interrupted due to Auction House being closed."])
+	end
+	
+	if( self.cancelFrame and self.cancelFrame:IsShown() ) then
+		QuickAuctions:Print(L["Cancelling interrupted due to Auction House being closed."])
+		QuickAuctions:Log("cancelstatus", L["Auction House closed before you could tell Quick Auctions to cancel."])
+		
+		self:StopCancelling()
+		self.cancelFrame:Hide()
 	end
 end
 
@@ -155,7 +163,142 @@ function Manage:CancelAll(group, duration)
 	end
 end
 
-function Manage:Cancel()
+-- Handle the cancel key press stuff
+function Manage:ReadyToCancel()
+	local hasCancelable = self:Cancel(true)
+	if( not hasCancelable ) then
+		QuickAuctions:Log("cancelstatus", L["Nothing to cancel"])
+		self:StopCancelling()
+		return
+	end
+	
+	if( self.cancelFrame ) then
+		self.cancelFrame:Show()
+		return
+	end
+
+	local function showTooltip(self)
+		if( self.tooltip ) then
+			GameTooltip:SetOwner(self:GetParent(), "ANCHOR_TOPLEFT")
+			GameTooltip:SetText(self.tooltip, 1, 1, 1, nil, true)
+			GameTooltip:Show()
+		end
+	end
+
+	local function hideTooltip(self)
+		GameTooltip:Hide()
+	end
+
+	local function formatTime(seconds)
+		if( seconds >= 3600 ) then
+			return seconds / 3600, L["hours"]
+		elseif( seconds >= 60 ) then
+			return seconds / 60, L["minutes"]
+		end
+
+		return seconds, L["seconds"]
+	end
+	
+	local scanFinished
+	local timeElapsed = 0
+	local soundElapsed = 0
+	local function OnUpdate(self, elapsed)
+		timeElapsed = timeElapsed + elapsed
+		if( timeElapsed >= 1 ) then
+			timeElapsed = timeElapsed - 1
+			self.text:SetFormattedText(L["Auction scan finished, can now smart cancel auctions.\n\nScan data age: %d %s"], formatTime(GetTime() - scanFinished)) 
+		end
+		
+		-- Remind them once every 60 seconds that it's ready
+		if( QuickAuctions.db.profile.playSound ) then
+			soundElapsed = soundElapsed + elapsed
+			if( soundElapsed >= 60 ) then
+				soundElapsed = soundElapsed - 60
+				
+				PlaySound("ReadyCheck")
+			end
+		end
+	end
+	
+	local frame = CreateFrame("Frame", nil, AuctionFrame)
+	frame:SetClampedToScreen(true)
+	frame:SetFrameStrata("HIGH")
+	frame:SetToplevel(true)
+	frame:SetWidth(300)
+	frame:SetHeight(100)
+	frame:SetBackdrop({
+		  bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+		  edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+		  edgeSize = 26,
+		  insets = {left = 9, right = 9, top = 9, bottom = 9},
+	})
+	frame:SetBackdropColor(0, 0, 0, 0.85)
+	frame:SetPoint("CENTER", UIParent, "CENTER", 0, 100)
+	frame:Hide()
+	frame:SetScript("OnUpdate", OnUpdate)
+	frame:SetScript("OnShow", function(self)
+		if( QuickAuctions.db.profile.cancelBinding ~= "" ) then
+			SetOverrideBindingClick(self, true, QuickAuctions.db.profile.cancelBinding, self.cancel:GetName())
+		end
+		
+		if( QuickAuctions.db.profile.playSound ) then
+			PlaySound("ReadyCheck")
+		end
+		
+		-- Setup initial data + update
+		scanFinished = GetTime()
+		soundElapsed = 0
+		OnUpdate(self, 1)
+	end)
+	frame:SetScript("OnHide", function(self)
+		ClearOverrideBindings(self)
+	end)
+	
+	frame.titleBar = frame:CreateTexture(nil, "ARTWORK")
+	frame.titleBar:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Header")
+	frame.titleBar:SetPoint("TOP", 0, 8)
+	frame.titleBar:SetWidth(225)
+	frame.titleBar:SetHeight(45)
+
+	frame.title = frame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+	frame.title:SetPoint("TOP", 0, 0)
+	frame.title:SetText("Quick Auctions")
+
+	frame.text = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	frame.text:SetText("")
+	frame.text:SetPoint("TOPLEFT", 12, -22)
+	frame.text:SetWidth(frame:GetWidth() - 20)
+	frame.text:SetJustifyH("LEFT")
+
+	frame.cancel = CreateFrame("Button", "QuickAuctionsCancelButton", frame, "UIPanelButtonTemplate")
+	frame.cancel:SetText(L["Cancel"])
+	frame.cancel:SetHeight(20)
+	frame.cancel:SetWidth(100)
+	frame.cancel:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 6, 8)
+	frame.cancel.tooltip = L["Clicking this will cancel auctions based on the data scanned."]
+	frame.cancel:SetScript("OnClick", function(self)
+		self:GetParent():Hide()
+		Manage:Cancel()
+	end)
+
+	frame.rescan = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+	frame.rescan:SetText(L["Rescan"])
+	frame.rescan:SetHeight(20)
+	frame.rescan:SetWidth(100)
+	frame.rescan:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -6, 8)
+	frame.rescan:SetScript("OnEnter", showTooltip)
+	frame.rescan:SetScript("OnLeave", hideTooltip)
+	frame.rescan.tooltip = L["If the data is too old and instead of canceling you would rather rescan auctions to get newer data just press this button."]
+	frame.rescan:SetScript("OnClick", function(self)
+		self:GetParent():Hide()
+		Manage:CancelScan()
+	end)
+	
+	self.cancelFrame = frame
+	frame:Show()
+end
+
+function Manage:Cancel(isTest)
 	table.wipe(tempList)
 	
 	for i=1, GetNumAuctionItems("owner") do
@@ -167,12 +310,12 @@ function Manage:Cancel()
 		
 		-- The item is in a group that's not supposed to be cancelled
 		if( wasSold == 0 and lowestOwner and self:GetBoolConfigValue(itemID, "noCancel") ) then
-			if( not tempList[name] ) then
+			if( not tempList[name] and not isTest ) then
 				QuickAuctions:Log(name .. "notcancel", string.format(L["Skipped cancelling %s flagged to not be canelled."], itemLink))
 				tempList[name] = true
 			end
 		elseif( wasSold == 0 and lowestOwner and self:GetBoolConfigValue(itemID, "autoFallback") and lowestBuyout <= self:GetConfigValue(itemID, "threshold") ) then
-			if( not tempList[name] ) then
+			if( not tempList[name] and not isTest ) then
 				QuickAuctions:Log(name .. "notcancel", string.format(L["Skipped cancelling %s flagged to post at fallback when market is below threshold."], itemLink))
 				tempList[name] = true
 			end
@@ -191,6 +334,8 @@ function Manage:Cancel()
 				-- The item that the difference is too high is actually on the tier that was too high as well
 				-- so cancel it, the reason this check is done here is so it doesn't think it undercut itself.
 				if( math.floor(lowestBuyout) == math.floor(buyout) ) then
+					if( isTest ) then return true end
+					
 					if( not tempList[name] ) then
 						tempList[name] = true
 						QuickAuctions:Log(name .. "diffcancel", string.format(L["Price threshold on %s at %s, second lowest is |cfffed000%d%%|r higher and above the |cfffed000%d%%|r threshold, cancelling"], itemLink, QuickAuctions:FormatTextMoney(lowestBuyout, true), priceDifference * 100, priceThreshold * 100))
@@ -210,6 +355,8 @@ function Manage:Cancel()
 				
 				-- Don't cancel if the buyout is equal, or below our threshold
 				if( QuickAuctions.db.profile.smartCancel and lowestBuyout <= threshold and not QuickAuctions.Scan:IsPlayerOnly(itemID)) then
+					if( isTest ) then return true end
+					
 					if( not tempList[name] ) then
 						tempList[name] = true
 						
@@ -217,8 +364,11 @@ function Manage:Cancel()
 					end
 				-- Don't cancel an auction if it has a bid and we're set to not cancel those
 				elseif( not QuickAuctions.db.profile.cancelWithBid and activeBid > 0 ) then
-					QuickAuctions:Log(name .. "bid", string.format(L["Undercut on %s by |cfffed000%s|r, but %s placed a bid of %s so not cancelling"], itemLink, lowestOwner, highBidder, QuickAuctions:FormatTextMoney(activeBid, true)))
+					if( not isTest ) then
+						QuickAuctions:Log(name .. "bid", string.format(L["Undercut on %s by |cfffed000%s|r, but %s placed a bid of %s so not cancelling"], itemLink, lowestOwner, highBidder, QuickAuctions:FormatTextMoney(activeBid, true)))
+					end
 				else
+					if( isTest ) then return true end
 					if( not tempList[name] ) then
 						tempList[name] = true
 						if( QuickAuctions.Scan:IsPlayerOnly(itemID) and buyout < fallback ) then
@@ -234,11 +384,6 @@ function Manage:Cancel()
 				end
 			end
 		end
-	end
-	
-	if( totalToCancel == 0 ) then
-		QuickAuctions:Log("cancelstatus", L["Nothing to cancel"])
-		self:StopCancelling()
 	end
 end
 
@@ -429,8 +574,7 @@ function Manage:QA_STOP_SCAN(event, interrupted)
 		
 	elseif( status.isCancelling ) then
 		QuickAuctions:Log("cancelstatus", L["Starting to cancel..."])
-		
-		self:Cancel()
+		self:ReadyToCancel()
 	end
 end
 
