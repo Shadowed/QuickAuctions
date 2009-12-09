@@ -630,6 +630,37 @@ local function generalConfig(container)
 	
 	general:AddChild(cancel)	
 	
+	-- Canceling stuff
+	local cancelGroup = AceGUI:Create("InlineGroup")
+	cancelGroup:SetTitle(L["Canceling"])
+	cancelGroup:SetLayout("Flow")
+	cancelGroup:SetFullWidth(true)
+	container:AddChild(cancelGroup)
+	
+	local cancelBinding = AceGUI:Create("Keybinding")
+	cancelBinding:SetUserData("name", L["Cancel binding"])
+	cancelBinding:SetUserData("desc", L["Quick binding you can press to cancel auctions once scan has finished.\n\nThis can be any key including space without overwriting your jump key."])
+	cancelBinding:SetUserData("config", "cancelBinding")
+	cancelBinding:SetCallback("OnEnter", showTooltip)
+	cancelBinding:SetCallback("OnLeave", hideTooltip)
+	cancelBinding:SetCallback("OnKeyChanged", valueChanged)
+	cancelBinding:SetLabel(cancelBinding:GetUserData("name"))
+	cancelBinding:SetKey(QuickAuctions.db.profile[cancelBinding:GetUserData("config")])
+	
+	cancelGroup:AddChild(cancelBinding)	
+	
+	local sound = AceGUI:Create("CheckBox")
+	sound:SetUserData("name", L["Play sound after cancel scan"])
+	sound:SetUserData("desc", L["When Quick Auctions finishes a cancel scan it will play the ready check sound telling you that it needs your interacting.\n\nOf course, you need sound enabled for this to do anything."])
+	sound:SetUserData("config", "playSound")
+	sound:SetCallback("OnEnter", showTooltip)
+	sound:SetCallback("OnLeave", hideTooltip)
+	sound:SetCallback("OnValueChanged", valueChanged)
+	sound:SetLabel(sound:GetUserData("name"))
+	sound:SetValue(QuickAuctions.db.profile[sound:GetUserData("config")])
+	
+	cancelGroup:AddChild(sound)	
+	
 	-- Help indicating what the default item settings do
 	local help = AceGUI:Create("InlineGroup")
 	help:SetTitle(L["Help"])
