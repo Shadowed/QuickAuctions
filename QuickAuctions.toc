@@ -1,4 +1,4 @@
-## Interface: 30200
+## Interface: 30300
 ## Title: Quick Auctions 2
 ## Notes: Because causing internet debates as to the merits of QA are amusing!
 ## Author: Shadowed
