@@ -590,6 +590,22 @@ local function generalConfig(container)
 	local seperator = AceGUI:Create("Label")
 	seperator:SetRelativeWidth(0.11)
 	general:AddChild(seperator)
+
+	--[[
+	-- Cancel items with bids
+	local superScan = AceGUI:Create("CheckBox")
+	superScan:SetUserData("name", L["Enable super scan"])
+	superScan:SetUserData("desc", L["Super scan will drastically speed up your auction posting, but you will lose the ability to use whitelist functions and it will undercut anyone except the character you are posting on."])
+	superScan:SetUserData("config", "superScan")
+	superScan:SetCallback("OnEnter", showTooltip)
+	superScan:SetCallback("OnLeave", hideTooltip)
+	superScan:SetCallback("OnValueChanged", valueChanged)
+	superScan:SetLabel(superScan:GetUserData("name"))
+	superScan:SetValue(QuickAuctions.db.profile[superScan:GetUserData("config")])
+	superScan:SetDisabled(true)
+	
+	general:AddChild(superScan)
+	]]
 	
 	-- Cancel items with bids
 	local cancel = AceGUI:Create("CheckBox")
