@@ -229,6 +229,11 @@ function Scan:CompareLowestToSecond(link, lowestBuyout)
 		end
 	end
 	
+	if( buyout ) then
+		local fallback = QuickAuctions.Manage:GetConfigValue(link, "fallback") * QuickAuctions.Manage:GetConfigValue(link, "fallbackCap")
+		if( fallback < buyout ) then return 0 end
+	end
+	
 	return buyout and (buyout - lowestBuyout) / buyout or 0
 end
 
