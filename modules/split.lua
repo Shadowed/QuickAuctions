@@ -2,7 +2,7 @@ local Split = QuickAuctions:NewModule("Split", "AceEvent-3.0")
 local L = QuickAuctionsLocals
 local status = QuickAuctions.status
 local splitQueue, alreadySplit, alreadyFound, bagList, lockedSlot = {}, {}, {}, {}, {}
-local timeElapsed, splitTimeout, hadSplitFailure = 0, 0
+local timeElapsed, splitTimeout, hadSplitFailure, scanRunning = 0, 0
 local eventThrottle = CreateFrame("Frame")
 eventThrottle:Hide()
 
@@ -62,7 +62,7 @@ function Split:CheckQueueMatch(bag, slot, link, quantity)
 	end
 	
 	-- Queues done, so stop splitting
-	if( #(splitQueue) == 0 ) then
+	if( not scanRunning and #(splitQueue) == 0 ) then
 		self:Stop()
 	end
 end
@@ -100,7 +100,7 @@ function Split:UpdateBags()
 	end
 	
 	-- Nothing else to post
-	if( #(splitQueue) == 0 ) then
+	if( not scanRunning and #(splitQueue) == 0 ) then
 		self:Stop()
 		return
 	end
@@ -164,9 +164,21 @@ eventThrottle:SetScript("OnUpdate", function(self, elapsed)
 	end
 end)
 
+function Split:ScanStarted()
+	scanRunning = true
+end
+
+function Split:ScanStopped()
+	scanRunning = nil
+	
+	if( #(splitQueue) == 0 ) then
+		self:Stop()
+	end
+end
+
 function Split:Start()
 	if( status.isSplitting ) then return end
-
+	
 	splitTimeout = GetTime() + 10
 	hadSplitFailure = nil
 	status.isSplitting = true
@@ -182,6 +194,7 @@ end
 
 function Split:Stop()
 	if( not status.isSplitting ) then return end
+	
 	status.isSplitting = nil
 	table.wipe(splitQueue)
 	self:UnregisterEvent("BAG_UPDATE")
@@ -190,6 +203,8 @@ function Split:Stop()
 		QuickAuctions:Log(L["Could not post all auctions, ran out of space."], true)
 		QuickAuctions:Print(L["Not all your auctions were posted, ran out of space to split items even after waiting 10 seconds."])
 	end
+
+	QuickAuctions.Post:ScanStopped()
 end
 
 function Split:QueueItem(link, quantity)

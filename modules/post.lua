@@ -1,7 +1,7 @@
 local Post = QuickAuctions:NewModule("Post", "AceEvent-3.0")
 local L = QuickAuctionsLocals
 local status = QuickAuctions.status
-local postQueue, postTotal, overallTotal = {}, {}, 0
+local postQueue, postTotal, overallTotal, scanRunning = {}, {}, 0
 local POST_TIMEOUT = 20
 local frame = CreateFrame("Frame")
 frame:Hide()
@@ -17,6 +17,18 @@ function Post:AuctionHouseClosed()
 	end
 end
 
+function Post:ScanStarted()
+	scanRunning = true
+end
+
+function Post:ScanStopped()
+	scanRunning = nil
+	
+	if( #(postQueue) == 0 ) then
+		self:Stop()
+	end
+end
+
 function Post:Start()
 	if( not status.isPosting ) then
 		overallTotal = 0
@@ -29,8 +41,9 @@ function Post:Start()
 end
 
 function Post:Stop()
-	QuickAuctions:Log(string.format(L["Finished posting |cfffed000%d|r items"], overallTotal))
 	self:UnregisterEvent("CHAT_MSG_SYSTEM")
+	QuickAuctions:Log(string.format(L["Finished posting |cfffed000%d|r items"], overallTotal))
+	QuickAuctions:UnlockButtons()
 	
 	table.wipe(postQueue)
 	table.wipe(postTotal)
@@ -44,7 +57,7 @@ end
 frame.timeElapsed = 0
 frame:SetScript("OnUpdate", function(self, elapsed)
 	self.timeElapsed = self.timeElapsed - elapsed
-	if( self.timeElapsed <= 0 ) then
+	if( self.timeElapsed <= 0 and not scanRunning ) then
 		self:Hide()
 		Post:Stop()
 	end
@@ -57,7 +70,7 @@ function Post:CHAT_MSG_SYSTEM(event, msg)
 		overallTotal = overallTotal + 1
 		QuickAuctions:SetButtonProgress("post", overallTotal, status.totalPostQueued)
 		
-		if( overallTotal >= status.totalPostQueued ) then
+		if( overallTotal >= status.totalPostQueued and not scanRunning ) then
 			Post:Stop()
 			return
 		end

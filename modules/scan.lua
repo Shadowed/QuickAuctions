@@ -2,6 +2,8 @@ local Scan = QuickAuctions:NewModule("Scan", "AceEvent-3.0")
 local L = QuickAuctionsLocals
 local status = QuickAuctions.status
 local auctionData = {}
+local alreadyScanned
+local BASE_DELAY = 0.50
 Scan.auctionData = auctionData
 
 function Scan:OnInitialize()
@@ -48,7 +50,9 @@ function Scan:StartItemScan(filterList)
 	status.subClassIndex = nil
 	
 	table.wipe(auctionData)
-
+	
+	BASE_DELAY = alreadyScanned and QuickAuctions.db.profile.superScan and 1 or 0.50
+	
 	self:SendMessage("QA_START_SCAN", "item", #(status.filterList))
 	self:RegisterEvent("AUCTION_ITEM_LIST_UPDATE")
 	self:SendQuery()
@@ -76,6 +80,7 @@ end
 
 function Scan:StopScanning(interrupted)
 	if( not status.isScanning ) then return end
+	alreadyScanned = true
 	
 	status.active = nil
 	status.isScanning = nil
@@ -283,7 +288,6 @@ function Scan:GetLowestAuction(link)
 end
 
 -- Do a delay before scanning the auctions so it has time to load all of the owner information
-local BASE_DELAY = 0.50
 Scan.scanFrame = CreateFrame("Frame")
 Scan.scanFrame.timeDelay = BASE_DELAY
 Scan.scanFrame:SetScript("OnUpdate", function(self, elapsed)
@@ -309,7 +313,7 @@ function Scan:ScanAuctions()
 	local totalPages = math.ceil(total / NUM_AUCTION_ITEMS_PER_PAGE)
 		
 	-- Check for bad data quickly
-	if( status.retries < 3 ) then
+	if( status.retries < 3 and not QuickAuctions.db.profile.superScan ) then
 		-- Blizzard doesn't resolve the GUID -> name of the owner until GetAuctionItemInfo is called for it
 		-- meaning will call it for everything on the list then if we had any bad data will requery
 		local badData
