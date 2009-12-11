@@ -473,8 +473,8 @@ function Manage:PostItems(itemID)
 		else
 			testBuyout = testBuyout - self:GetConfigValue(itemID, "undercut")
 		end
-		
-		if( testBuyout < threshold ) then
+				
+		if( testBuyout < threshold and buyout <= threshold ) then
 			QuickAuctions:Log(name .. "query", string.format(L["Skipped %s lowest buyout is %s threshold is %s"], itemLink, QuickAuctions:FormatTextMoney(buyout, true), QuickAuctions:FormatTextMoney(threshold, true)))
 			return
 		end

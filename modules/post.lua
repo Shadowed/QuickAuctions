@@ -78,7 +78,7 @@ function Post:PostAuction(queue)
 	postTotal[itemID] = (postTotal[itemID] or 0) + 1
 	
 	-- Set our initial costs
-	local fallbackCap, buyoutTooLow, bidTooLow, autoFallback, bid, buyout, differencedPrice
+	local fallbackCap, buyoutTooLow, bidTooLow, autoFallback, bid, buyout, differencedPrice, buyoutThresholded
 	local fallback = QuickAuctions.Manage:GetConfigValue(itemID, "fallback")
 	local threshold = QuickAuctions.Manage:GetConfigValue(itemID, "threshold")
 	local priceThreshold = QuickAuctions.Manage:GetConfigValue(itemID, "priceThreshold")
@@ -128,6 +128,11 @@ function Post:PostAuction(queue)
 
 		bid = math.floor(buyout * QuickAuctions.Manage:GetConfigValue(itemID, "bidPercent"))
 		
+		if( buyout < threshold ) then
+			buyout = threshold
+			buyoutThresholded = true
+		end
+		
 		-- Check if the bid is too low
 		if( bid < threshold ) then
 			bid = threshold
@@ -142,7 +147,9 @@ function Post:PostAuction(queue)
 	bid = math.floor(bid * quantity)
 	buyout = math.floor(buyout * quantity)
 	
-	if( not lowestOwner ) then
+	if( buyoutThresholded ) then
+		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (Increased buyout price due to going below thresold)"], itemLink, quantityText, postTotal[itemID], QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
+	elseif( not lowestOwner ) then
 		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (No other auctions up)"], itemLink, quantityText, postTotal[itemID], QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
 	elseif( autoFallback ) then
 		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (Forced to fallback price, market below threshold)"], itemLink, quantityText, postTotal[itemID], QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
