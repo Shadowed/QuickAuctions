@@ -176,7 +176,7 @@ function QuickAuctions:UpdateStatusLog()
 	local self = QuickAuctions
 	local totalLogs = #(statusLog)
 	if( not self.statusFrame or not self.statusFrame:IsVisible() ) then
-		local waiting = totalLogs - lastSeenLogID
+		local waiting = totalLogs - (lastSeenLogID or 0)
 		if( waiting > 0 ) then
 			self.buttons.log:SetFormattedText(L["Log (%d)"], waiting)
 			self.buttons.log.tooltip = string.format(L["%d log messages waiting"], waiting)
