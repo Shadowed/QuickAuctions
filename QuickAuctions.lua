@@ -16,6 +16,7 @@ function QuickAuctions:OnInitialize()
 			hideUncraft = false,
 			playSound = true,
 			screenHook = false,
+			superScan = false,
 			cancelBinding = "",
 			groups = {},
 			categories = {},
@@ -459,18 +460,15 @@ end
 
 function QuickAuctions:UnlockButtons()
 	self.buttons.post:Enable()
+	self.buttons.post:SetText(self.buttons.post.originalText)
 	self.buttons.cancel:Enable()
+	self.buttons.cancel:SetText(self.buttons.cancel.originalText)
 	self.buttons.status:Enable()
+	self.buttons.status:SetText(self.buttons.status.originalText)
 end
 
 function QuickAuctions:SetButtonProgress(type, current, total)
-	if( current >= total ) then
-		self.buttons[type]:SetText(self.buttons[type].originalText)
-		self:UnlockButtons()
-	else
-		self.buttons[type]:SetFormattedText("%d/%d", current, total)
-		self:LockButtons()
-	end
+	self.buttons[type]:SetFormattedText("%d/%d", current, total)
 end
 
 -- Stolen from Tekkub!
