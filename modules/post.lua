@@ -24,7 +24,7 @@ end
 function Post:ScanStopped()
 	scanRunning = nil
 	
-	if( #(postQueue) == 0 ) then
+	if( #(postQueue) == 0 and overalTotal >= status.totalPostQueued ) then
 		self:Stop()
 	end
 end
