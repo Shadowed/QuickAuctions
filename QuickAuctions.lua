@@ -155,6 +155,7 @@ end
 -- If you only pass message, it will assume the next line is going to be a new one
 -- passing an ID will make it use that same line unless the ID changed, pretty much just an automated new line method
 function QuickAuctions:Log(id, msg)
+	if( not id ) then return end
 	if( not msg and id ) then msg = id end
 	
 	if( not logIDs[id] ) then
