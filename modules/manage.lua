@@ -504,7 +504,7 @@ function Manage:PostItems(itemID)
 			
 	-- Either the player or a whitelist person is the lowest teir so use this tiers quantity of items
 	elseif( isPlayer or isWhitelist ) then
-		activeAuctions = QuickAuctions.Scan:GetPlayerAuctionCount(itemID, buyout, bid)
+		activeAuctions = QuickAuctions.Scan:GetPlayerAuctionCount(itemID, buyout or 0, bid or 0)
 	end
 	
 	-- If we have a post cap of 20, and 10 active auctions, but we can only have 5 of the item then this will only let us create 5 auctions
@@ -567,6 +567,7 @@ end
 
 function Manage:QA_STOP_SCAN(event, interrupted)
 	self:StopLog()
+	status.isManaging = nil
 	QuickAuctions.Split:ScanStopped()
 
 	if( interrupted ) then
