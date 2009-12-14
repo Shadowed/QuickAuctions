@@ -127,25 +127,20 @@ function Post:PostAuction(queue)
 			buyout = lowestBuyout - QuickAuctions.Manage:GetConfigValue(itemID, "undercut")
 		end
 		
-		-- Mostly for protection, if the buyout is removed then it will default to undercutting by a copper
-		if( buyout <= 0 ) then
-			buyout = lowestBuyout - 1
-			buyoutTooLow = true
-		end
-		
 		-- Check if we're posting something too high
 		if( buyout > (fallback * QuickAuctions.Manage:GetConfigValue(itemID, "fallbackCap")) ) then
 			buyout = fallback
 			fallbackCap = true
 		end
-
-		bid = math.floor(buyout * QuickAuctions.Manage:GetConfigValue(itemID, "bidPercent"))
 		
+		-- Check if we're posting too low!
 		if( buyout < threshold ) then
 			buyout = threshold
 			buyoutThresholded = true
 		end
 		
+		bid = math.floor(buyout * QuickAuctions.Manage:GetConfigValue(itemID, "bidPercent"))
+
 		-- Check if the bid is too low
 		if( bid < threshold ) then
 			bid = threshold
