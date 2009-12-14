@@ -257,6 +257,11 @@ function Manage:ReadyToCancel()
 		OnUpdate(self, 1)
 	end)
 	frame:SetScript("OnHide", function(self)
+		if( not self.wasClicked ) then
+			Manage:StopCancelling()
+		end
+		
+		self.wasclicked = nil
 		ClearOverrideBindings(self)
 	end)
 	
@@ -283,6 +288,7 @@ function Manage:ReadyToCancel()
 	frame.cancel:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 6, 8)
 	frame.cancel.tooltip = L["Clicking this will cancel auctions based on the data scanned."]
 	frame.cancel:SetScript("OnClick", function(self)
+		self:GetParent().wasClicked = true
 		self:GetParent():Hide()
 		Manage:Cancel()
 	end)
