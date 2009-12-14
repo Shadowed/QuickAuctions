@@ -115,11 +115,11 @@ end
 
 -- Add a new record
 function Scan:AddAuctionRecord(name, link, owner, quantity, bid, buyout)
-	auctionData[link] = auctionData[link] or {quantity = 0, onlyPlayer = true, records = {}}
-	auctionData[link].quantity = auctionData[link].quantity + quantity
-	
 	-- Don't add this data, just add the quantity if it has no buyout
 	if( buyout <= 0 ) then return end
+
+	auctionData[link] = auctionData[link] or {quantity = 0, onlyPlayer = true, records = {}}
+	auctionData[link].quantity = auctionData[link].quantity + quantity
 
 	-- Not only the player has posted this anymore :(
 	if( not QuickAuctions.db.factionrealm.player[owner] ) then
