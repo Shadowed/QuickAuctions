@@ -12,9 +12,8 @@ function Manage:OnInitialize()
 end
 
 function Manage:AuctionHouseClosed()
-	if( status.isManaging and not status.isScanning ) then
+	if( status.isManaging and not status.isCancelling ) then
 		self:StopPosting()
-		QuickAuctions:Print(L["Posting interrupted due to Auction House being closed."])
 	end
 	
 	if( self.cancelFrame and self.cancelFrame:IsShown() ) then

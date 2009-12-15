@@ -41,8 +41,15 @@ function Post:Start()
 end
 
 function Post:Stop()
+	if( not status.isPosting ) then return end
+	
 	self:UnregisterEvent("CHAT_MSG_SYSTEM")
-	QuickAuctions:Log(string.format(L["Finished posting |cfffed000%d|r items"], overallTotal))
+	if( overallTotal > 0 ) then
+		QuickAuctions:Log(string.format(L["Finished posting |cfffed000%d|r items"], overallTotal))
+	else
+		QuickAuctions:Log(L["No auctions posted"])
+	end
+	
 	QuickAuctions:UnlockButtons()
 	
 	table.wipe(postQueue)
