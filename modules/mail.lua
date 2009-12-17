@@ -1,9 +1,9 @@
 local Mail = QuickAuctions:NewModule("Mail", "AceEvent-3.0")
 local L = QuickAuctionsLocals
+local eventThrottle = CreateFrame("Frame")
 local reverseLookup = QuickAuctions.modules.Manage.reverseLookup
 local timeElapsed, itemTimer, cacheFrame
-local eventThrottle = CreateFrame("Frame")
-eventThrottle:Hide()
+local lockedItems = {}
 
 function Mail:OnInitialize()
 	local function showTooltip(self)
@@ -151,34 +151,46 @@ function Mail:UpdateBags()
 	for bag=0, 4 do
 		for slot=1, GetContainerNumSlots(bag) do
 			local link = QuickAuctions:GetSafeLink(GetContainerItemLink(bag, slot))
-			local locked = select(3, GetContainerItemInfo(bag, slot))
+			local quantity, locked = select(2, GetContainerItemInfo(bag, slot))
+			
+			if( not locked ) then
+				lockedItems[bag .. slot] = nil
+			end
 			
 			-- Can't use something that's still locked
-			if( reverseLookup[link] and QuickAuctions.Manage:GetBoolConfigValue(link, "mail") and not locked ) then
-				local totalAttached = 0
-				for i=1, ATTACHMENTS_MAX_SEND do
-					if( GetSendMailItem(i) ) then
-						totalAttached = totalAttached + 1
-					end
-				end
-				
-				-- Too many attached, nothing we can do yet
-				if( totalAttached >= ATTACHMENTS_MAX_SEND ) then return end
-
-				PickupContainerItem(bag, slot)
-				ClickSendMailItemButton()
-				
-				totalAttached = totalAttached + 1
-				
-				-- Hit cap, send us off
-				if( totalAttached >= ATTACHMENTS_MAX_SEND ) then
-					self:SendMail()
-					
-				-- We ran out of items that can be posted, wait 10 seconds to make no more are being crafted still
-				-- then send them off
-				elseif( self:FindTotalUnlocked() <= 0 ) then
+			if( reverseLookup[link] and QuickAuctions.Manage:GetBoolConfigValue(link, "mail") ) then
+				-- When creating lots of glyphs, or anything that stacks really this will stop it from sending too early
+				if( locked and lockedItems[bag .. slot] and lockedItems[bag .. slot] ~= quantity ) then
+					lockedItems[bag .. slot] = quantity
 					itemTimer = 10
 					eventThrottle:Show()
+				else
+					local totalAttached = 0
+					for i=1, ATTACHMENTS_MAX_SEND do
+						if( GetSendMailItem(i) ) then
+							totalAttached = totalAttached + 1
+						end
+					end
+					
+					-- Too many attached, nothing we can do yet
+					if( totalAttached >= ATTACHMENTS_MAX_SEND ) then return end
+
+					PickupContainerItem(bag, slot)
+					ClickSendMailItemButton()
+					
+					totalAttached = totalAttached + 1
+					lockedItems[bag .. slot] = quantity
+					
+					-- Hit cap, send us off
+					if( totalAttached >= ATTACHMENTS_MAX_SEND ) then
+						self:SendMail()
+						
+					-- We ran out of items that can be posted, wait 10 seconds to make no more are being crafted still
+					-- then send them off
+					elseif( self:FindTotalUnlocked() <= 0 ) then
+						itemTimer = 10
+						eventThrottle:Show()
+					end
 				end
 			end
 		end
@@ -212,3 +224,4 @@ eventThrottle:SetScript("OnUpdate", function(self, elapsed)
 		self:Hide()
 	end
 end)
+eventThrottle:Hide()
