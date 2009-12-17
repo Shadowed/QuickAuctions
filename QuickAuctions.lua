@@ -411,7 +411,7 @@ function QuickAuctions:CreateStatus()
 
 	-- Tooltips!
 	local function showTooltip(self)
-		if( self.tooltip and self.tooltip ~= "" ) then
+		if( type(self.tooltip) == "string" and self.tooltip ~= "" ) then
 			GameTooltip:SetOwner(self:GetParent(), "ANCHOR_TOPLEFT")
 			GameTooltip:SetText(self.tooltip, 1, 1, 1, nil, true)
 			GameTooltip:Show()
