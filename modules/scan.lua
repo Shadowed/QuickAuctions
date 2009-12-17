@@ -7,13 +7,18 @@ local BASE_DELAY = 0.50
 Scan.auctionData = auctionData
 
 function Scan:OnInitialize()
-	self:RegisterMessage("QA_AH_LOADED", "AuctionHouseLoaded")
 	self:RegisterMessage("QA_AH_CLOSED", "AuctionHouseClosed")
+	if( IsAddOnLoaded("Blizzard_AuctionUI") ) then
+		self:AuctionHouseLoaded()
+	else
+		self:RegisterMessage("QA_AH_LOADED", "AuctionHouseLoaded")
+	end
 	
 	status.filterList = {}
 end
 
 function Scan:AuctionHouseLoaded()
+	--[[
 	-- Hook the query function so we know what we last sent a search on
 	local orig_QueryAuctionItems = QueryAuctionItems
 	QueryAuctionItems = function(name, minLevel, maxLevel, invTypeIndex, classIndex, subClassIndex, page, isUsable, qualityIndex, getAll, ...)
@@ -24,6 +29,7 @@ function Scan:AuctionHouseLoaded()
 		
 		return orig_QueryAuctionItems(name, minLevel, maxLevel, invTypeIndex, classIndex, subClassIndex, page, isUsable, qualityIndex, getAll, ...)
 	end
+	]]
 end
 
 function Scan:AuctionHouseClosed()
@@ -37,7 +43,7 @@ function Scan:StartItemScan(filterList)
 	if( #(filterList) == 0 ) then
 		return
 	end
-	
+		
 	status.active = true
 	status.isScanning = "item"
 	status.page = 0
@@ -388,7 +394,7 @@ function Scan:ScanAuctions()
 		
 		status.subClassIndex = status.subClassList[1]
 	end
-	
+		
 	-- Query the next filter if we have one
 	if( status.filter ) then
 		status.page = 0
