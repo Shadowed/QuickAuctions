@@ -22,6 +22,8 @@ function Manage:AuctionHouseClosed()
 		
 		self:StopCancelling()
 		self.cancelFrame:Hide()
+	elseif( status.isCancelling ) then
+		self:StopCancelling()
 	end
 end
 
@@ -281,7 +283,7 @@ function Manage:ReadyToCancel()
 	frame.text:SetJustifyH("LEFT")
 
 	frame.cancel = CreateFrame("Button", "QuickAuctionsCancelButton", frame, "UIPanelButtonTemplate")
-	frame.cancel:SetText(L["Cancel"])
+	frame.cancel:SetText(L["Start"])
 	frame.cancel:SetHeight(20)
 	frame.cancel:SetWidth(100)
 	frame.cancel:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 6, 8)

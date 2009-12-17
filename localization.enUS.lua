@@ -192,6 +192,7 @@ QuickAuctionsLocals = {
 	["Slash commands"] = "Slash commands",
 	["Smart cancelling"] = "Smart cancelling",
 	["Smart undercutting"] = "Smart undercutting",
+	["Start"] = "Start",
 	["Starting to cancel..."] = "Starting to cancel...",
 	["Status"] = "Status",
 	["Stop"] = "Stop",
