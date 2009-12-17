@@ -1,5 +1,6 @@
+local QuickAuctions = select(2, ...)
 local Mail = QuickAuctions:NewModule("Mail", "AceEvent-3.0")
-local L = QuickAuctionsLocals
+local L = QuickAuctions.L
 local eventThrottle = CreateFrame("Frame")
 local reverseLookup = QuickAuctions.modules.Manage.reverseLookup
 local timeElapsed, itemTimer, cacheFrame

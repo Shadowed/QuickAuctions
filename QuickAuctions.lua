@@ -1,7 +1,8 @@
-QuickAuctions = LibStub("AceAddon-3.0"):NewAddon("QuickAuctions", "AceEvent-3.0")
+local QuickAuctions = select(2, ...)
+QuickAuctions = LibStub("AceAddon-3.0"):NewAddon(QuickAuctions, "QuickAuctions", "AceEvent-3.0")
 QuickAuctions.status = {}
 
-local L = QuickAuctionsLocals
+local L = QuickAuctions.L
 local status = QuickAuctions.status
 local statusLog, logIDs, lastSeenLogID = {}, {}
 
@@ -518,3 +519,15 @@ end
 function QuickAuctions:Echo(msg)
 	DEFAULT_CHAT_FRAME:AddMessage(msg)
 end
+
+if( IsAddOnLoaded("TestCode") ) then
+	QuickAuctions.L = setmetatable(QuickAuctions.L, {
+		__index = function(tbl, value)
+			rawset(tbl, value, value)
+			return value
+		end,
+	})
+	
+	_G["QuickAuctions"] = QuickAuctions
+end
+

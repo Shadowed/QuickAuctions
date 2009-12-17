@@ -2,7 +2,8 @@ if( GetLocale() ~= "frFR" ) then
 	return
 end
 
-QuickAuctionsLocals = {
+local QuickAuctions = select(2, ...)
+QuickAuctions.L.L = {
 	["%d (max %d) posted by yourself (%s)"] = "%d (max %d) post\195\169s par vous-m\195\170me (%s)",
 	["%d log messages waiting"] = "%d messages de log cach\195\169s",
 	["%s lowest buyout %s (threshold %s), total posted |cfffed000%d|r (%d by you)"] = "%s prix le plus bas %s (seuil %s), |cfffed000%d|r post\195\169s au total (%d par vous)",

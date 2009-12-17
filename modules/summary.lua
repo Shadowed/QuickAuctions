@@ -1,6 +1,7 @@
 -- This is still fairly ugly code that needs to be cleaned up more
+local QuickAuctions = select(2, ...)
 local Summary = QuickAuctions:NewModule("Summary", "AceEvent-3.0")
-local L = QuickAuctionsLocals
+local L = QuickAuctions.L
 local displayData, createdCats, rowDisplay, usedLinks, activeAuctions = {}, {}, {}, {}, {}
 local createQuantity, focusedLink, isScanning, startTime, selectedSummary, summaryCats
 local MAX_SUMMARY_ROWS = 24

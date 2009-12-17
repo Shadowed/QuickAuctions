@@ -1,5 +1,6 @@
+local QuickAuctions = select(2, ...)
 local Post = QuickAuctions:NewModule("Post", "AceEvent-3.0")
-local L = QuickAuctionsLocals
+local L = QuickAuctions.L
 local status = QuickAuctions.status
 local postQueue, postTotal, overallTotal, scanRunning = {}, {}, 0
 local POST_TIMEOUT = 20

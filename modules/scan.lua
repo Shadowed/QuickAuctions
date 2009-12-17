@@ -1,5 +1,6 @@
+local QuickAuctions = select(2, ...)
 local Scan = QuickAuctions:NewModule("Scan", "AceEvent-3.0")
-local L = QuickAuctionsLocals
+local L = QuickAuctions.L
 local status = QuickAuctions.status
 local auctionData = {}
 local alreadyScanned

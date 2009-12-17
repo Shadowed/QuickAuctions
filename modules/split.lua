@@ -1,5 +1,6 @@
+local QuickAuctions = select(2, ...)
 local Split = QuickAuctions:NewModule("Split", "AceEvent-3.0")
-local L = QuickAuctionsLocals
+local L = QuickAuctions.L
 local status = QuickAuctions.status
 local splitQueue, alreadySplit, alreadyFound, bagList, lockedSlot = {}, {}, {}, {}, {}
 local timeElapsed, splitTimeout, hadSplitFailure, scanRunning = 0, 0

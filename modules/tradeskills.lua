@@ -1,5 +1,6 @@
+local QuickAuctions = select(2, ...)
 local Tradeskill = QuickAuctions:NewModule("Tradeskill", "AceEvent-3.0")
-local L = QuickAuctionsLocals
+local L = QuickAuctions.L
 local ROW_HEIGHT = 16
 local MAX_ROWS = 23
 local creatingItem, creatingItemID

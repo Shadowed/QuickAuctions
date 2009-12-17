@@ -1,5 +1,6 @@
+local QuickAuctions = select(2, ...)
 local Manage = QuickAuctions:NewModule("Manage", "AceEvent-3.0")
-local L = QuickAuctionsLocals
+local L = QuickAuctions.L
 local status = QuickAuctions.status
 local reverseLookup, postQueue, scanList, tempList, stats = {}, {}, {}, {}, {}
 local totalToCancel, totalCancelled = 0, 0

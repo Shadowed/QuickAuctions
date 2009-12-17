@@ -1,4 +1,5 @@
-QuickAuctionsLocals = {
+local QuickAuctions = select(2, ...)
+QuickAuctions.L = {
 	["%d (max %d) posted by yourself (%s)"] = "%d (max %d) posted by yourself (%s)",
 	["%d log messages waiting"] = "%d log messages waiting",
 	["%s lowest buyout %s (threshold %s), total posted |cfffed000%d|r (%d by you)"] = "%s lowest buyout %s (threshold %s), total posted |cfffed000%d|r (%d by you)",

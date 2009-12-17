@@ -2,7 +2,7 @@ if( GetLocale() ~= "ruRU" ) then
 	return
 end
 
-QuickAuctionsLocals = setmetatable({
+QuickAuctions.L = setmetatable({
 	["Glyph"] = "Символы",
 	["Glyphs"] = "Символы",
 	["Trade Goods"] = "Хозяйственные товары",
@@ -29,4 +29,4 @@ QuickAuctionsLocals = setmetatable({
 	["Bracers"] = "Браслеты",
 	["Scroll of Enchant (.+)"] = "Свиток чар для (.+)",
 	["Scroll of Enchant (.+) %- .+"] = "Свиток чар для (.+) %- .+",
-}, {__index = QuickAuctionsLocals})
+}, {__index = QuickAuctions.L})

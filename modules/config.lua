@@ -1,5 +1,6 @@
+local QuickAuctions = select(2, ...)
 local Config = QuickAuctions:NewModule("Config", "AceEvent-3.0")
-local L = QuickAuctionsLocals
+local L = QuickAuctions.L
 local AceGUI = LibStub("AceGUI-3.0")
 local categoryTree, currentTree, configFrame
 local lastTree = "general"

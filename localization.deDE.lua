@@ -1,8 +1,9 @@
 if( GetLocale() ~= "deDE" ) then
 	return
 end
- 
-QuickAuctionsLocals = setmetatable({
+
+local QuickAuctions = select(2, ...)
+QuickAuctions.L = setmetatable({
 	["%d (max %d) posted by yourself (%s)"] = "%d (max %d) von Dir (%s) im Auktioshaus",
 	["%d log messages waiting"] = "%d Protokoll Meldungen",
 	["%s lowest buyout %s (threshold %s), total posted |cfffed000%d|r (%d by you)"] = "%s tiefster SK %s (Schwellenwert %s), insgesamt im AH |cfffed000%d|r (%d von Dir)",
@@ -232,4 +233,4 @@ QuickAuctionsLocals = setmetatable({
 	["minutes"] = "Minuten",
 	["seconds"] = "Sekunden",
 	["undercut"] = "Unterbieten",
-}, {__index = QuickAuctionsLocals}) 
+}, {__index = QuickAuctions.L}) 
