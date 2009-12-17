@@ -162,7 +162,7 @@ function QuickAuctions:Log(id, msg)
 		logIDs[id] = #(statusLog) + 1
 	end
 	
-	statusLog[logIDs[id]] = msg
+	statusLog[logIDs[id]] = msg or ""
 	
 	-- Force the scroll bar to the bottom while posting, assuming they haven't scrolled within 10 seconds
 	local scrollBar = QALogScrollFrameScrollBar
@@ -411,7 +411,7 @@ function QuickAuctions:CreateStatus()
 
 	-- Tooltips!
 	local function showTooltip(self)
-		if( self.tooltip ) then
+		if( self.tooltip and self.tooltip ~= "" ) then
 			GameTooltip:SetOwner(self:GetParent(), "ANCHOR_TOPLEFT")
 			GameTooltip:SetText(self.tooltip, 1, 1, 1, nil, true)
 			GameTooltip:Show()
