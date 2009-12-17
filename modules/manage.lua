@@ -368,8 +368,6 @@ function Manage:Cancel(isTest)
 				
 				-- Don't cancel if the buyout is equal, or below our threshold
 				if( QuickAuctions.db.profile.smartCancel and lowestBuyout <= threshold and not QuickAuctions.Scan:IsPlayerOnly(itemID)) then
-					if( isTest ) then return true end
-					
 					if( not tempList[name] ) then
 						tempList[name] = true
 						
