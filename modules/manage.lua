@@ -22,7 +22,7 @@ function Manage:AuctionHouseClosed()
 		
 		self:StopCancelling()
 		self.cancelFrame:Hide()
-	elseif( status.isCancelling ) then
+	elseif( status.isCancelling and status.isScanning ) then
 		self:StopCancelling()
 	end
 end
