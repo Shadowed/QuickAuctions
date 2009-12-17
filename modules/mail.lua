@@ -1,7 +1,7 @@
 local Mail = QuickAuctions:NewModule("Mail", "AceEvent-3.0")
 local L = QuickAuctionsLocals
 local reverseLookup = QuickAuctions.modules.Manage.reverseLookup
-local timeElapsed, itemTimer
+local timeElapsed, itemTimer, cacheFrame
 local eventThrottle = CreateFrame("Frame")
 eventThrottle:Hide()
 
@@ -42,9 +42,57 @@ function Mail:OnInitialize()
 	
 	self.checkBox = check
 	
-	-- Hide Inbox/Send Mail text, it's wastes space and makes my lazyly done checkbox look bad
+	-- Hide Inbox/Send Mail text, it's wastes space and makes my lazyly done checkbox look bad. Also hide the too much mail warning
+	local noop = function() end
+	InboxTooMuchMail:Hide()
+	InboxTooMuchMail.Show = noop
+	InboxTooMuchMail.Hide = noop
+	
 	InboxTitleText:Hide()
 	SendMailTitleText:Hide()
+
+	-- Timer for mailbox cache updates
+	cacheFrame = CreateFrame("Frame", nil, MailFrame)
+	cacheFrame:SetScript("OnEnter", showTooltip)
+	cacheFrame:SetScript("OnLeave", hideTooltip)
+	cacheFrame:EnableMouse(true)
+	cacheFrame.tooltip = L["How many seconds until the mailbox will retrieve new data and you can continue looting mail."]
+	cacheFrame:SetScript("OnUpdate", function(self, elapsed)
+		local seconds = self.endTime - GetTime()
+		if( seconds <= 0 ) then
+			self:Hide()
+			return
+		end
+		
+		cacheFrame.text:SetFormattedText("%d", seconds)
+	end)
+	cacheFrame.text = cacheFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	cacheFrame.text:SetFont(GameFontHighlight:GetFont(), 30, "THICKOUTLINE")
+	cacheFrame.text:SetPoint("CENTER", MailFrame, "TOPLEFT", 40, -35)
+	cacheFrame:Hide()
+
+	self:RegisterEvent("MAIL_CLOSED")
+	self:RegisterEvent("MAIL_INBOX_UPDATE")
+end
+
+local allowTimerStart, lastTotal = true
+function Mail:MAIL_INBOX_UPDATE()
+	local current, total = GetInboxNumItems()
+	-- Yay nothing else to loot, so nothing else to update the cache for!
+	if( cacheFrame.endTime and current == total and lastTotal ~= total ) then
+		cacheFrame.endTime = nil
+		cacheFrame:Hide()
+	-- Start a timer since we're over the limit of 50 items before waiting for it to recache
+	elseif( ( cacheFrame.endTime and current >= 50 and lastTotal ~= total ) or ( current >= 50 and allowTimerStart ) ) then
+		allowTimerStart = nil
+		lastTotal = total
+		cacheFrame.endTime = GetTime() + 60
+		cacheFrame:Show()
+	end
+end
+
+function Mail:MAIL_CLOSED()
+	allowTimerStart = true
 end
 
 function Mail:Start()
