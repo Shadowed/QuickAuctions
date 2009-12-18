@@ -1,979 +1,698 @@
 local QuickAuctions = select(2, ...)
 local Config = QuickAuctions:NewModule("Config", "AceEvent-3.0")
 local L = QuickAuctions.L
-local AceGUI = LibStub("AceGUI-3.0")
-local categoryTree, currentTree, configFrame
-local lastTree = "general"
-local timeTable = {[12] = L["12 hours"], [24] = L["24 hours"], [48] = L["48 hours"]}
-local _G = getfenv(0)
+local AceDialog, AceRegistry, options
+local idToGroup, groupID = {}, 1
 
---[[
-	TREE BUILDER
-]]--
-
-local function sortChildren(a, b)
-	return a.text < b.text
+local function set(info, value)
+	QuickAuctions.db.global[info[#(info)]] = value
 end
 
-local function updateTree()
-	currentTree = {
-		{ text = L["General"], value = "general" },
-		{ text = L["Whitelist"], value = "whitelist" },
-		{ text = L["Item groups"], value = "groups" },
-	}
+local function get(info, value)
+	return QuickAuctions.db.global[info[#(info)]]
+end
+
+local function setGroup(info, value)
+	local group = info[1] == "general" and "default" or idToGroup[info[2]]
+	QuickAuctions.db.profile[info[#(info)]][group] = value
+end
+
+local function getGroupSetting(key, group)
+	group = idToGroup[group] or group
+	if( QuickAuctions.db.profile[key][group] ~= nil ) then
+		return QuickAuctions.db.profile[key][group]
+	end	
 	
-	-- Add groups
-	for name in pairs(QuickAuctions.db.profile.groups) do
-		currentTree[3].children = currentTree[3].children or {}
-		table.insert(currentTree[3].children, { text = name, value = name})
-	end
+	return QuickAuctions.db.profile[key].default
+end
+
+local function getGroup(info)
+	return getGroupSetting(info[#(info)], info[2])
+end
+
+local function validateMoney(info, value)
+	local gold = tonumber(string.match(value, "([0-9]+)|c([0-9a-fA-F]+)g|r") or string.match(value, "([0-9]+)g"))
+	local silver = tonumber(string.match(value, "([0-9]+)|c([0-9a-fA-F]+)s|r") or string.match(value, "([0-9]+)s"))
+	local copper = tonumber(string.match(value, "([0-9]+)|c([0-9a-fA-F]+)c|r") or string.match(value, "([0-9]+)c"))
 	
-	-- Remove nonexistant groups
-	if( currentTree[3].children ) then
-		for i=#(currentTree[3].children), 1, -1 do
-			if( not QuickAuctions.db.profile.groups[currentTree[3].children[i].value] ) then
-				table.remove(currentTree[3].children, i)
-			end
-		end
-
-		-- Alphabetizalical the children
-		table.sort(currentTree[3].children, sortChildren)
-	end
-			
-	-- Setup the tree
-	categoryTree:SetTree(currentTree)
-end
-
---[[
-	RANDOM HELPER FUNCTIONS
-]]
-local function showTooltip(widget)
-	GameTooltip:SetOwner(widget.frame, "ANCHOR_TOPLEFT")
-	GameTooltip:SetText(widget:GetUserData("name"), 1, .82, 0, 1)
-	GameTooltip:AddLine(widget:GetUserData("desc"), 1, 1, 1, 1)
-	GameTooltip:Show()
-end
-
-local function hideTooltip()
-	GameTooltip:Hide()
-end
-
-local function valueChanged(widget, event, value)
-	QuickAuctions.db.profile[widget:GetUserData("config")] = value
-end
-
-local function setBankName(widget, event, value)
-	QuickAuctions.db.factionrealm[widget:GetUserData("config")] = value
-end
-
-local function groupValueChanged(widget, event, value)
-	QuickAuctions.db.profile[widget:GetUserData("group")][widget:GetUserData("key")] = value
-end
-
-local function groupSliderChanged(widget, event, value)
-	value = math.floor((value - widget.min) / widget.step + 0.5) * widget.step + widget.min
-
-	groupValueChanged(widget, event, value)
-	widget:SetValue(value)
-end
-
-local function groupGetMoney(widget)
-	local money = QuickAuctions.db.profile[widget:GetUserData("group")][widget:GetUserData("key")] or QuickAuctions.defaults.profile[widget:GetUserData("group")].default or 0
-	local gold = math.floor(money / COPPER_PER_GOLD)
-	local silver = math.floor((money - (gold * COPPER_PER_GOLD)) / COPPER_PER_SILVER)
-	local copper = math.fmod(money, COPPER_PER_SILVER)
-	
-	local text = ""
-	if( gold > 0 ) then
-		text = text .. gold .. "g"
-	end
-	
-	if( silver > 0 ) then
-		text = text .. silver .. "s"
-	end
-	
-	if( copper > 0 or silver == 0 and gold == 0 ) then
-		text = text .. copper .. "c"
-	end
-	
-	return text ~= "" and text
-end
-
-local function groupMoneyValueChanged(widget, event, text)
-	if( text == "" ) then
-		QuickAuctions.db.profile[widget:GetUserData("group")][widget:GetUserData("key")] = 0
-		widget:SetText("0c")
-		return
-	end
-	
-	text = string.lower(text)
-	local gold = tonumber(string.match(text, "([0-9]+)g"))
-	local silver = tonumber(string.match(text, "([0-9]+)s"))
-	local copper = tonumber(string.match(text, "([0-9]+)c"))
-	
-	-- Not a fan of using the status text for errors, need to work out a better way but you can't easily flag a widget as invisible
-	-- without redrawing the entire container which I don't want to do right now :|
 	if( not gold and not silver and not copper ) then
-		configFrame:SetStatusText(string.format(L["Invalid money format entered for \"%s\""], widget:GetUserData("name")))
-		return
-	else
-		configFrame:SetStatusText(nil)
+		return L["Invalid monney format entered, should be \"#g#s#c\", \"25g4s50c\" is 25 gold, 4 silver, 50 copper."]
 	end
 	
+	return true
+end
+
+local function setGroupMoney(info, value)
+	local gold = tonumber(string.match(value, "([0-9]+)|c([0-9a-fA-F]+)g|r") or string.match(value, "([0-9]+)g"))
+	local silver = tonumber(string.match(value, "([0-9]+)|c([0-9a-fA-F]+)s|r") or string.match(value, "([0-9]+)s"))
+	local copper = tonumber(string.match(value, "([0-9]+)|c([0-9a-fA-F]+)c|r") or string.match(value, "([0-9]+)c"))
+		
 	-- Convert it all into copper
 	copper = (copper or 0) + ((gold or 0) * COPPER_PER_GOLD) + ((silver or 0) * COPPER_PER_SILVER)
-	
-	QuickAuctions.db.profile[widget:GetUserData("group")][widget:GetUserData("key")] = copper or 0
+	setGroup(info, copper)
 end
 
-local function groupValueChanged(widget, event, value)
-	QuickAuctions.db.profile[widget:GetUserData("group")][widget:GetUserData("key")] = value
+local function getGroupMoney(info)
+	-- Being anal, if we aren't overriding, the option will be disabled so strip color codes so it all grays out
+	if( info[1] ~= "general" and QuickAuctions.db.profile[info[#(info)]][idToGroup[info[2]]] == nil ) then
+		local money = QuickAuctions:FormatTextMoney(getGroup(info))
+		return string.trim(string.gsub(money, "|(.-)([gsc])|r", "%2"))
+	end
+	
+	return string.trim(QuickAuctions:FormatTextMoney(getGroup(info)))
 end
 
---[[
-	AUCTION SETTINGS
-]]--
-local function overrideSettings(widget, event, value)
-	if( value ) then
-		QuickAuctions.db.profile[widget:GetUserData("group")][widget:GetUserData("key")] = QuickAuctions.db.profile[widget:GetUserData("group")][widget:GetUserData("key")] or QuickAuctions.db.profile[widget:GetUserData("group")].default
-	
-		local parent = widget:GetUserData("parent")
-		parent:SetDisabled(false)
-		
-		if( parent.SetValue ) then
-			parent:SetValue(QuickAuctions.db.profile[widget:GetUserData("group")][widget:GetUserData("key")])
-		elseif( parent.SetText ) then
-			parent:SetText(groupGetMoney(parent))
-		end
+local function setGroupOverride(info, value)
+	if( not value ) then
+		QuickAuctions.db.profile[info.arg][idToGroup[info[2]]] = nil
 	else
-		QuickAuctions.db.profile[widget:GetUserData("group")][widget:GetUserData("key")] = nil
-
-		local parent = widget:GetUserData("parent")
-		parent:SetDisabled(true)
-		if( parent.SetValue ) then
-			parent:SetValue(QuickAuctions.db.profile[widget:GetUserData("group")].default)
-		elseif( parent.SetText ) then
-			parent:SetText(nil)
-		end
+		QuickAuctions.db.profile[info.arg][idToGroup[info[2]]] = QuickAuctions.db.profile[info.arg].default
 	end
 end
 
-local function createAuctionSettings(container, group)
-	local WIDGET_WIDTH = 0.45
-
-	if( group ~= "default" ) then
-		local noCancel = AceGUI:Create("CheckBox")
-		noCancel:SetUserData("name", L["Disable cancelling"])
-		noCancel:SetUserData("desc", L["Disables automatically cancelling items if they are undercut and in this group."])
-		noCancel:SetUserData("group", "noCancel")
-		noCancel:SetUserData("key", group)
-		noCancel:SetCallback("OnEnter", showTooltip)
-		noCancel:SetCallback("OnLeave", hideTooltip)
-		noCancel:SetCallback("OnValueChanged", groupValueChanged)
-		noCancel:SetLabel(noCancel:GetUserData("name"))
-		noCancel:SetRelativeWidth(1)
+function getGroupOverride(info)
+	if( info[1] == "general" ) then return false end
 	
-		noCancel:SetValue(QuickAuctions.db.profile[noCancel:GetUserData("group")][noCancel:GetUserData("key")])
-		container:AddChild(noCancel)
-	end
-			
-	local mail = AceGUI:Create("CheckBox")
-	mail:SetUserData("name", L["Enable auto mail"])
-	mail:SetUserData("desc", L["Automatically mails items to your banker if you set a bank name.\n\n[WARNING!] There is no confirmation once it starts mailing, if you enter the wrong banker name it's your own fault."])
-	mail:SetUserData("group", "mail")
-	mail:SetUserData("key", group)
-	mail:SetCallback("OnEnter", showTooltip)
-	mail:SetCallback("OnLeave", hideTooltip)
-	mail:SetCallback("OnValueChanged", groupValueChanged)
-	mail:SetLabel(mail:GetUserData("name"))
-	mail:SetRelativeWidth(WIDGET_WIDTH)
-	
-	local autoFallback = AceGUI:Create("CheckBox")
-	autoFallback:SetUserData("name", L["Enable auto fallback"])
-	autoFallback:SetUserData("desc", L["Automatically posts auctions at the fallback price if the lowest item in the auction house is below the threshold price."])
-	autoFallback:SetUserData("group", "autoFallback")
-	autoFallback:SetUserData("key", group)
-	autoFallback:SetCallback("OnEnter", showTooltip)
-	autoFallback:SetCallback("OnLeave", hideTooltip)
-	autoFallback:SetCallback("OnValueChanged", groupValueChanged)
-	autoFallback:SetLabel(autoFallback:GetUserData("name"))
-	autoFallback:SetRelativeWidth(WIDGET_WIDTH)
-	
-	if( group == "default" ) then
-		mail:SetValue(QuickAuctions.db.profile[mail:GetUserData("group")].default)
-		container:AddChild(mail)
-
-		autoFallback:SetValue(QuickAuctions.db.profile[autoFallback:GetUserData("group")].default)
-		container:AddChild(autoFallback)
-	else
-		local val = QuickAuctions.db.profile[mail:GetUserData("group")][mail:GetUserData("key")]
-		if( val == nil ) then
-			mail:SetValue(QuickAuctions.defaults.profile[mail:GetUserData("group")].default)
-		else
-			mail:SetValue(val)
-		end
-		
-		local enable = AceGUI:Create("CheckBox")
-		enable:SetUserData("name", L["Override auto mail"])
-		enable:SetUserData("desc", L["Allows you to override the default auto mailer settings."])
-		enable:SetUserData("group", "mail")
-		enable:SetUserData("key", group)
-		enable:SetUserData("parent", mail)
-		enable:SetLabel(enable:GetUserData("name"))
-		enable:SetCallback("OnValueChanged", overrideSettings)
-		enable:SetCallback("OnEnter", showTooltip)
-		enable:SetCallback("OnLeave", hideTooltip)
-		enable:SetValue(QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")] ~= nil and true or false)
-		enable:SetRelativeWidth(WIDGET_WIDTH)
-		mail:SetDisabled(QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")] == nil)
-		
-		container:AddChild(enable)
-		container:AddChild(mail)
-
-		local val = QuickAuctions.db.profile[autoFallback:GetUserData("group")][autoFallback:GetUserData("key")]
-		if( val == nil ) then
-			autoFallback:SetValue(QuickAuctions.defaults.profile[autoFallback:GetUserData("group")].default)
-		else
-			autoFallback:SetValue(val)
-		end
-		
-		local enable = AceGUI:Create("CheckBox")
-		enable:SetUserData("name", L["Override auto fallback"])
-		enable:SetUserData("desc", L["Allows you to override the default auto fallback settings."])
-		enable:SetUserData("group", "autoFallback")
-		enable:SetUserData("key", group)
-		enable:SetUserData("parent", autoFallback)
-		enable:SetLabel(enable:GetUserData("name"))
-		enable:SetCallback("OnValueChanged", overrideSettings)
-		enable:SetCallback("OnEnter", showTooltip)
-		enable:SetCallback("OnLeave", hideTooltip)
-		enable:SetValue(QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")] ~= nil and true or false)
-		enable:SetRelativeWidth(WIDGET_WIDTH)
-		autoFallback:SetDisabled(QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")] == nil)
-		
-		container:AddChild(enable)
-		container:AddChild(autoFallback)
-	end
-
-	local undercut = AceGUI:Create("EditBox")
-	undercut:SetUserData("name", L["Undercut by"])
-	undercut:SetUserData("desc", L["How much auctions should be undercut."])
-	undercut:SetUserData("group", "undercut")
-	undercut:SetUserData("key", group)
-	undercut:SetCallback("OnEnter", showTooltip)
-	undercut:SetCallback("OnLeave", hideTooltip)
-	undercut:SetCallback("OnEnterPressed", groupMoneyValueChanged)
-	undercut:SetLabel(undercut:GetUserData("name"))
-	undercut:SetText(groupGetMoney(undercut))
-	undercut:SetRelativeWidth(WIDGET_WIDTH)
-	
-	local threshold = AceGUI:Create("EditBox")
-	threshold:SetUserData("name", L["Threshold price"])
-	threshold:SetUserData("desc", L["The price at which an auction won't be posted, meaning if you set this to 10g then no auctions posted through Quick Auctions will go below 10g."])
-	threshold:SetUserData("group", "threshold")
-	threshold:SetUserData("key", group)
-	threshold:SetCallback("OnEnter", showTooltip)
-	threshold:SetCallback("OnLeave", hideTooltip)
-	threshold:SetCallback("OnEnterPressed", groupMoneyValueChanged)
-	threshold:SetLabel(threshold:GetUserData("name"))
-	threshold:SetText(groupGetMoney(threshold))
-	threshold:SetRelativeWidth(WIDGET_WIDTH)
-
-	if( group ~= "default" ) then
-		local enable = AceGUI:Create("CheckBox")
-		enable:SetUserData("name", L["Override undercut"])
-		enable:SetUserData("desc", L["Allows you to override the default undercut settings."])
-		enable:SetUserData("group", "undercut")
-		enable:SetUserData("key", group)
-		enable:SetUserData("parent", undercut)
-		enable:SetLabel(enable:GetUserData("name"))
-		enable:SetCallback("OnValueChanged", overrideSettings)
-		enable:SetCallback("OnEnter", showTooltip)
-		enable:SetCallback("OnLeave", hideTooltip)
-		enable:SetValue(QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")] and true or false)
-		enable:SetRelativeWidth(WIDGET_WIDTH)
-		undercut:SetDisabled(not QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")])
-		
-		container:AddChild(enable)
-
-		local enable = AceGUI:Create("CheckBox")
-		enable:SetUserData("name", L["Override threshold"])
-		enable:SetUserData("desc", L["Allows you to override the default threshold settings."])
-		enable:SetUserData("group", "threshold")
-		enable:SetUserData("key", group)
-		enable:SetUserData("parent", threshold)
-		enable:SetLabel(enable:GetUserData("name"))
-		enable:SetCallback("OnValueChanged", overrideSettings)
-		enable:SetCallback("OnEnter", showTooltip)
-		enable:SetCallback("OnLeave", hideTooltip)
-		enable:SetValue(QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")] and true or false)
-		enable:SetRelativeWidth(WIDGET_WIDTH)
-		threshold:SetDisabled(not QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")])
-		
-		container:AddChild(enable)
-		
-		local sep = AceGUI:Create("Label")
-		sep:SetFullWidth(true)
-		container:AddChild(sep)
-	end
-	
-	container:AddChild(undercut)
-	container:AddChild(threshold)
-	
-	local sep = AceGUI:Create("Label")
-	sep:SetFullWidth(true)
-	container:AddChild(sep)
-
-	local fallback = AceGUI:Create("EditBox")
-	fallback:SetUserData("name", L["Fallback price"])
-	fallback:SetUserData("desc", L["Price items should be posted at if there are no others of it's kind on the auction house."])
-	fallback:SetUserData("group", "fallback")
-	fallback:SetUserData("key", group)
-	fallback:SetCallback("OnEnter", showTooltip)
-	fallback:SetCallback("OnLeave", hideTooltip)
-	fallback:SetCallback("OnEnterPressed", groupMoneyValueChanged)
-	fallback:SetLabel(fallback:GetUserData("name"))
-	fallback:SetText(groupGetMoney(fallback))
-	fallback:SetRelativeWidth(WIDGET_WIDTH)
-
-	local fallbackCap = AceGUI:Create("Slider")
-	fallbackCap:SetUserData("name", L["Fallback after"]) 
-	fallbackCap:SetUserData("desc", L["If someone posts an item at a percentage higher than the fallback, it will automatically use the fallback price instead.\n\nFor example, fallback is 100g, fallback after is set to 50% if someone posts an item at 160g it will fallback to 100g."])
-	fallbackCap:SetUserData("group", "fallbackCap")
-	fallbackCap:SetUserData("key", group)
-	fallbackCap:SetCallback("OnEnter", showTooltip)
-	fallbackCap:SetCallback("OnLeave", hideTooltip)
-	fallbackCap:SetCallback("OnValueChanged", groupSliderChanged)
-	fallbackCap:SetCallback("OnMouseUp", groupSliderChanged)
-	fallbackCap:SetLabel(fallbackCap:GetUserData("name"))
-	fallbackCap:SetSliderValues(1, 10, 0.10)
-	fallbackCap:SetIsPercent(true)
-	fallbackCap:SetValue(QuickAuctions.db.profile[fallbackCap:GetUserData("group")][fallbackCap:GetUserData("key")] or QuickAuctions.defaults.profile[fallbackCap:GetUserData("group")].default)
-	fallbackCap:SetRelativeWidth(WIDGET_WIDTH)
-
-	if( group ~= "default" ) then
-		local enable = AceGUI:Create("CheckBox")
-		enable:SetUserData("name", L["Override fallback"])
-		enable:SetUserData("desc", L["Allows you to override the default fallback settings."])
-		enable:SetUserData("group", "fallback")
-		enable:SetUserData("key", group)
-		enable:SetUserData("parent", fallback)
-		enable:SetLabel(enable:GetUserData("name"))
-		enable:SetCallback("OnValueChanged", overrideSettings)
-		enable:SetCallback("OnEnter", showTooltip)
-		enable:SetCallback("OnLeave", hideTooltip)
-		enable:SetValue(QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")] and true or false)
-		enable:SetRelativeWidth(WIDGET_WIDTH)
-		fallback:SetDisabled(not QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")])
-		
-		container:AddChild(enable)
-
-		local enable = AceGUI:Create("CheckBox")
-		enable:SetUserData("name", L["Override fallback after"])
-		enable:SetUserData("desc", L["Allows you to override the default fallback after settings."])
-		enable:SetUserData("group", "fallbackCap")
-		enable:SetUserData("key", group)
-		enable:SetUserData("parent", fallbackCap)
-		enable:SetLabel(enable:GetUserData("name"))
-		enable:SetCallback("OnValueChanged", overrideSettings)
-		enable:SetCallback("OnEnter", showTooltip)
-		enable:SetCallback("OnLeave", hideTooltip)
-		enable:SetValue(QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")] and true or false)
-		enable:SetRelativeWidth(WIDGET_WIDTH)
-		fallbackCap:SetDisabled(not QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")])
-		
-		container:AddChild(enable)
-		
-		local sep = AceGUI:Create("Label")
-		sep:SetFullWidth(true)
-		container:AddChild(sep)
-	end
-	
-	container:AddChild(fallback)
-	container:AddChild(fallbackCap)
-
-	local priceThreshold = AceGUI:Create("Slider")
-	priceThreshold:SetUserData("name", L["Maximum price gap"]) 
-	priceThreshold:SetUserData("desc", L["How much of a difference between auction prices should be allowed before posting at the second highest value.\n\nFor example. If Apple is posting Runed Scarlet Ruby at 50g, Orange posts one at 30g and you post one at 29g, then Oranges expires. If you set price threshold to 30% then it will cancel yours at 29g and post it at 49g next time because the difference in price is 42% and above the allowed threshold."])
-	priceThreshold:SetUserData("group", "priceThreshold")
-	priceThreshold:SetUserData("key", group)
-	priceThreshold:SetCallback("OnEnter", showTooltip)
-	priceThreshold:SetCallback("OnLeave", hideTooltip)
-	priceThreshold:SetCallback("OnValueChanged", groupSliderChanged)
-	priceThreshold:SetCallback("OnMouseUp", groupSliderChanged)
-	priceThreshold:SetLabel(priceThreshold:GetUserData("name"))
-	priceThreshold:SetSliderValues(0.10, 10, 0.05)
-	priceThreshold:SetValue(QuickAuctions.db.profile[priceThreshold:GetUserData("group")][priceThreshold:GetUserData("key")] or QuickAuctions.defaults.profile[priceThreshold:GetUserData("group")].default)
-	priceThreshold:SetIsPercent(true)
-	priceThreshold:SetRelativeWidth(WIDGET_WIDTH)
-
-	if( group ~= "default" ) then
-		local enable = AceGUI:Create("CheckBox")
-		enable:SetUserData("name", L["Override price threshold after"])
-		enable:SetUserData("desc", L["Allows you to override the default price threshold settings."])
-		enable:SetUserData("group", "priceThreshold")
-		enable:SetUserData("key", group)
-		enable:SetUserData("parent", priceThreshold)
-		enable:SetLabel(enable:GetUserData("name"))
-		enable:SetCallback("OnValueChanged", overrideSettings)
-		enable:SetCallback("OnEnter", showTooltip)
-		enable:SetCallback("OnLeave", hideTooltip)
-		enable:SetValue(QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")] and true or false)
-		enable:SetRelativeWidth(WIDGET_WIDTH)
-		priceThreshold:SetDisabled(not QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")])
-	
-		container:AddChild(enable)
-	end
-	
-	container:AddChild(priceThreshold)
-	
-	local postCap = AceGUI:Create("Slider")
-	postCap:SetUserData("name", L["Post cap"]) 
-	postCap:SetUserData("desc", L["How many auctions of the same item should be up at any one time.\n\nNote that post cap only applies if you weren't undercut, if you were undercut you can post more until you hit the post cap."])
-	postCap:SetUserData("group", "postCap")
-	postCap:SetUserData("key", group)
-	postCap:SetCallback("OnEnter", showTooltip)
-	postCap:SetCallback("OnLeave", hideTooltip)
-	postCap:SetCallback("OnValueChanged", groupSliderChanged)
-	postCap:SetCallback("OnMouseUp", groupSliderChanged)
-	postCap:SetLabel(postCap:GetUserData("name"))
-	postCap:SetSliderValues(1, 1000, 1)
-	postCap:SetValue(QuickAuctions.db.profile[postCap:GetUserData("group")][postCap:GetUserData("key")] or QuickAuctions.defaults.profile[postCap:GetUserData("group")].default)
-	postCap:SetRelativeWidth(WIDGET_WIDTH)
-	
-	local bidPercent = AceGUI:Create("Slider")
-	bidPercent:SetUserData("name", L["Bid percent"]) 
-	bidPercent:SetUserData("desc", L["Percentage of the buyout the bid will be set at, if the buyout is 100g and set you set this to 90%, then the bid will be 90g."])
-	bidPercent:SetUserData("group", "bidPercent")
-	bidPercent:SetUserData("key", group)
-	bidPercent:SetCallback("OnEnter", showTooltip)
-	bidPercent:SetCallback("OnLeave", hideTooltip)
-	bidPercent:SetCallback("OnValueChanged", groupSliderChanged)
-	bidPercent:SetCallback("OnMouseUp", groupSliderChanged)
-	bidPercent:SetLabel(bidPercent:GetUserData("name"))
-	bidPercent:SetSliderValues(0, 1, 0.05)
-	bidPercent:SetIsPercent(true)
-	bidPercent:SetValue(QuickAuctions.db.profile[bidPercent:GetUserData("group")][bidPercent:GetUserData("key")] or QuickAuctions.defaults.profile[bidPercent:GetUserData("group")].default)
-	bidPercent:SetRelativeWidth(WIDGET_WIDTH)
-
-	if( group ~= "default" ) then
-		local enable = AceGUI:Create("CheckBox")
-		enable:SetUserData("name", L["Override bid percent"])
-		enable:SetUserData("desc", L["Allows you to override the default bid percent settings."])
-		enable:SetUserData("group", "bidPercent")
-		enable:SetUserData("key", group)
-		enable:SetUserData("parent", bidPercent)
-		enable:SetLabel(enable:GetUserData("name"))
-		enable:SetCallback("OnValueChanged", overrideSettings)
-		enable:SetCallback("OnEnter", showTooltip)
-		enable:SetCallback("OnLeave", hideTooltip)
-		enable:SetValue(QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")] and true or false)
-		enable:SetRelativeWidth(WIDGET_WIDTH)
-		bidPercent:SetDisabled(not QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")])
-		
-		container:AddChild(enable)
-
-		local enable = AceGUI:Create("CheckBox")
-		enable:SetUserData("name", L["Override post cap"])
-		enable:SetUserData("desc", L["Allows you to override the default post cap settings."])
-		enable:SetUserData("group", "postCap")
-		enable:SetUserData("key", group)
-		enable:SetUserData("parent", postCap)
-		enable:SetLabel(enable:GetUserData("name"))
-		enable:SetCallback("OnValueChanged", overrideSettings)
-		enable:SetCallback("OnEnter", showTooltip)
-		enable:SetCallback("OnLeave", hideTooltip)
-		enable:SetValue(QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")] and true or false)
-		enable:SetRelativeWidth(WIDGET_WIDTH)
-		postCap:SetDisabled(not QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")])
-		
-		container:AddChild(enable)
-		
-		local sep = AceGUI:Create("Label")
-		sep:SetFullWidth(true)
-		container:AddChild(sep)
-	end
-	
-	container:AddChild(bidPercent)
-	container:AddChild(postCap)
-
-	local perAuction = AceGUI:Create("Slider")
-	perAuction:SetUserData("name", L["Items per auction"]) 
-	perAuction:SetUserData("desc", L["How many items each auction should contain, if the item cannot stack it will always post at least one item."])
-	perAuction:SetUserData("group", "perAuction")
-	perAuction:SetUserData("key", group)
-	perAuction:SetCallback("OnEnter", showTooltip)
-	perAuction:SetCallback("OnLeave", hideTooltip)
-	perAuction:SetCallback("OnValueChanged", groupSliderChanged)
-	perAuction:SetCallback("OnMouseUp", groupSliderChanged)
-	perAuction:SetLabel(perAuction:GetUserData("name"))
-	perAuction:SetSliderValues(1, 1000, 1)
-	perAuction:SetValue(QuickAuctions.db.profile[perAuction:GetUserData("group")][perAuction:GetUserData("key")] or QuickAuctions.defaults.profile[perAuction:GetUserData("group")].default)
-	perAuction:SetRelativeWidth(WIDGET_WIDTH)
-
-	local postTime = AceGUI:Create("Dropdown")
-	postTime:SetUserData("name", L["Post time"]) 
-	postTime:SetUserData("desc", L["How long auctions should be posted for."])
-	postTime:SetUserData("group", "postTime")
-	postTime:SetUserData("key", group)
-	postTime:SetCallback("OnEnter", showTooltip)
-	postTime:SetCallback("OnLeave", hideTooltip)
-	postTime:SetCallback("OnValueChanged", groupValueChanged)
-	postTime:SetLabel(postTime:GetUserData("name"))
-	local hours = QuickAuctions.db.profile[postTime:GetUserData("group")][postTime:GetUserData("key")] or QuickAuctions.defaults.profile[postTime:GetUserData("group")].default
-	postTime:SetValue(hours)
-	postTime:SetText(timeTable[hours])
-	postTime:SetList(timeTable)
-	postTime:SetRelativeWidth(WIDGET_WIDTH)
-	
-	if( group ~= "default" ) then
-		local enable = AceGUI:Create("CheckBox")
-		enable:SetUserData("name", L["Override per auction"])
-		enable:SetUserData("desc", L["Allows you to override the default items per auction."])
-		enable:SetUserData("group", "perAuction")
-		enable:SetUserData("key", group)
-		enable:SetUserData("parent", perAuction)
-		enable:SetLabel(enable:GetUserData("name"))
-		enable:SetCallback("OnValueChanged", overrideSettings)
-		enable:SetCallback("OnEnter", showTooltip)
-		enable:SetCallback("OnLeave", hideTooltip)
-		enable:SetValue(QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")] and true or false)
-		enable:SetRelativeWidth(WIDGET_WIDTH)
-		perAuction:SetDisabled(not QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")])
-		
-		container:AddChild(enable)
-
-		local enable = AceGUI:Create("CheckBox")
-		enable:SetUserData("name", L["Override post time"])
-		enable:SetUserData("desc", L["Allows you to override the default post time settings."])
-		enable:SetUserData("group", "postTime")
-		enable:SetUserData("key", group)
-		enable:SetUserData("parent", postTime)
-		enable:SetLabel(enable:GetUserData("name"))
-		enable:SetCallback("OnValueChanged", overrideSettings)
-		enable:SetCallback("OnEnter", showTooltip)
-		enable:SetCallback("OnLeave", hideTooltip)
-		enable:SetValue(QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")] and true or false)
-		enable:SetRelativeWidth(WIDGET_WIDTH)
-		postTime:SetDisabled(not QuickAuctions.db.profile[enable:GetUserData("group")][enable:GetUserData("key")])
-		
-		container:AddChild(enable)
-	end
-	
-	container:AddChild(perAuction)
-	container:AddChild(postTime)
+	return QuickAuctions.db.profile[info.arg][idToGroup[info[2]]] ~= nil
 end
 
---[[
-	GENERAL CONFIGURATION
-]]--
-local function generalConfig(container)
-	local general = AceGUI:Create("InlineGroup")
-	general:SetTitle(L["General"])
-	general:SetLayout("Flow")
-	general:SetFullWidth(true)
-	container:AddChild(general)
-
-	-- Banker name
-	local bank = AceGUI:Create("EditBox")
-	bank:SetUserData("name", L["Banker name"])
-	bank:SetUserData("desc", L["Name of your banker on this realm/faction, this is where items will be mailed if you have any items to auto mail."])
-	bank:SetUserData("config", "bank")
-	bank:SetCallback("OnEnter", showTooltip)
-	bank:SetCallback("OnLeave", hideTooltip)
-	bank:SetCallback("OnEnterPressed", setBankName)
-	bank:SetLabel(bank:GetUserData("name"))
-	bank:SetText(QuickAuctions.db.factionrealm[bank:GetUserData("config")])
-	bank:SetRelativeWidth(0.35)
-	
-	general:AddChild(bank)
-
-	local seperator = AceGUI:Create("Label")
-	seperator:SetRelativeWidth(0.11)
-	general:AddChild(seperator)
-
-	--[[
-	-- Cancel items with bids
-	local superScan = AceGUI:Create("CheckBox")
-	superScan:SetUserData("name", L["Enable super scan"])
-	superScan:SetUserData("desc", L["Super scan will drastically speed up your auction posting, but you will lose the ability to use whitelist functions and it will undercut anyone except the character you are posting on."])
-	superScan:SetUserData("config", "superScan")
-	superScan:SetCallback("OnEnter", showTooltip)
-	superScan:SetCallback("OnLeave", hideTooltip)
-	superScan:SetCallback("OnValueChanged", valueChanged)
-	superScan:SetLabel(superScan:GetUserData("name"))
-	superScan:SetValue(QuickAuctions.db.profile[superScan:GetUserData("config")])
-	superScan:SetDisabled(true)
-	
-	general:AddChild(superScan)
-	]]
-	
-	-- Cancel items with bids
-	local cancel = AceGUI:Create("CheckBox")
-	cancel:SetUserData("name", L["Cancel auctions with bids"])
-	cancel:SetUserData("desc", L["Will cancel your auctions even if they have a bid on them."])
-	cancel:SetUserData("config", "cancelWithBid")
-	cancel:SetCallback("OnEnter", showTooltip)
-	cancel:SetCallback("OnLeave", hideTooltip)
-	cancel:SetCallback("OnValueChanged", valueChanged)
-	cancel:SetLabel(cancel:GetUserData("name"))
-	cancel:SetValue(QuickAuctions.db.profile[cancel:GetUserData("config")])
-	
-	general:AddChild(cancel)
-			
-	-- Smart Undercut
-	local undercut = AceGUI:Create("CheckBox")
-	undercut:SetUserData("name", L["Smart undercutting"])
-	undercut:SetUserData("desc", L["Prices will be rounded to the nearest gold piece when undercutting, meaning instead of posting an auction for 1 gold and 50 silver, it would be posted for 1 gold."])
-	undercut:SetUserData("config", "smartUndercut")
-	undercut:SetCallback("OnEnter", showTooltip)
-	undercut:SetCallback("OnLeave", hideTooltip)
-	undercut:SetCallback("OnValueChanged", valueChanged)
-	undercut:SetLabel(undercut:GetUserData("name"))
-	undercut:SetValue(QuickAuctions.db.profile[undercut:GetUserData("config")])
-	
-	general:AddChild(undercut)
-
-	-- Smart Cancel
-	local cancel = AceGUI:Create("CheckBox")
-	cancel:SetUserData("name", L["Smart cancelling"])
-	cancel:SetUserData("desc", L["Disables cancelling of auctions with a market price below the threshold, also will cancel auctions if you are the only one with that item up and you can relist it for more."])
-	cancel:SetUserData("config", "smartCancel")
-	cancel:SetCallback("OnEnter", showTooltip)
-	cancel:SetCallback("OnLeave", hideTooltip)
-	cancel:SetCallback("OnValueChanged", valueChanged)
-	cancel:SetLabel(cancel:GetUserData("name"))
-	cancel:SetValue(QuickAuctions.db.profile[cancel:GetUserData("config")])
-	
-	general:AddChild(cancel)	
-	
-	-- Canceling stuff
-	local cancelGroup = AceGUI:Create("InlineGroup")
-	cancelGroup:SetTitle(L["Canceling"])
-	cancelGroup:SetLayout("Flow")
-	cancelGroup:SetFullWidth(true)
-	container:AddChild(cancelGroup)
-	
-	local cancelBinding = AceGUI:Create("Keybinding")
-	cancelBinding:SetUserData("name", L["Cancel binding"])
-	cancelBinding:SetUserData("desc", L["Quick binding you can press to cancel auctions once scan has finished.\n\nThis can be any key including space without overwriting your jump key."])
-	cancelBinding:SetUserData("config", "cancelBinding")
-	cancelBinding:SetCallback("OnEnter", showTooltip)
-	cancelBinding:SetCallback("OnLeave", hideTooltip)
-	cancelBinding:SetCallback("OnKeyChanged", valueChanged)
-	cancelBinding:SetLabel(cancelBinding:GetUserData("name"))
-	cancelBinding:SetKey(QuickAuctions.db.profile[cancelBinding:GetUserData("config")])
-	
-	cancelGroup:AddChild(cancelBinding)	
-	
-	local sound = AceGUI:Create("CheckBox")
-	sound:SetUserData("name", L["Play sound after cancel scan"])
-	sound:SetUserData("desc", L["When Quick Auctions finishes a cancel scan it will play the ready check sound telling you that it needs your interacting.\n\nOf course, you need sound enabled for this to do anything."])
-	sound:SetUserData("config", "playSound")
-	sound:SetCallback("OnEnter", showTooltip)
-	sound:SetCallback("OnLeave", hideTooltip)
-	sound:SetCallback("OnValueChanged", valueChanged)
-	sound:SetLabel(sound:GetUserData("name"))
-	sound:SetValue(QuickAuctions.db.profile[sound:GetUserData("config")])
-	
-	cancelGroup:AddChild(sound)	
-	
-	-- Help indicating what the default item settings do
-	local help = AceGUI:Create("InlineGroup")
-	help:SetTitle(L["Help"])
-	help:SetLayout("Flow")
-	help:SetFullWidth(true)
-	container:AddChild(help)
-	
-	local helpText = AceGUI:Create("Label")
-	helpText:SetText(L["You can set the fallback settings to use for items that do not have one set specifically for their group, or per item.\n\nMoney values should be entered as \"#g#s#c\". For example, \"50g20s\" is entered as 50 gold, 20 silver.\n\nAll sliders can have their values entered manually, use the middle number below the slider bar."])
-	helpText:SetFullWidth(true)
-	help:AddChild(helpText)
-	
-	-- Default auction settings
-	local default = AceGUI:Create("InlineGroup")
-	default:SetTitle(L["Default auction settings"])
-	default:SetLayout("Flow")
-	default:SetFullWidth(true)
-	container:AddChild(default)
-	
-	createAuctionSettings(default, "default")
+local function isGroupOptionDisabled(info)
+	return info[1] ~= "general" and QuickAuctions.db.profile[info[#(info)]][idToGroup[info[2]]] == nil
 end
 
---[[
-	WHITELIST CONFIGURATION
-]]--
-local deleteWhitelist
-local function updateWhitelist(container)
-	container:ReleaseChildren()
+local function hideForDefault(info)
+	return info[1] == "general"
+end
+
+local function hideHelpOrGeneral(info)
+	return QuickAuctions.db.global.hideHelp
+end
+
+-- Core group settings table!
+local groupSettings = {
+	general = {
+		order = 6,
+		type = "group",
+		inline = true,
+		name = L["General"],
+		set = setGroup,
+		get = getGroup,
+		disabled = isGroupOptionDisabled,
+		args = {
+			overrideCancel = {
+				order = 1,
+				type = "toggle",
+				name = L["Override cancel settings"],
+				desc = L["Allows you to override the default cancel settings for this group."],
+				hidden = hideForDefault,
+				disabled = false,
+				set = setGroupOverride,
+				get = getGroupOverride,
+				arg = "noCancel",
+			},
+			noCancel = {
+				order = 2,
+				type = "toggle",
+				name = L["Disable auto cancelling"],
+				desc = L["Disable automatically cancelling of items in this group if undercut."],
+				hidden = hideForDefault,
+			},
+			overrideTime = {
+				order = 3,
+				type = "toggle",
+				name = L["Override post time"],
+				desc = L["Allows you to override the default post time sttings for this group."],
+				hidden = hideForDefault,
+				disabled = false,
+				set = setGroupOverride,
+				get = getGroupOverride,
+				arg = "postTime",
+			},
+			postTime = {
+				order = 4,
+				type = "select",
+				name = L["Post time"],
+				desc = L["How long auctions should be up for."],
+				values = {[12] = L["12 hours"], [24] = L["24 hours"], [48] = L["48 hours"]},
+			},
+		},
+	},
+	quantity = {
+		order = 7,
+		type = "group",
+		inline = true,
+		name = L["Quantities"],
+		set = setGroup,
+		get = getGroup,
+		disabled = isGroupOptionDisabled,
+		args = {
+			desc = {
+				order = 1,
+				type = "description",
+				name = function(info) return string.format(L["Will post at most |cfffed000%d|r auctions in stacks of |cfffed000%d|r."], getGroupSetting("postCap", info[2]), getGroupSetting("perAuction", info[2])) end,
+				hidden = hideHelpOrGeneral,
+			},
+			header = {
+				order = 2,
+				type = "header",
+				name = "",
+				hidden = hideHelpOrGeneral,
+			},
+			overrideCap = {
+				order = 3,
+				type = "toggle",
+				name = L["Override post cap"],
+				desc = L["Allows you to override the post cap settings for this group."],
+				hidden = hideForDefault,
+				disabled = false,
+				set = setGroupOverride,
+				get = getGroupOverride,
+				arg = "postCap",
+			},
+			postCap = {
+				order = 4,
+				type = "range",
+				name = L["Post cap"],
+				desc = L["How many auctions at the lowest price tier can be up at any one time."],
+				min = 1, max = 50, step = 1,
+			},
+			overridePerAuction = {
+				order = 5,
+				type = "toggle",
+				name = L["Override per auction"],
+				desc = L["Allows you to override the per auction settings for this group."],
+				hidden = hideForDefault,
+				disabled = false,
+				set = setGroupOverride,
+				get = getGroupOverride,
+				arg = "perAuction",
+			},
+			perAuction = {
+				order = 6,
+				type = "range",
+				name = L["Per auction"],
+				desc = L["How many items should be in a single auction, 20 will mean they are posted in stacks of 20."],
+				min = 1, max = 1000, step = 1,
+			},
+		},
+	},
+	price = {
+		order = 8,
+		type = "group",
+		inline = true,
+		name = L["Price"],
+		set = setGroup,
+		get = getGroup,
+		disabled = isGroupOptionDisabled,
+		args = {
+			desc = {
+				order = 1,
+				type = "description",
+				name = function(info) return string.format(L["Undercutting auctions by %s until price goes below %s, unless there is greater than a |cfffed000%d%%|r price difference between lowest and second lowest in which case undercutting second lowest auction."], QuickAuctions:FormatTextMoney(getGroupSetting("undercut", info[2])), QuickAuctions:FormatTextMoney(getGroupSetting("threshold", info[2])), getGroupSetting("priceThreshold", info[2])) end,
+				hidden = hideHelpOrGeneral,
+			},
+			header = {
+				order = 2,
+				type = "header",
+				name = "",
+				hidden = hideHelpOrGeneral,
+			},
+			overrideUndercut = {
+				order = 3,
+				type = "toggle",
+				name = L["Override undercut"],
+				desc = L["Allows you to override the undercut settings for this group."],
+				hidden = hideForDefault,
+				disabled = false,
+				set = setGroupOverride,
+				get = getGroupOverride,
+				arg = "undercut",
+			},
+			undercut = {
+				order = 4,
+				type = "input",
+				name = L["Undercut by"],
+				desc = L["How much to undercut other auctions by, format is in \"#g#s#c\" but can be in any order, \"50g30s\" means 50 gold, 30 silver and so on."],
+				validate = validateMoney,
+				set = setGroupMoney,
+				get = getGroupMoney,
+			},
+			overrideBid = {
+				order = 5,
+				type = "toggle",
+				name = L["Override bid percent"],
+				desc = L["Allows you to override bid percent settings for this group."],
+				hidden = hideForDefault,
+				disabled = false,
+				set = setGroupOverride,
+				get = getGroupOverride,
+				arg = "bidPercent",
+			},
+			bidPercent = {
+				order = 6,
+				type = "range",
+				min = 0, max = 1, step = 0.05, isPercent = true,
+				name = L["Bid percent"],
+				desc = L["Percentage of the buyout as bid, if you set this to 90% then a 100g buyout will have a 90g bid."],
+			},
+			overrideThreshold = {
+				order = 7,
+				type = "toggle",
+				name = L["Override threshold"],
+				desc = L["Allows you to override the threshold settings for this group."],
+				hidden = hideForDefault,
+				disabled = false,
+				set = setGroupOverride,
+				get = getGroupOverride,
+				arg = "threshold",
+			},
+			threshold = {
+				order = 8,
+				type = "input",
+				name = L["Price threshold"],
+				desc = L["How low the market can go before an item should no longer be posted."],
+				validate = validateMoney,
+				set = setGroupMoney,
+				get = getGroupMoney,
+			},
+			overrideGap = {
+				order = 9,
+				type = "toggle",
+				name = L["Override price gap"],
+				desc = L["Allows you to override the price gap settings for this group."],
+				hidden = hideForDefault,
+				disabled = false,
+				set = setGroupOverride,
+				get = getGroupOverride,
+				arg = "priceThreshold",
+			},
+			priceThreshold = {
+				order = 10,
+				type = "range",
+				name = L["Maximum price gap"],
+				desc = L["How much of a difference between auction prices should be allowed before posting at the second highest value.\n\nFor example. If Apple is posting Runed Scarlet Ruby at 50g, Orange posts one at 30g and you post one at 29g, then Oranges expires. If you set price threshold to 30% then it will cancel yours at 29g and post it at 49g next time because the difference in price is 42% and above the allowed threshold."],
+				min = 0.10, max = 10, step = 0.05, isPercent = true,
+			},
+		},
+	},
+	fallback = {
+		order = 9,
+		type = "group",
+		inline = true,
+		name = L["Fallbacks"],
+		set = setGroup,
+		get = getGroup,
+		disabled = isGroupOptionDisabled,
+		args = {
+			desc = {
+				order = 1,
+				type = "description",
+				name = function(info)
+					local fallback = getGroupSetting("fallback", info[2])
+					local fallbackCap = getGroupSetting("fallbackCap", info[2])
+					local autoFallback = getGroupSetting("autoFallback", info[2])
+					local threshold = getGroupSetting("threshold", info[2])
+					
+					if( autoFallback ) then
+						return string.format(L["Once market goes below %s, auctions will be automatically posted at the fallback price of %s."], QuickAuctions:FormatTextMoney(threshold), QuickAuctions:FormatTextMoney(fallback))
+					else
+						return string.format(L["When no auctions are up, or the market price is above %s auctions will be posted at the fallback price of %s."], QuickAuctions:FormatTextMoney(fallback * fallbackCap), QuickAuctions:FormatTextMoney(fallback))
+					end
+				end,
+				hidden = hideHelpOrGeneral,
+			},
+			header = {
+				order = 2,
+				type = "header",
+				name = "",
+				hidden = hideHelpOrGeneral,
+			},
+			overrideFallAuto = {
+				order = 3,
+				type = "toggle",
+				name = L["Override auto fallback"],
+				desc = L["Allows you to override the auto fallback settings for this group."],
+				hidden = hideForDefault,
+				disabled = false,
+				set = setGroupOverride,
+				get = getGroupOverride,
+				arg = "autoFallback",
+			},
+			autoFallback = {
+				order = 4,
+				type = "toggle",
+				name = L["Enable auto fallback"],
+				desc = L["When the market price of an item goes below your threshold settings, it will be posted at the fallback setting instead."],
+			},
+			sep = {order = 4.5, type = "description", hidden = function(info) return info[1] ~= "general" end, name = ""},
+			overrideFallback = {
+				order = 5,
+				type = "toggle",
+				name = L["Override fallback"],
+				desc = L["Allows you to override the fallback price for this group."],
+				hidden = hideForDefault,
+				disabled = false,
+				set = setGroupOverride,
+				get = getGroupOverride,
+				arg = "fallback",
+			},
+			fallback = {
+				order = 6,
+				type = "input",
+				name = L["Fallback price"],
+				desc = L["Price to fallback too if there are no other auctions up, the lowest market price is too high."],
+				validate = validateMoney,
+				set = setGroupMoney,
+				get = getGroupMoney,
+			},
+			overrideFallCap = {
+				order = 7,
+				type = "toggle",
+				name = L["Override fallback"],
+				desc = L["Allows you to override the fallback price for this group."],
+				hidden = hideForDefault,
+				disabled = false,
+				set = setGroupOverride,
+				get = getGroupOverride,
+				arg = "fallbackCap",
+			},
+			fallbackCap = {
+				order = 8,
+				type = "range",
+				name = L["Maxmimum price"],
+				desc = L["If the market price is above fallback price * maximum price, items will be posted at the fallback * maximum price instead.\n\nEffective for posting prices in a sane price range when someone is posting an item at 5000g when it only goes for 100g."],
+			},
+		},
+	},
+}
+
+local function hideIfConflictingMail() return select(6, GetAddOnInfo("Postal")) ~= nil end
+local function loadGeneralOptions()
+	options.args.general = {
+		order = 1,
+		type = "group",
+		name = L["General"],
+		set = set,
+		get = get,
+		args = {
+			generalConfig = {
+				order = 2,
+				type = "group",
+				inline = true,
+				name = L["General"],
+				args = {
+					hideHelp = {
+						order = 1,
+						type = "toggle",
+						name = L["Hide help text"],
+						desc = L["Hides auction setting help text throughout the group settings options."],
+					},
+					superScan = {
+						order = 1,
+						type = "toggle",
+						name = L["Enable super scan"],
+						desc = L["Super scanning will speed up your auction scanning, but it will no longer get accurate poster name data.\n\nWhitelist functions and matching your alts will no longer work if you enable this."],
+						hidden = true,
+					},
+				},
+			},
+			mail = {
+				order = 3,
+				type = "group",
+				inline = true,
+				name = L["Auto mail looter"],
+				args = {
+					postal = {
+						order = 0,
+						type = "description",
+						hidden = function(info) return not hideIfConflictingMail(info) end,
+						name = L["You cannot use the mailing features with Postal enabled."],
+					},
+					autoCheck = {
+						order = 1,
+						type = "toggle",
+						name = L["Auto recheck mail"],
+						desc = L["Automatically rechecks mail every 60 seconds when you have too much mail.\n\nIf you loot all mail with this enabled, it will wait and recheck then keep auto looting."],
+						width = "full",
+						hidden = hideIfConflictingMail,
+					},
+					mailLatency = {
+						order = 2,
+						type = "toggle",
+						name = L["Interval off latency"],
+						desc = L["Instead of mail opening interval being based off a static amount, it will use your latency. For example, if you have 150 MS latency it will loot an item every 0.175 seconds, if you have 20 MS latency it will loot an item every 0.035 seconds."],
+						hidden = hideIfConflictingMail,
+					},
+					mailInterval = {
+						order = 3,
+						type = "range",
+						min = 0.10, max = 2, step = 0.05,
+						name = L["Open interval"],
+						desc = L["How many seconds Quick Auctions should wait between looting mail."],
+						hidden = hideIfConflictingMail,
+						disabled = function(info) return QuickAuctions.db.global.mailLatency end,
+					},
+				},
+			},
+			cancel = {
+				order = 4,
+				type = "group",
+				inline = true,
+				name = L["Canceling"],
+				args = {
+					cancelBinding = {
+						order = 0,
+						type = "keybinding",
+						name = L["Cancel binding"],
+						desc = L["Quick binding you can press to cancel auctions once scan has finished.\n\nThis can be any key including space without overwriting your jump key."],
+					},
+					cancelWithBid = {
+						order = 1,
+						type = "toggle",
+						name = L["Cancel auctions with bids"],
+						desc = L["Will cancel auctions even if they have a bid on them, you will take an additional gold cost if you cancel an auction with bid."],
+					},
+					smartCancel = {
+						order = 2,
+						type = "toggle",
+						name = L["Smart cancelling"],
+						desc = L["Disables cancelling of auctions with a market price below the threshold, also will cancel auctions if you are the only one with that item up and you can relist it for more."],
+					},
+					playSound = {
+						order = 3,
+						type = "toggle",
+						name = L["Play sound after scan"],
+						desc = L["After a cancel scan has finished, the ready check sound will play indicating user interaction is needed."],
+					},
+				},
+			},
+			groupHelp = {
+				order = 5,
+				type = "group",
+				inline = true,
+				name = L["Help"],
+				args = {
+					help = {
+						order = 0,
+						type = "description",
+						name = L["The below are fallback settings for groups, if you do not override a setting in a group then it will use the settings below."],
+					},
+				},
+			},
+		}
+	}
 	
-	local row = 0
-	for id, name in pairs(QuickAuctions.db.factionrealm.whitelist) do
-		row = row + 1
-		if( row % 2 == 0 ) then
-			local seperator = AceGUI:Create("Label")
-			seperator:SetRelativeWidth(0.10)
-			container:AddChild(seperator)
-		end
-		
-		local label = AceGUI:Create("Label")
-		label:SetText(name)
-		label:SetRelativeWidth(0.25)
-		container:AddChild(label)
-		
-		local delete = AceGUI:Create("Button")
-		delete:SetUserData("id", id)
-		delete:SetUserData("container", container)
-		delete:SetText(L["Remove"])
-		delete:SetCallback("OnClick", deleteWhitelist)
-		delete:SetRelativeWidth(0.20)
-		delete:SetHeight(19)
-		container:AddChild(delete)
-			
-	end
-	
-	if( row == 0 ) then
-		local listEmpty = AceGUI:Create("Label")
-		listEmpty:SetText(L["You have nobody on your whitelist yet."])
-		listEmpty:SetFullWidth(true)
-		container:AddChild(listEmpty)
+	for key, data in pairs(groupSettings) do
+		options.args.general.args[key] = data
 	end
 end
 
-deleteWhitelist = function(widget, event)
-	QuickAuctions.db.factionrealm.whitelist[widget:GetUserData("id")] = nil
-	updateWhitelist(widget:GetUserData("container"))
-end
-
-local function addWhitelist(widget, event, value)
-	if( value == "" ) then
-		configFrame:SetStatusText(L["No player name entered."])
-		return
+local deleteWhitelist 
+local function updateWhitelist()
+	table.wipe(options.args.whitelist.args.list.args)
+	local order = 1
+	for player, visualName in pairs(QuickAuctions.db.factionrealm.whitelist) do
+		options.args.whitelist.args.list.args[player .. "text"] = {
+			order = order,
+			type = "description",
+			name = visualName,
+			fontSize = "medium",
+		}
+		
+		options.args.whitelist.args.list.args[player] = {
+			order = order + 0.25,
+			type = "execute",
+			name = L["Delete"],
+			func = deleteWhitelist,
+			width = "half",
+		}
+		
+		options.args.whitelist.args.list.args[player .. "sep"] = {order = order + 0.50, type = "description", name = ""}
+		order = order + 1
 	end
 	
-	QuickAuctions.db.factionrealm.whitelist[string.lower(value)] = value
-
-	configFrame:SetStatusText(nil)
-	widget:SetText(nil)
-	
-	updateWhitelist(widget:GetUserData("container"))
-end
-
-local function whitelistConfig(container)
-	-- Help
-	local help = AceGUI:Create("InlineGroup")
-	help:SetTitle(L["Help"])
-	help:SetLayout("Flow")
-	help:SetFullWidth(true)
-	container:AddChild(help)
-	
-	local helpText = AceGUI:Create("Label")
-	helpText:SetText(L["Whistlists give you a way of setting others users who Quick Auctions should not undercut; however, if they match your buyout and undercut your bid they will still be considered undercutting.\n\nWhile your alts are not shown in this list, your alts will be considered yourself automatically."])
-	helpText:SetFullWidth(true)
-	help:AddChild(helpText)
-	
-	-- Add new player to whitelist
-	local addList = AceGUI:Create("InlineGroup")
-	addList:SetTitle(L["Add new player"])
-	addList:SetLayout("Flow")
-	addList:SetFullWidth(true)
-	container:AddChild(addList)
-	
-	local add = AceGUI:Create("EditBox")
-	add:SetUserData("name", L["Player name"]) 
-	add:SetUserData("desc", L["Adds a new player to the whitelist so they will not be undercut."])
-	add:SetCallback("OnEnter", showTooltip)
-	add:SetCallback("OnLeave", hideTooltip)
-	add:SetLabel(add:GetUserData("name"))
-	add:SetRelativeWidth(0.35)
-	add:SetCallback("OnEnterPressed", addWhitelist)
-	add:SetText(nil)
-	addList:AddChild(add)
-	
-	-- Actual listing
-	local whitelist = AceGUI:Create("InlineGroup")
-	whitelist:SetTitle(L["List"])
-	whitelist:SetLayout("Flow")
-	whitelist:SetFullWidth(true)
-	container:AddChild(whitelist)
-	add:SetUserData("container", whitelist)
-	
-	updateWhitelist(whitelist)
-end
-
---[[
-	GROUP CONFIGURATION
-]]
-local confirmGroup, oldStrata
-local function deleteGroup(widget, event)
-	if( not StaticPopupDialogs["QUICKAUCTIONS_CONFIRM_DELETE"] ) then
-		StaticPopupDialogs["QUICKAUCTIONS_CONFIRM_DELETE"] = {
-			text = L["Are you sure you want to delete this group?"],
-			button1 = L["Yes"],
-			button2 = L["No"],
-			OnAccept = function(dialog)
-				dialog:SetFrameStrata(oldStrata)
-
-				QuickAuctions.db.profile.groups[confirmGroup] = nil
-				QuickAuctions.db.profile.undercut[confirmGroup] = nil
-				QuickAuctions.db.profile.postTime[confirmGroup] = nil
-				QuickAuctions.db.profile.bidPercent[confirmGroup] = nil
-				QuickAuctions.db.profile.fallback[confirmGroup] = nil
-				QuickAuctions.db.profile.fallbackCap[confirmGroup] = nil
-				QuickAuctions.db.profile.threshold[confirmGroup] = nil
-				QuickAuctions.db.profile.postCap[confirmGroup] = nil
-				QuickAuctions.db.profile.perAuction[confirmGroup] = nil
-				
-				updateTree()
-				categoryTree:SelectByPath("groups")
-			end,
-			OnCancel = function(dialog)
-				dialog:SetFrameStrata(oldStrata)
-			end,
-			timeout = 30,
-			whileDead = 1,
-			hideOnEscape = 1,
+	if( order == 1 ) then
+		options.args.whitelist.args.list.args.none = {
+			order = 1,
+			type = "description",
+			name = L["You do not have any players on your whitelist yet."],
 		}
 	end
-
-	confirmGroup = widget:GetUserData("id")
-
-	local dialog = StaticPopup_Show("QUICKAUCTIONS_CONFIRM_DELETE")
-	oldStrata = dialog:GetFrameStrata()
-	dialog:SetFrameStrata("TOOLTIP")
 end
 
-local function addGroup(widget, event, value)
-	local name = string.lower(value)
-	for groupName in pairs(QuickAuctions.db.profile.groups) do
-		if( string.lower(groupName) == name ) then
-			configFrame:SetStatusText(string.format(L["The group \"%s\" already exists."], value))
-			return
+deleteWhitelist = function(info)
+	QuickAuctions.db.factionrealm.whitelist[info[#(info)]] = nil
+	updateWhitelist()
+end
+
+local function loadWhitelistOptions()
+	options.args.whitelist = {
+		order = 2,
+		type = "group",
+		name = L["Whitelist"],
+		args = {
+			help = {
+				order = 0,
+				type = "group",
+				inline = true,
+				name = L["Help"],
+				args = {
+					help = {
+						order = 0,
+						type = "description",
+						name = function(info) return not QuickAuctions.db.global.superScan and L["Whitelists allow you to set other players besides you and your alts that you do not want to undercut; however, if somebody on your whitelist matches your buyout but lists a lower bid it will still consider them undercutting."] or L["Super scan is enabled, you will not be able to use your whitelist. Disable super scanner to use the whitelist again."] end
+					},
+				},
+			},
+			add = {
+				order = 1,
+				type = "group",
+				inline = true,
+				name = L["Add player"],
+				args = {
+					name = {
+						order = 0,
+						type = "input",
+						name = L["Player name"],
+						desc = L["Add a new player to your whitelist."],
+						validate = function(info, value)
+							value = string.trim(string.lower(value or ""))
+							if( value == "" ) then return L["No name entered."] end
+							
+							for playerID, player in pairs(QuickAuctions.db.factionrealm.whitelist) do
+								return string.format(L["The player \"%s\" is already on your whitelist."], player)
+							end
+							
+							for player in pairs(QuickAuctions.db.factionrealm.player) do
+								if( string.lower(player) == value ) then
+									return string.format(L["You do not need to add \"%s\", alts are whitelisted automatically."], player)
+								end
+							end
+							
+							return true
+						end,
+						set = function(info, value)
+							QuickAuctions.db.factionrealm[string.lower(value)] = value
+							updateWhitelist()
+						end,
+						get = false,
+					},
+				},
+			},
+			list = {
+				order = 2,
+				type = "group",
+				inline = true,
+				name = L["Whitelist"],
+				args = {
+					
+				},
+			},
+		},
+	}
+	
+	updateWhitelist()
+end
+
+local function loadMailOptions()
+	options.args.mail = {
+		order = 3,
+		type = "group",
+		name = L["Auto mailer"],
+		args = {}
+	}
+end
+
+local updateGroups
+
+
+local throttle
+local addItemsTable = {
+	order = 3,
+	type = "group",
+	inline = true,
+	name = L["Item list"],
+	hidden = function()
+		if( not throttle or throttle <= GetTime() ) then
+			throttle = GetTime() + 5
+			Config:RebuildItemList(true)
 		end
-	end
-	
-	configFrame:SetStatusText(nil)
+	end,
+	args = {},
+}
 
-	QuickAuctions.db.profile.groups[value] = {}
-	updateTree()
-	categoryTree:SelectByPath("groups", value)
-end
+local addItem = {
+	type = "execute",
+	name = function(info) return (select(2, GetItemInfo(info[#(info)]))) end,
+	image = function(info) return (select(10, GetItemInfo(info[#(info)]))) end,
+	hidden = false,
+	imageHeight = 24,
+	imageWidth = 24,
+	func = function(info)
+		QuickAuctions.db.global.groups[idToGroup[info[2]]][info[#(info)]] = true
+		options.args.groups.args[info[2]].args.remove.args.list.args[info[#(info)]] = removeItemTable
+		options.args.groups.args[info[2]].args.remove.args.list.args.help = nil
+		addItemsTable.args[info[#(info)]] = nil
+	end,
+	width = "half",
+}
 
-local function groupGeneralConfig(container)
-	createAuctionSettings(container, container:GetUserData("id"))
-	
-	local sep = AceGUI:Create("Label")
-	sep:SetFullWidth(true)
-	sep:SetHeight(50)
-	container:AddChild(sep)
-	
-	local delete = AceGUI:Create("Button")
-	delete:SetText(L["Delete"])
-	delete:SetRelativeWidth(0.20)
-	delete:SetUserData("id", container:GetUserData("id"))
-	delete:SetCallback("OnClick", deleteGroup)
-	container:AddChild(delete)
-end
-
-local function showItemTooltip(widget)
-	GameTooltip:SetOwner(widget:GetUserData("icon") or widget.frame, "ANCHOR_TOPLEFT")
-	if( widget:GetUserData("validLink") ) then
-		GameTooltip:SetHyperlink(widget:GetUserData("itemID"))
-	else
-		GameTooltip:SetText(L["Item data not found, you will need to see this item before the name is shown."], 1, .82, 0, 1)
-	end
-	GameTooltip:Show()
-end
-
-local deleteItemFromGroup
-local function updateEditGroupList(container)
-	container:ReleaseChildren()
-	
-	-- InteractiveLabel tries to automatically move icons to the top if theres not enough width available, which I don't want
-	-- it should always have it on the side no matter what
-	local row = 0
-	for itemID in pairs(QuickAuctions.db.profile.groups[container:GetUserData("id")]) do
-		local itemName, itemLink, _, _, _, _, _, _, _, itemTexture = GetItemInfo(itemID)
+-- Remove management
+local removeItemTable = {
+	type = "execute",
+	name = function(info) return (select(2, GetItemInfo(info[#(info)]))) or info[#(info)] end,
+	image = function(info) return (select(10, GetItemInfo(info[#(info)]))) or "Interface\\Icons\\INV_Misc_QuestionMark" end,
+	hidden = false,
+	imageHeight = 24,
+	imageWidth = 24,
+	func = function(info)
+		QuickAuctions.db.global.groups[idToGroup[info[2]]][info[#(info)]] = nil
+		options.args.groups.args[info[2]].args.remove.args.list.args[info[#(info)]] = nil
+		addItemsTable.args[info[#(info)]] = addItem
 		
-		if( row % 2 == 0 ) then
-			local sep = AceGUI:Create("Label")
-			sep:SetFullWidth(true)
-			container:AddChild(sep)
+		local hasItems
+		for itemID in pairs(QuickAuctions.db.global.groups[idToGroup[info[2]]]) do
+			hasItems = true
+			break
 		end
-
-		row = row + 1
 		
-		local icon = AceGUI:Create("InteractiveLabel")
-		icon:SetImage(itemTexture or "Interface\\Icons\\INV_Misc_QuestionMark")
-		icon:SetUserData("group", container:GetUserData("id"))
-		icon:SetUserData("itemID", itemID)
-		icon:SetUserData("validLink", itemLink)
-		icon:SetUserData("container", container)
-		icon:SetCallback("OnClick", deleteItemFromGroup)
-		icon:SetCallback("OnEnter", showItemTooltip)
-		icon:SetCallback("OnLeave", hideTooltip)
-		icon:SetImageSize(22, 22)
-		icon:SetHighlight(0, 0, 0, 0)
-		icon:SetRelativeWidth(0.10)
-
-		container:AddChild(icon)
-		
-		local item = AceGUI:Create("InteractiveLabel")
-		item:SetText(itemLink or itemID)
-		item:SetUserData("group", container:GetUserData("id"))
-		item:SetUserData("icon", icon.frame)
-		item:SetUserData("itemID", itemID)
-		item:SetUserData("validLink", itemLink)
-		item:SetUserData("container", container)
-		item:SetCallback("OnClick", deleteItemFromGroup)
-		item:SetCallback("OnEnter", showItemTooltip)
-		item:SetCallback("OnLeave", hideTooltip)
-		item:SetRelativeWidth(0.35)
-		item:SetHeight(20)
-		
-		container:AddChild(item)
-	end
-	
-	if( row == 0 ) then
-		local listEmpty = AceGUI:Create("Label")
-		listEmpty:SetText(string.format(L["The %s group does not have any items in it yet."], container:GetUserData("id")))
-		listEmpty:SetFullWidth(true)
-		container:AddChild(listEmpty)
-	end
-end
-
-deleteItemFromGroup = function(widget)
-	QuickAuctions.db.profile.groups[widget:GetUserData("group")][widget:GetUserData("itemID")] = nil
-	updateEditGroupList(widget:GetUserData("container"))
-end
-
-local function groupDeleteConfig(container)
-	-- Help
-	local help = AceGUI:Create("InlineGroup")
-	help:SetTitle(L["Help"])
-	help:SetLayout("Flow")
-	help:SetFullWidth(true)
-	container:AddChild(help)
-	
-	local helpText = AceGUI:Create("Label")
-	helpText:SetText(L["Click an item to remove it from this group."])
-	helpText:SetFullWidth(true)
-	help:AddChild(helpText)
-	
-	-- Do item list
-	local items = AceGUI:Create("InlineGroup")
-	items:SetTitle(L["Items"])
-	items:SetFullWidth(true)
-	items:SetLayout("Flow")
-	items:SetUserData("id", container:GetUserData("id"))
-	container:AddChild(items)
-	
-	updateEditGroupList(items)
-end
+		if( not hasItems ) then
+			options.args.groups.args[info[2]].args.remove.args.list.args.help = {
+				order = 0,
+				type = "description",
+				name = L["No items have been added to this group yet."],
+			}	
+		end
+	end,
+	width = "half",
+}
 
 -- Make sure the item isn't soulbound
 local scanTooltip
+local resultsCache = {}
 local function isSoulbound(bag, slot)
+	if( resultsCache[bag .. slot] ~= nil ) then return resultsCache[bag .. slot] end
+	
 	if( not scanTooltip ) then
 		scanTooltip = CreateFrame("GameTooltip", "QuickAuctionsScanTooltip", UIParent, "GameTooltipTemplate")
 		scanTooltip:SetOwner(UIParent, "ANCHOR_NONE")	
@@ -985,311 +704,350 @@ local function isSoulbound(bag, slot)
 	for id=1, scanTooltip:NumLines() do
 		local text = _G["QuickAuctionsScanTooltipTextLeft" .. id]
 		if( text and text:GetText() and text:GetText() == ITEM_SOULBOUND ) then
+			resultsCache[bag .. slot] = true
 			return true
 		end
 	end
 	
+	resultsCache[bag .. slot] = nil
 	return false
 end
 
-local function isAlreadyGrouped(itemID)
-	for _, itemList in pairs(QuickAuctions.db.profile.groups) do
-		if( itemList[itemID] ) then
-			return true
+-- Delete a group :(
+local function deleteGroup(info)
+	local group = idToGroup[info[2]]
+	QuickAuctions.db.global.groups[group] = nil
+	for key, data in pairs(QuickAuctions.db.profile) do
+		if( type(data) == "table" and data[group] ~= nil ) then
+			data[group] = nil
 		end
 	end
 	
-	return false
+	updateGroups()
 end
 
-local addItemToGroup
-local alreadyListed = {}
-local function updateAddGroupList(container)
-	container:ReleaseChildren()
-
-	local row = 0
-	for bag=4, 0, -1 do
-		if( QuickAuctions:IsValidBag(bag) ) then
-			for slot=1, GetContainerNumSlots(bag) do
-				local link = GetContainerItemLink(bag, slot)
-				local itemID = QuickAuctions:GetSafeLink(link)
-				if( link and not alreadyListed[itemID] and not isSoulbound(bag, slot) and not isAlreadyGrouped(itemID) ) then
-					local itemName, itemLink, _, _, _, _, _, _, _, itemTexture = GetItemInfo(link)
-					
-					if( row % 2 == 0 ) then
-						local sep = AceGUI:Create("Label")
-						sep:SetFullWidth(true)
-						container:AddChild(sep)
-					end
-					row = row + 1
-					
-					local icon = AceGUI:Create("InteractiveLabel")
-					icon:SetImage(itemTexture or "Interface\\Icons\\INV_Misc_QuestionMark")
-					icon:SetUserData("group", container:GetUserData("id"))
-					icon:SetUserData("itemID", itemID)
-					icon:SetUserData("validLink", itemLink)
-					icon:SetUserData("container", container)
-					icon:SetCallback("OnClick", addItemToGroup)
-					icon:SetCallback("OnEnter", showItemTooltip)
-					icon:SetCallback("OnLeave", hideTooltip)
-					icon:SetImageSize(22, 22)
-					icon:SetHighlight(0, 0, 0, 0)
-					icon:SetRelativeWidth(0.10)
-
-					container:AddChild(icon)
-					
-					local item = AceGUI:Create("InteractiveLabel")
-					item:SetText(itemLink or itemID)
-					item:SetUserData("group", container:GetUserData("id"))
-					item:SetUserData("icon", icon.frame)
-					item:SetUserData("itemID", itemID)
-					item:SetUserData("validLink", itemLink)
-					item:SetUserData("container", container)
-					item:SetCallback("OnClick", addItemToGroup)
-					item:SetCallback("OnEnter", showItemTooltip)
-					item:SetCallback("OnLeave", hideTooltip)
-					item:SetRelativeWidth(0.35)
-					item:SetHeight(20)
-					
-					container:AddChild(item)
-
-					alreadyListed[itemID] = true
-				end
-			end
+local function validateGroupRename(info, value)
+	value = string.trim(string.lower(value or ""))
+	for name in pairs(QuickAuctions.db.global.groups) do
+		if( string.lower(name) == value ) then
+			return string.format(L["Group named \"%s\" already exists!"], name)
 		end
 	end
 	
-	if( row == 0 ) then
-		local listEmpty = AceGUI:Create("Label")
-		listEmpty:SetText(L["Either your inventory is empty, or all of the items inside it are already listed in other groups."])
-		listEmpty:SetFullWidth(true)
-		container:AddChild(listEmpty)
+	return true
+end
+
+local function renameGroup(info, value)
+	local oldName = idToGroup[info[2]]
+	
+	QuickAuctions.db.global.groups[value] = CopyTable(QuickAuctions.db.global.groups[oldName])
+	QuickAuctions.db.global.groups[oldName] = nil
+	for key, data in pairs(QuickAuctions.db.profile) do
+		if( type(data) == "table" and data[oldName] ~= nil ) then
+			data[value] = data[oldName]
+			data[oldName] = nil
+		end
 	end
-
-	table.wipe(alreadyListed)
+	
+	-- Update reference so we don't create a new entry or change pages
+	idToGroup[info[2]] = value
+	idToGroup[value] = true
+	idToGroup[oldName] = nil
+	
+	updateGroups()
 end
 
-addItemToGroup = function(widget)
-	QuickAuctions.db.profile.groups[widget:GetUserData("group")][widget:GetUserData("itemID")] = true
-	updateAddGroupList(widget:GetUserData("container"))
-end
-
-local function addByFilter(widget, event, value)
+-- Mass add by name
+local function massAddItems(info, value)
 	value = string.trim(string.lower(value))
 	
-	local added = true
+	QuickAuctions.Manage:UpdateReverseLookup()
+	
 	for bag=4, 0, -1 do
-		if( QuickAuctions:IsValidBag(bag) ) then
-			for slot=1, GetContainerNumSlots(bag) do
-				local link = GetContainerItemLink(bag, slot)
-				if( link and not isSoulbound(bag, slot) and not isAlreadyGrouped(itemID) ) then
-					local name = string.lower(GetItemInfo(link))
-					if( string.match(name, value) ) then
-						QuickAuctions.db.profile.groups[widget:GetUserData("id")][QuickAuctions:GetSafeLink(link)] = true
-						added = true
-					end
+		for slot=1, GetContainerNumSlots(bag) do
+			local link = QuickAuctions:GetSafeLink(GetContainerItemLink(bag, slot))
+			local name = link and string.lower(GetItemInfo(link))
+			if( link and name and string.match(name, value) and not QuickAuctions.modules.Manage.reverseLookup[link] and not isSoulbound(bag, slot) ) then
+				QuickAuctions.db.global.groups[idToGroup[info[2]]][link] = true
+				options.args.groups.args[info[2]].args.remove.args.list.args[link] = removeItemTable
+				options.args.groups.args[info[2]].args.remove.args.list.args.help = nil
+				addItemsTable.args[link] = nil
+			end
+		end
+	end
+end
+
+function Config:RebuildItemList(updateOnChange)
+	QuickAuctions.Manage:UpdateReverseLookup()
+	table.wipe(addItemsTable.args)
+
+	local addedItem, hasItems
+	for bag=4, 0, -1 do
+		for slot=1, GetContainerNumSlots(bag) do
+			local link = QuickAuctions:GetSafeLink(GetContainerItemLink(bag, slot))
+			if( link and not addItemsTable.args[link] and not QuickAuctions.modules.Manage.reverseLookup[link] and not isSoulbound(bag, slot) ) then
+				local itemName, itemLink, _, _, _, _, _, _, _, itemTexture = GetItemInfo(link)
+				addItemsTable.args[link] = addItem
+				addedItem = true
+				hasItems = true
+			elseif( link and addItemsTable.args[link] ) then
+				hasItems = true
+			end
+		end
+	end
+	
+	if( not hasItems ) then
+		addItemsTable.args.help = {
+			order = 0,
+			type = "description",
+			name = L["You do not have any items to add to this group, either your inventory is empty or all the items are already in another group."]
+		}
+	end
+	
+	-- "Trick" to get event-based changes of a GUI in AceConfig
+	if( updateOnChange and addedItem ) then
+		AceRegistry:NotifyChange("QuickAuctions")
+	end
+end
+					
+-- General group table					
+local groupTable = {
+	order = 0,
+	type = "group",
+	childGroups = "tab",
+	name = function(info) return idToGroup[info[#(info)]] end,
+	args = {
+		general = {
+			order = 1,
+			type = "group",
+			name = L["Auction settings"],
+			args = {
+			
+			},
+		},
+		group = {
+			order = 2,
+			type = "group",
+			name = L["Management"],
+			args = {
+				rename = {
+					order = 1,
+					type = "group",
+					name = L["Rename"],
+					inline = true,
+					args = {
+						rename = {
+							order = 0,
+							type = "input",
+							name = L["New group name"],
+							desc = L["Rename this group to something else!"],
+							validate = validateGroupRename,
+							set = renameGroup,
+							get = false,
+						},
+					},
+				},
+				delete = {
+					order = 2,
+					type = "group",
+					name = L["Delete"],
+					inline = true,
+					args = {
+						delete = {
+							order = 0,
+							type = "execute",
+							name = L["Delete group"],
+							desc = L["Delete this group, this cannot be undone!"],
+							confirm = true,
+							confirmText = L["Are you SURE you want to delete this group?"],
+							func = deleteGroup,
+						},
+					},
+				},
+			},
+		},
+		add = {
+			order = 3,
+			type = "group",
+			name = L["Add items"],
+			args = {
+				help = {
+					order = 1,
+					type = "group",
+					inline = true,
+					name = L["Help"],
+					args = {
+						help = {
+							order = 1,
+							type = "description",
+							name = L["Click an item to add it to this group, you can only have one item in a group at any time."]
+						},
+					},
+				},
+				massAdd = {
+					order = 2,
+					type = "group",
+					inline = true,
+					name = L["Mass add"],
+					args = {
+						name = {
+							order = 1,
+							type = "input",
+							name = L["Add items matching"],
+							desc = L["Mass adds all items matching the below, entering \"Glyph of\" will mass add all items starting with \"Glyph of\" to this group."],
+							set = massAddItems,
+							get = false,
+						},
+					},
+				},
+			},
+		},
+		remove = {
+			order = 4,
+			type = "group",
+			name = L["Remove items"],
+			args = {
+				help = {
+					order = 1,
+					type = "group",
+					inline = true,
+					name = L["Help"],
+					hidden = false,
+					args = {
+						help = {
+							order = 1,
+							type = "description",
+							name = L["Click an item to remove it from this group."]
+						},
+					},
+				},
+				list = {
+					order = 2,
+					type = "group",
+					inline = true,
+					name = L["Item list"],
+					hidden = false,
+					args = {
+					
+					},
+				},
+			},
+		},
+	},
+}
+
+for key, tbl in pairs(groupSettings) do groupTable.args.general.args[key] = tbl end
+
+updateGroups = function()
+	for id, group in pairs(idToGroup) do
+		if( type(group) == "string" and not QuickAuctions.db.global.groups[group] ) then
+			options.args.groups.args[id] = nil
+			idToGroup[id] = nil
+			idToGroup[group] = nil
+		end
+	end
+
+	for group, items in pairs(QuickAuctions.db.global.groups) do
+		if( not idToGroup[group] ) then
+			idToGroup[tostring(groupID)] = group
+			idToGroup[group] = true
+			options.args.groups.args[tostring(groupID)] = CopyTable(groupTable)
+			options.args.groups.args[tostring(groupID)].args.add.args.list = addItemsTable
+
+			local hasItems
+			for itemID in pairs(items) do
+				hasItems = true
+				options.args.groups.args[tostring(groupID)].args.remove.args.list.args[itemID] = removeItemTable
+			end
+			
+			if( not hasItems ) then
+				options.args.groups.args[tostring(groupID)].args.remove.args.list.args.help = {
+					order = 0,
+					type = "description",
+					name = L["No items have been added to this group yet."],
+				}
+			end
+
+			groupID = groupID + 1
 				end
-			end
-		end
-	end
-	
-	widget:SetText(nil)
-	
-	if( added ) then
-		updateAddGroupList(widget:GetUserData("container"))
 	end
 end
 
-local function groupAddConfig(container)
-	-- Help
-	local help = AceGUI:Create("InlineGroup")
-	help:SetTitle(L["Help"])
-	help:SetLayout("Flow")
-	help:SetFullWidth(true)
-	container:AddChild(help)
+local function loadGroupOptions()
+	options.args.groups = {
+		order = 4,
+		type = "group",
+		name = L["Item groups"],
+		childGroups = "tree",
+		args = {
+			add = {
+				order = 0,
+				type = "group",
+				name = L["Add group"],
+				inline = true,
+				args = {
+					name = {
+						order = 0,
+						type = "input",
+						name = L["Group name"],
+						desc = L["Name of the new group, this can be whatever you want and has no relation to how the group itself functions."],
+						validate = function(info, value)
+							value = string.trim(string.lower(value or ""))
+							for name in pairs(QuickAuctions.db.global.groups) do
+								if( string.lower(name) == value ) then
+									return string.format(L["Group named \"%s\" already exists!"], name)
+								end
+							end
+							
+							return true
+						end,
+						set = function(info, value)
+							QuickAuctions.db.global.groups[value] = {}
+						end,
+						get = false,
+					},
+				},
+			},
+		},
+	}
 	
-	local helpText = AceGUI:Create("Label")
-	helpText:SetText(L["Click an item to add it to this group, you cannot add an item that is already in another group.\n\nYou can enter a search and it will automatically add any item from your inventory that matches the filter."])
-	helpText:SetFullWidth(true)
-	help:AddChild(helpText)
-	
-	-- Add all matching filter
-	local filterContainer = AceGUI:Create("InlineGroup")
-	filterContainer:SetTitle(L["Add items matching filter"])
-	filterContainer:SetLayout("Flow")
-	filterContainer:SetFullWidth(true)
-	container:AddChild(filterContainer)
-	
-	local add = AceGUI:Create("EditBox")
-	add:SetUserData("name", L["Add items matching filter"]) 
-	add:SetUserData("desc", L["Items in your inventory (and only your inventory) that match the filter will be added to this group."])
-	add:SetUserData("id", container:GetUserData("id"))
-	add:SetCallback("OnEnter", showTooltip)
-	add:SetCallback("OnLeave", hideTooltip)
-	add:SetRelativeWidth(0.50)
-	add:SetCallback("OnEnterPressed", addByFilter)
-	add:SetText(nil)
-	filterContainer:AddChild(add)
-	
-	-- Do item list
-	local items = AceGUI:Create("InlineGroup")
-	items:SetTitle(L["Items"])
-	items:SetFullWidth(true)
-	items:SetLayout("Flow")
-	items:SetUserData("id", container:GetUserData("id"))
-	container:AddChild(items)
-	
-	add:SetUserData("container", items)
-	
-	updateAddGroupList(items)
+	updateGroups()
+	Config:RebuildItemList()
 end
 
--- Tabs for group selection
-local function groupTabSelected(container, event, selected)
-	container:ReleaseChildren()
-	container:SetLayout("Fill")
-	
-	local scroll = AceGUI:Create("ScrollFrame")
-	scroll:SetLayout("Flow")
-	scroll:SetFullHeight(true)
-	scroll:SetFullWidth(true)
-	scroll:SetUserData("id", container:GetUserData("id"))
-	
-	if( selected == "general" ) then
-		groupGeneralConfig(scroll)
-	elseif( selected == "delete" ) then
-		groupDeleteConfig(scroll)
-	elseif( selected == "add" ) then
-		groupAddConfig(scroll)
-	end
-	
-	container:AddChild(scroll)
+local function loadPreloadOptions()
+	options.args.preload = {
+		order = 3,
+		type = "group",
+		name = L["Preload groups"],
+		args = {
+		
+		},
+	}
 end
 
-local groupTabs = {{value = "general", text = L["General"]}, {value = "add", text = L["Add items"]}, {value = "delete", text = L["Remove items"]}}
-local function groupsConfig(container, id)
-	local tabGroup = AceGUI:Create("TabGroup")
-	tabGroup:SetCallback("OnGroupSelected", groupTabSelected)
-	tabGroup:SetUserData("id", id)
-	tabGroup:SetTabs(groupTabs)
-	tabGroup:SetLayout("Flow")
-	tabGroup:SelectTab("general")
-	tabGroup:SetFullWidth(true)
-	tabGroup:SetFullHeight(true)
-	container:AddChild(tabGroup)
-end
-
-
-local function manageGroupsConfig(container)
-	-- Help
-	local help = AceGUI:Create("InlineGroup")
-	help:SetTitle(L["Help"])
-	help:SetLayout("Flow")
-	help:SetFullWidth(true)
-	container:AddChild(help)
+local function loadOptions()
+	options = {
+		type = "group",	
+		name = "Quick Auctions",
+		childGroups = "tree",
+		args = {},
+	}
 	
-	local helpText = AceGUI:Create("Label")
-	helpText:SetText(L["Groups are both how you list items to be managed by Quick Auctions as well as giving you finer control for auction configuration.\n\nYou cannot have the same item in multiple groups at the same time."])
-	helpText:SetFullWidth(true)
-	help:AddChild(helpText)
+	loadGeneralOptions()
+	loadWhitelistOptions()
+	loadPreloadOptions()
+	loadMailOptions()
+	loadGroupOptions()
 	
-	-- Create a new group
-	local addList = AceGUI:Create("InlineGroup")
-	addList:SetTitle(L["Add new group"])
-	addList:SetLayout("Flow")
-	addList:SetFullWidth(true)
-	container:AddChild(addList)
-	
-	local add = AceGUI:Create("EditBox")
-	add:SetUserData("name", L["Group name"]) 
-	add:SetUserData("desc", L["Creates a new group in Quick Auctions."])
-	add:SetCallback("OnEnter", showTooltip)
-	add:SetCallback("OnLeave", hideTooltip)
-	add:SetLabel(add:GetUserData("name"))
-	add:SetRelativeWidth(0.50)
-	add:SetCallback("OnEnterPressed", addGroup)
-	add:SetText(nil)
-	addList:AddChild(add)
-end
-
-
-local function categorySelected(container, event, selected)
-	container:ReleaseChildren()
-	container:SetLayout("Fill")
-	
-	-- Save last selected group for next time someone opens QA config in this session
-	lastTree = selected
-	
-	local scroll
-	if( selected == "general" or selected == "whitelist" or selected == "groups" ) then
-		scroll = AceGUI:Create("ScrollFrame")
-		scroll:SetLayout("Flow")
-		scroll:SetFullHeight(true)
-		scroll:SetFullWidth(true)
-	end
-	
-	if( selected == "general" ) then
-		generalConfig(scroll)
-	elseif( selected == "whitelist" ) then
-		whitelistConfig(scroll)
-	else
-		local selected, id = string.split("\001", selected)
-		if( selected == "groups" ) then
-			if( id ) then
-				groupsConfig(container, id)
-			else
-				manageGroupsConfig(scroll)
-			end
-		end
-	end
-
-	if( scroll ) then
-		container:AddChild(scroll)
-	end
-end
-
--- Create the core frame
-local old_CloseSpecialWindows
-local function createOptions()
-	-- This seems to be the easiest way to hide AceGUI frames when ESCAPE is hit, which seems silly but a decent quick solution
-	if( not old_CloseSpecialWindows ) then
-		old_CloseSpecialWindows = CloseSpecialWindows
-		CloseSpecialWindows = function()
-			local found = old_CloseSpecialWindows()
-			if( configFrame:IsVisible() ) then
-				configFrame:Hide()
-				return true
-			end
-
-			return found
-		end
-	end
-	
-	-- Create the category selection tree
-	categoryTree = AceGUI:Create("TreeGroup")
-	categoryTree:SetCallback("OnGroupSelected", categorySelected)
-	categoryTree:SetStatusTable({groups = {["groups"] = true}})
-	categoryTree:SelectByPath(lastTree)
-	
-	updateTree()
-
-	-- Create the frame container
-	local frame = AceGUI:Create("Frame")
-	frame:SetTitle("Quick Auctions")
-	frame:SetCallback("OnClose", function(container) AceGUI:Release(container) end)
-	frame:SetLayout("Fill")
-	frame:AddChild(categoryTree)
-	frame:SetHeight(450)
-	frame:SetWidth(700)
-	frame:Show()
-	
-	configFrame = frame
+	options.args.profile = LibStub("AceDBOptions-3.0"):GetOptionsTable(QuickAuctions.db, true)
+	options.args.profile.order = 5
 end
 
 SLASH_QA1 = nil
 SLASH_QUICKAUCTION1 = nil
 
-SLASH_QUICKAUCTIONS1 = "/qa"
+SLASH_QUICKAUCTIONS1 = "/qa" 
 SLASH_QUICKAUCTIONS2 = "/quickauction"
 SLASH_QUICKAUCTIONS3 = "/quickauctions"
 SlashCmdList["QUICKAUCTIONS"] = function(msg)
@@ -1332,12 +1090,16 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 		end
 	-- Configuration
 	elseif( cmd == "config" ) then
-		if( not configFrame or not configFrame:IsVisible() ) then
-			createOptions()
-			configFrame:Show()
-		else
-			configFrame:Hide()
+		if( not AceDialog and not AceRegistry ) then
+			loadOptions()
+			
+			AceDialog = LibStub("AceConfigDialog-3.0")
+			AceRegistry = LibStub("AceConfigRegistry-3.0")
+			LibStub("AceConfig-3.0"):RegisterOptionsTable("QuickAuctions", options)
+			AceDialog:SetDefaultSize("QuickAuctions", 700, 500)
 		end
+			
+		AceDialog:Open("QuickAuctions")
 	-- Tradeskill
 	elseif( cmd == "tradeskill" ) then
 		if( QuickAuctions.Tradeskill.frame and QuickAuctions.Tradeskill.frame:IsVisible() ) then
