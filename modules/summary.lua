@@ -279,7 +279,7 @@ function Summary:Update()
 			if( not QuickAuctions.db.profile.categories[data.name] ) then
 				for index, childData in pairs(displayData) do
 					if( childData.enabled and not childData.isParent and childData.parent == data.name ) then
-						if( not summaryData.canCraft or not QuickAuctions.db.profile.hideUncraft or summaryData.canCraft(childData.link, (GetItemInfo(childData.link)) or "") ) then
+						if( not summaryData.canCraft or not QuickAuctions.db.global.hideUncraft or summaryData.canCraft(childData.link, (GetItemInfo(childData.link)) or "") ) then
 							table.insert(rowDisplay, index)
 						end
 					end
@@ -688,12 +688,12 @@ function Summary:CreateGUI()
 	row:SetNormalFontObject(GameFontNormalSmall)
 	row:SetHighlightFontObject(GameFontHighlightSmall)
 	row:SetDisabledFontObject(GameFontDisableSmall)
-	row:SetText(QuickAuctions.db.profile.hideUncraft and L["Show uncraftables"] or L["Hide uncraftables"])
+	row:SetText(QuickAuctions.db.global.hideUncraft and L["Show uncraftables"] or L["Hide uncraftables"])
 	row:SetScript("OnEnter", showTooltip)
 	row:SetScript("OnLeave", hideTooltip)
 	row:SetScript("OnClick", function(self)
-		QuickAuctions.db.profile.hideUncraft = not QuickAuctions.db.profile.hideUncraft
-		self:SetText(QuickAuctions.db.profile.hideUncraft and L["Show uncraftables"] or L["Hide uncraftables"])
+		QuickAuctions.db.global.hideUncraft = not QuickAuctions.db.global.hideUncraft
+		self:SetText(QuickAuctions.db.global.hideUncraft and L["Show uncraftables"] or L["Hide uncraftables"])
 		Summary:Update()
 	end)
 	row:SetPoint("TOPLEFT", self.getDataButton, "BOTTOMLEFT", 0, -10)
