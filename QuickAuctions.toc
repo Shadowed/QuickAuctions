@@ -1,5 +1,5 @@
 ## Interface: 30300
-## Title: Quick Auctions 2
+## Title: Quick Auctions 3
 ## Notes: Go quick, or go home!
 ## Author: Shadowed
 ## LoadManagers: AddonLoader
