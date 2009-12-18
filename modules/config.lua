@@ -4,6 +4,32 @@ local L = QuickAuctions.L
 local AceDialog, AceRegistry, options
 local idToGroup, groupID = {}, 1
 
+-- Make sure the item isn't soulbound
+local scanTooltip
+local resultsCache = {}
+local function isSoulbound(bag, slot)
+	if( resultsCache[bag .. slot] ~= nil ) then return resultsCache[bag .. slot] end
+	
+	if( not scanTooltip ) then
+		scanTooltip = CreateFrame("GameTooltip", "QuickAuctionsScanTooltip", UIParent, "GameTooltipTemplate")
+		scanTooltip:SetOwner(UIParent, "ANCHOR_NONE")	
+	end
+	
+	scanTooltip:ClearLines()
+	scanTooltip:SetBagItem(bag, slot)
+	
+	for id=1, scanTooltip:NumLines() do
+		local text = _G["QuickAuctionsScanTooltipTextLeft" .. id]
+		if( text and text:GetText() and text:GetText() == ITEM_SOULBOUND ) then
+			resultsCache[bag .. slot] = true
+			return true
+		end
+	end
+	
+	resultsCache[bag .. slot] = nil
+	return false
+end
+
 local function set(info, value)
 	QuickAuctions.db.global[info[#(info)]] = value
 end
@@ -84,7 +110,7 @@ local function hideForDefault(info)
 	return info[1] == "general"
 end
 
-local function hideHelpOrGeneral(info)
+local function hideHelpText(info)
 	return QuickAuctions.db.global.hideHelp
 end
 
@@ -99,8 +125,49 @@ local groupSettings = {
 		get = getGroup,
 		disabled = isGroupOptionDisabled,
 		args = {
-			overrideCancel = {
+			desc = {
 				order = 1,
+				type = "description",
+				name = function(info)
+					local postTime = getGroupSetting("postTime", info[2])
+					local ignoreStacks = getGroupSetting("ignoreStacks", info[2])
+					local noCancel = getGroupSetting("noCancel", info[2])
+					
+					if( noCancel ) then
+						return string.format(L["Posting auctions for |cfffed000%d|r hours, ignoring auctions with more than |cfffed000%d|r items in them, but will not cancel auctions even if undercut."], postTime, ignoreStacks)
+					else
+						return string.format(L["Posting auctions for |cfffed000%d|r hours, ignoring auctions with more than |cfffed000%d|r items in them."], postTime, ignoreStacks)
+					end
+				end,
+				hidden = hideHelpText,
+			},
+			header = {
+				order = 2,
+				type = "header",
+				name = "",
+				hidden = hideHelpText,
+			},
+			overrideStacks = {
+				order = 3,
+				type = "toggle",
+				name = L["Override stack settings"],
+				desc = L["Allows you to override the default stack ignore settings for this group."],
+				hidden = hideForDefault,
+				disabled = false,
+				set = setGroupOverride,
+				get = getGroupOverride,
+				arg = "ignoreStacks",
+			},
+			ignoreStacks = {
+				order = 4,
+				type = "range",
+				min = 1, max = 1000, step = 1,
+				name = L["Ignore stacks over"],
+				desc = L["Items that are stacked beyond the set amount are ignored when calculating the lowest market price."],
+			},
+			sep = {order = 5, type = "description", name = "", hidden = hideForDefault},
+			overrideCancel = {
+				order = 6,
 				type = "toggle",
 				name = L["Override cancel settings"],
 				desc = L["Allows you to override the default cancel settings for this group."],
@@ -111,14 +178,14 @@ local groupSettings = {
 				arg = "noCancel",
 			},
 			noCancel = {
-				order = 2,
+				order = 7,
 				type = "toggle",
 				name = L["Disable auto cancelling"],
 				desc = L["Disable automatically cancelling of items in this group if undercut."],
 				hidden = hideForDefault,
 			},
 			overrideTime = {
-				order = 3,
+				order = 8,
 				type = "toggle",
 				name = L["Override post time"],
 				desc = L["Allows you to override the default post time sttings for this group."],
@@ -129,7 +196,7 @@ local groupSettings = {
 				arg = "postTime",
 			},
 			postTime = {
-				order = 4,
+				order = 9,
 				type = "select",
 				name = L["Post time"],
 				desc = L["How long auctions should be up for."],
@@ -150,13 +217,13 @@ local groupSettings = {
 				order = 1,
 				type = "description",
 				name = function(info) return string.format(L["Will post at most |cfffed000%d|r auctions in stacks of |cfffed000%d|r."], getGroupSetting("postCap", info[2]), getGroupSetting("perAuction", info[2])) end,
-				hidden = hideHelpOrGeneral,
+				hidden = hideHelpText,
 			},
 			header = {
 				order = 2,
 				type = "header",
 				name = "",
-				hidden = hideHelpOrGeneral,
+				hidden = hideHelpText,
 			},
 			overrideCap = {
 				order = 3,
@@ -208,14 +275,14 @@ local groupSettings = {
 			desc = {
 				order = 1,
 				type = "description",
-				name = function(info) return string.format(L["Undercutting auctions by %s until price goes below %s, unless there is greater than a |cfffed000%d%%|r price difference between lowest and second lowest in which case undercutting second lowest auction."], QuickAuctions:FormatTextMoney(getGroupSetting("undercut", info[2])), QuickAuctions:FormatTextMoney(getGroupSetting("threshold", info[2])), getGroupSetting("priceThreshold", info[2])) end,
-				hidden = hideHelpOrGeneral,
+				name = function(info) return string.format(L["Undercutting auctions by %s until price goes below %s, unless there is greater than a |cfffed000%.2f%%|r price difference between lowest and second lowest in which case undercutting second lowest auction."], QuickAuctions:FormatTextMoney(getGroupSetting("undercut", info[2])), QuickAuctions:FormatTextMoney(getGroupSetting("threshold", info[2])), getGroupSetting("priceThreshold", info[2]) * 100) end,
+				hidden = hideHelpText,
 			},
 			header = {
 				order = 2,
 				type = "header",
 				name = "",
-				hidden = hideHelpOrGeneral,
+				hidden = hideHelpText,
 			},
 			overrideUndercut = {
 				order = 3,
@@ -319,13 +386,13 @@ local groupSettings = {
 						return string.format(L["When no auctions are up, or the market price is above %s auctions will be posted at the fallback price of %s."], QuickAuctions:FormatTextMoney(fallback * fallbackCap), QuickAuctions:FormatTextMoney(fallback))
 					end
 				end,
-				hidden = hideHelpOrGeneral,
+				hidden = hideHelpText,
 			},
 			header = {
 				order = 2,
 				type = "header",
 				name = "",
-				hidden = hideHelpOrGeneral,
+				hidden = hideHelpText,
 			},
 			overrideFallAuto = {
 				order = 3,
@@ -381,6 +448,7 @@ local groupSettings = {
 				type = "range",
 				name = L["Maxmimum price"],
 				desc = L["If the market price is above fallback price * maximum price, items will be posted at the fallback * maximum price instead.\n\nEffective for posting prices in a sane price range when someone is posting an item at 5000g when it only goes for 100g."],
+				min = 1, max = 10, step = 0.10, isPercent = true,
 			},
 		},
 	},
@@ -614,13 +682,291 @@ local function loadWhitelistOptions()
 	updateWhitelist()
 end
 
+local addMailItemsTable
+-- Adding groups
+local addGroupTable = {
+	order = 1,
+	type = "execute",
+	name = function(info) return idToGroup[info[#(info)]] end,
+	hidden = false,
+	func = function(info)
+		QuickAuctions.db.factionrealm.mail[idToGroup[info[#(info)]]] = info[2]
+		AceRegistry:NotifyChange("QuickAuctions")
+	end,
+}
+
+local function rebuildMailGroups()
+	for id in pairs(addMailItemsTable.args.groups.args) do
+		if( not idToGroup[id] or QuickAuctions.db.factionrealm.mail[idToGroup[id]] ) then
+			addMailItemsTable.args.groups.args[id] = nil
+		end
+	end
+	
+	for id, group in pairs(idToGroup) do
+		if( type(group) == "string" and not QuickAuctions.db.factionrealm.mail[group] ) then
+			addMailItemsTable.args.groups.args[id] = addGroupTable
+		end
+	end
+end
+
+-- Adding straight items
+local addItemTable = {
+	order = 1,
+	type = "execute",
+	name = function(info) return (select(2, GetItemInfo(info[#(info)]))) end,
+	image = function(info) return (select(10, GetItemInfo(info[#(info)]))) end,
+	hidden = false,
+	imageHeight = 16,
+	imageWidth = 16,
+	width = "half",
+	func = function(info)
+		QuickAuctions.db.factionrealm.mail[info[#(info)]] = info[2]
+		addMailItemsTable.args.items.args[info[#(info)]] = nil
+	end,
+}
+local function rebuildMailItems()
+	for bag=4, 0, -1 do
+		for slot=1, GetContainerNumSlots(bag) do
+			local link = QuickAuctions:GetSafeLink(GetContainerItemLink(bag, slot))
+			if( link and not QuickAuctions.db.factionrealm.mail[link] ) then
+				addMailItemsTable.args.items.args[link] = addItemTable
+			end
+		end
+	end
+end
+
+local function massMailItems(info, value)
+	value = string.trim(string.lower(value or ""))
+
+	for bag=4, 0, -1 do
+		for slot=1, GetContainerNumSlots(bag) do
+			local link = QuickAuctions:GetSafeLink(GetContainerItemLink(bag, slot))
+			local name = link and string.lower(GetItemInfo(link))
+			if( link and name and string.match(name, value) and not QuickAuctions.db.factionrealm.mail[link] and not isSoulbound(bag, slot) ) then
+				QuickAuctions.db.factionrealm.mail[link] = info[2]
+				addMailItemsTable.args.items.args[link] = nil
+			end
+		end
+	end
+end
+
+addMailItemsTable = {
+	order = 1,
+	type = "group",
+	name = L["Add items/groups"],
+	args = {
+		general = {
+			order = 1,
+			type = "group",
+			name = L["General"],
+			inline = true,
+			args = {
+				help = {
+					order = 1,
+					type = "description",
+					name = function(info) return string.format(L["Click an item or group to add it to the list of items to be automatically mailed to %s."], info[2]) end,
+				},
+				header = {
+					order = 2,
+					type = "header",
+					name = "",
+				},
+				massItem = {
+					order = 3,
+					type = "input",
+					name = L["Add items matching"],
+					desc = function(info) return string.format(L["All items that match the entered name will be automatically added to be mailed to %s, \"Glyph of\" will add all glyphs in your inventory for example."], info[2]) end,
+					set = massMailItems,
+					get = false,
+				},
+			},
+		},
+		groups = {
+			order = 2,
+			type = "group",
+			name = L["Groups"],
+			inline = true,
+			hidden = rebuildMailGroups,
+			args = {
+			},
+		},
+		items = {
+			order = 3,
+			type = "group",
+			name = L["Items"],
+			inline = true,
+			hidden = rebuildMailItems,
+			args = {
+			},
+		},
+	}
+}
+-- Adding groups
+local addGroupTable = {
+	order = 1,
+	type = "execute",
+	name = function(info) return idToGroup[info[#(info)]] end,
+	hidden = false,
+	func = function(info)
+		QuickAuctions.db.factionrealm.mail[idToGroup[info[#(info)]]] = info[2]
+		AceRegistry:NotifyChange("QuickAuctions")
+	end,
+}
+
+local function rebuildMailGroups()
+	for id in pairs(addMailItemsTable.args.groups.args) do
+		if( not idToGroup[id] or QuickAuctions.db.factionrealm.mail[idToGroup[id]] ) then
+			addMailItemsTable.args.groups.args[id] = nil
+		end
+	end
+	
+end
+
+-- Remove groups
+local removeMailGroup = {
+	order = 1,
+	type = "execute",
+	name = function(info) return idToGroup[info[#(info)]] end,
+	hidden = false,
+	func = function(info)
+		QuickAuctions.db.factionrealm.mail[idToGroup[info[#(info)]]] = nil
+		options.args.mail.args[info[2]].args.remove.args.groups.args[info[#(info)]] = nil
+	end,
+}
+
+local function rebuildMailRemoveGroups(info)
+	for id, group in pairs(idToGroup) do
+		if( type(group) == "string" and QuickAuctions.db.factionrealm.mail[group] == info[2] ) then
+			options.args.mail.args[info[2]].args.remove.args.groups.args[id] = removeMailGroup
+		end
+	end
+end
+
+-- Removing items
+local removeMailItem = {
+	order = 1,
+	type = "execute",
+	name = function(info) return (select(2, GetItemInfo(info[#(info)]))) end,
+	image = function(info) return (select(10, GetItemInfo(info[#(info)]))) end,
+	hidden = false,
+	imageHeight = 16,
+	imageWidth = 16,
+	width = "half",
+	func = function(info)
+		QuickAuctions.db.factionrealm.mail[info[#(info)]] = nil
+		options.args.mail.args[info[2]].args.remove.args.items.args[info[#(info)]] = nil
+	end,
+}
+local function rebuildMailRemoveItems(info)
+	for link, target in pairs(QuickAuctions.db.factionrealm.mail) do
+		if( target == info[2] and not QuickAuctions.db.global.groups[link] ) then
+			options.args.mail.args[info[2]].args.remove.args.items.args[link] = removeMailItem
+		end
+	end
+end
+
+local mailTargetTable = {
+	order = 1,
+	type = "group",
+	name = function(info) return info[#(info)] end,
+	childGroups = "tab",
+	args = {
+		remove = {
+			order = 2,
+			type = "group",
+			name = L["Remove items/groups"],
+			args = {
+				help = {
+					order = 1,
+					type = "group",
+					name = L["Help"],
+					inline = true,
+					args = {
+						help = {
+							order = 1,
+							type = "description",
+							name = function(info) return string.format(L["Clicking an item or group will stop Quick Auctions from auto mailing it to %s."], info[2]) end,
+						}
+					},
+				},
+				groups = {
+					order = 2,
+					type = "group",
+					name = L["Groups"],
+					inline = true,
+					hidden = rebuildMailRemoveGroups,
+					args = {},
+				},
+				items = {
+					order = 3,
+					type = "group",
+					name = L["Items"],
+					inline = true,
+					hidden = rebuildMailRemoveItems,
+					args = {},
+				},
+			},
+		},
+	},
+}
+
 local function loadMailOptions()
 	options.args.mail = {
 		order = 3,
 		type = "group",
 		name = L["Auto mailer"],
-		args = {}
+		args = {
+			help = {
+				order = 1,
+				type = "group",
+				name = L["Help"],
+				inline = true,
+				args = {
+					help = {
+						order = 0,
+						type = "description",
+						name = L["Auto mailing will let you setup groups and specific items that should be mailed to another character.\n\nCheck your spelling! If you typo a name it will send it to the wrong person."],
+					},
+				},
+			},
+			add = {
+				order = 2,
+				type = "group",
+				name = L["Add mail target"],
+				inline = true,
+				args = {
+					name = {
+						order = 1,
+						type = "input",
+						name = L["Player name"],
+						validate = function(info, value)
+							value = string.trim(string.lower(value or ""))
+							if( value == "" ) then return L["No player name entered."] end
+							
+							for _, name in pairs(QuickAuctions.db.factionrealm.mail) do
+								if( string.lower(name) == value ) then
+									return string.format(L["Player \"%s\" is already a mail target."], name)
+								end
+							end
+							
+							return true
+						end,
+						set = function(info, value)
+							options.args.mail.args[value] = CopyTable(mailTargetTable)
+							options.args.mail.args[value].args.add = addMailItemsTable
+						end,
+					}
+				},
+			},
+		}
 	}
+	
+	for _, target in pairs(QuickAuctions.db.factionrealm.mail) do
+		if( not options.args.mail.args[target] ) then
+			options.args.mail.args[target] = CopyTable(mailTargetTable)
+			options.args.mail.args[target].args.add = addMailItemsTable
+		end
+	end
 end
 
 local updateGroups
@@ -686,32 +1032,6 @@ local removeItemTable = {
 	end,
 	width = "half",
 }
-
--- Make sure the item isn't soulbound
-local scanTooltip
-local resultsCache = {}
-local function isSoulbound(bag, slot)
-	if( resultsCache[bag .. slot] ~= nil ) then return resultsCache[bag .. slot] end
-	
-	if( not scanTooltip ) then
-		scanTooltip = CreateFrame("GameTooltip", "QuickAuctionsScanTooltip", UIParent, "GameTooltipTemplate")
-		scanTooltip:SetOwner(UIParent, "ANCHOR_NONE")	
-	end
-	
-	scanTooltip:ClearLines()
-	scanTooltip:SetBagItem(bag, slot)
-	
-	for id=1, scanTooltip:NumLines() do
-		local text = _G["QuickAuctionsScanTooltipTextLeft" .. id]
-		if( text and text:GetText() and text:GetText() == ITEM_SOULBOUND ) then
-			resultsCache[bag .. slot] = true
-			return true
-		end
-	end
-	
-	resultsCache[bag .. slot] = nil
-	return false
-end
 
 -- Delete a group :(
 local function deleteGroup(info)
