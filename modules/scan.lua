@@ -125,6 +125,12 @@ function Scan:AddAuctionRecord(name, link, owner, quantity, bid, buyout)
 	-- Don't add this data, just add the quantity if it has no buyout
 	if( buyout <= 0 ) then return end
 
+	-- Quick hack job, need to rewrite this all
+	if( status.isScanning == "item" ) then
+		local ignoreStacks = QuickAuctions.Manage:GetConfigValue(link, "ignoreStacks")
+		if( quantity > ignoreStacks ) then return end
+	end
+	
 	auctionData[link] = auctionData[link] or {quantity = 0, onlyPlayer = true, records = {}}
 	auctionData[link].quantity = auctionData[link].quantity + quantity
 
