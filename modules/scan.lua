@@ -58,7 +58,7 @@ function Scan:StartItemScan(filterList)
 	
 	table.wipe(auctionData)
 	
-	BASE_DELAY = alreadyScanned and QuickAuctions.db.profile.superScan and 1 or 0.50
+	BASE_DELAY = alreadyScanned and QuickAuctions.db.global.superScan and 1 or 0.50
 	
 	self:SendMessage("QA_START_SCAN", "item", #(status.filterList))
 	self:RegisterEvent("AUCTION_ITEM_LIST_UPDATE")
@@ -163,7 +163,7 @@ function Scan:IsLowestAuction(name, buyout, bid)
 	for _, record in pairs(auctionData[link].records) do
 		-- They are on our whitelist, and they undercut us, or they matched our buyout but under bid us.
 		if( QuickAuctions.db.factionrealm.whitelist[string.lower(record.owner)] ) then
-			if( record.buyout < buyout or ( QuickAuctions.db.profile.bidUndercut and record.buyout == buyout and record.bid < bid ) ) then
+			if( record.buyout < buyout or ( QuickAuctions.db.global.bidUndercut and record.buyout == buyout and record.bid < bid ) ) then
 				return false, record.owner, record.quantity, record.buyout, record.bid
 			end
 		-- They are not on our whitelist, it's not us, and they either are matching or undercut us
@@ -320,7 +320,7 @@ function Scan:ScanAuctions()
 	local totalPages = math.ceil(total / NUM_AUCTION_ITEMS_PER_PAGE)
 		
 	-- Check for bad data quickly
-	if( status.retries < 3 and not QuickAuctions.db.profile.superScan ) then
+	if( status.retries < 3 and not QuickAuctions.db.global.superScan ) then
 		-- Blizzard doesn't resolve the GUID -> name of the owner until GetAuctionItemInfo is called for it
 		-- meaning will call it for everything on the list then if we had any bad data will requery
 		local badData

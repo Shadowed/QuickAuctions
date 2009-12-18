@@ -129,7 +129,7 @@ function Post:PostAuction(queue)
 		local goldTotal = lowestBuyout / COPPER_PER_GOLD
 		-- Smart undercutting is enabled, and the auction is for at least 1 gold, round it down to the nearest gold piece
 		-- the math.floor(blah) == blah check is so we only do a smart undercut if the price isn't a whole gold piece and not a partial
-		if( QuickAuctions.db.profile.smartUndercut and lowestBuyout > COPPER_PER_GOLD and goldTotal ~= math.floor(goldTotal) ) then
+		if( QuickAuctions.db.global.smartUndercut and lowestBuyout > COPPER_PER_GOLD and goldTotal ~= math.floor(goldTotal) ) then
 			buyout = math.floor(goldTotal) * COPPER_PER_GOLD
 		else
 			buyout = lowestBuyout - QuickAuctions.Manage:GetConfigValue(itemID, "undercut")

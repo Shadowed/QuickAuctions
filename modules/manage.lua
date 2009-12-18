@@ -44,7 +44,7 @@ end
 function Manage:UpdateReverseLookup()
 	table.wipe(reverseLookup)
 	
-	for group, items in pairs(QuickAuctions.db.profile.groups) do
+	for group, items in pairs(QuickAuctions.db.global.groups) do
 		for itemID in pairs(items) do
 			reverseLookup[itemID] = group
 		end
@@ -218,7 +218,7 @@ function Manage:ReadyToCancel()
 		end
 		
 		-- Remind them once every 60 seconds that it's ready
-		if( QuickAuctions.db.profile.playSound ) then
+		if( QuickAuctions.db.global.playSound ) then
 			soundElapsed = soundElapsed + elapsed
 			if( soundElapsed >= 60 ) then
 				soundElapsed = soundElapsed - 60
@@ -245,11 +245,11 @@ function Manage:ReadyToCancel()
 	frame:Hide()
 	frame:SetScript("OnUpdate", OnUpdate)
 	frame:SetScript("OnShow", function(self)
-		if( QuickAuctions.db.profile.cancelBinding ~= "" ) then
-			SetOverrideBindingClick(self, true, QuickAuctions.db.profile.cancelBinding, self.cancel:GetName())
+		if( QuickAuctions.db.global.cancelBinding ~= "" ) then
+			SetOverrideBindingClick(self, true, QuickAuctions.db.global.cancelBinding, self.cancel:GetName())
 		end
 		
-		if( QuickAuctions.db.profile.playSound ) then
+		if( QuickAuctions.db.global.playSound ) then
 			PlaySound("ReadyCheck")
 		end
 		
@@ -365,17 +365,17 @@ function Manage:Cancel(isTest)
 			-- The player is the only one with it on the AH and it's below the threshold
 			elseif( ( not isPlayer and not isWhitelist ) or
 				( isWhitelist and ( buyout > lowestBuyout or ( buyout == lowestBuyout and lowestBid < bid ) ) ) or
-				( QuickAuctions.db.profile.smartCancel and QuickAuctions.Scan:IsPlayerOnly(itemID) and buyout < fallback ) ) then
+				( QuickAuctions.db.global.smartCancel and QuickAuctions.Scan:IsPlayerOnly(itemID) and buyout < fallback ) ) then
 				
 				-- Don't cancel if the buyout is equal, or below our threshold
-				if( QuickAuctions.db.profile.smartCancel and lowestBuyout <= threshold and not QuickAuctions.Scan:IsPlayerOnly(itemID)) then
+				if( QuickAuctions.db.global.smartCancel and lowestBuyout <= threshold and not QuickAuctions.Scan:IsPlayerOnly(itemID)) then
 					if( not tempList[name] ) then
 						tempList[name] = true
 						
 						QuickAuctions:Log(name .. "notcancel", string.format(L["Undercut on %s by |cfffed000%s|r, their buyout %s, yours %s (per item), threshold is %s not cancelling"], itemLink, lowestOwner, QuickAuctions:FormatTextMoney(lowestBuyout, true), QuickAuctions:FormatTextMoney(buyout, true), QuickAuctions:FormatTextMoney(threshold, true)))
 					end
 				-- Don't cancel an auction if it has a bid and we're set to not cancel those
-				elseif( not QuickAuctions.db.profile.cancelWithBid and activeBid > 0 ) then
+				elseif( not QuickAuctions.db.global.cancelWithBid and activeBid > 0 ) then
 					if( not isTest ) then
 						QuickAuctions:Log(name .. "bid", string.format(L["Undercut on %s by |cfffed000%s|r, but %s placed a bid of %s so not cancelling"], itemLink, lowestOwner, highBidder, QuickAuctions:FormatTextMoney(activeBid, true)))
 					end
@@ -489,7 +489,7 @@ function Manage:PostItems(itemID)
 	if( buyout and not self:GetBoolConfigValue(itemID, "autoFallback") ) then
 		-- Smart undercutting is enabled, and the auction is for at least 1 gold, round it down to the nearest gold piece
 		local testBuyout = buyout
-		if( QuickAuctions.db.profile.smartUndercut and testBuyout > COPPER_PER_GOLD ) then
+		if( QuickAuctions.db.global.smartUndercut and testBuyout > COPPER_PER_GOLD ) then
 			testBuyout = math.floor(buyout / COPPER_PER_GOLD) * COPPER_PER_GOLD
 		else
 			testBuyout = testBuyout - self:GetConfigValue(itemID, "undercut")
