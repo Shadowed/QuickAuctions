@@ -10,18 +10,6 @@ local statusLog, logIDs, lastSeenLogID = {}, {}
 function QuickAuctions:OnInitialize()
 	self.defaults = {
 		profile = {
-			showStatus = false,
-			smartUndercut = false,
-			smartCancel = true,
-			cancelWithBid = true,
-			hideUncraft = false,
-			playSound = true,
-			screenHook = false,
-			superScan = false,
-			cancelBinding = "",
-			groups = {},
-			categories = {},
-			mail = {default = false},
 			noCancel = {default = false},
 			autoFallback = {default = false},
 			undercut = {default = 0},
@@ -33,9 +21,25 @@ function QuickAuctions:OnInitialize()
 			postCap = {default = 4},
 			perAuction = {default = 1},
 			priceThreshold = {default = 10},
+			categories = {},
 		},
 		global = {
-			summaryItems = {}
+			summaryItems = {},
+			groups = {},
+			infoID = 0,
+			hideUncraft = false,
+			playSound = true,
+			cancelBinding = "",
+			showStatus = false,
+			smartUndercut = false,
+			smartCancel = true,
+			cancelWithBid = false,
+			superScan = false,
+			hideHelp = false,
+			autoMail = false,
+			autoCheck = true,
+			mailLatency = false,
+			mailInterval = 0.30,
 		},
 		realm = {
 			crafts = {},
@@ -44,6 +48,7 @@ function QuickAuctions:OnInitialize()
 		factionrealm = {
 			player = {},
 			whitelist = {},
+			mail = {},
 		},
 	}
 	
@@ -55,9 +60,20 @@ function QuickAuctions:OnInitialize()
 	self.Summary = self.modules.Summary
 	self.Tradeskill = self.modules.Tradeskill
 	self.Status = self.modules.Status
-	
+		
 	-- Add this character to the alt list so it's not undercut by the player
 	self.db.factionrealm.player[UnitName("player")] = true
+	
+	-- Move to the global DB
+	if( QuickAuctions.db.profile.groups ) then
+		QuickAuctions.db.global.groups = CopyTable(QuickAuctions.db.profile.groups)
+		QuickAuctions.db.profile.groups = nil
+	end
+	
+	if( QuickAuctions.db.global.warned ) then
+		QuickAuctions.db.global.infoID = 1
+		QuickAuctions.db.global.warned = nil
+	end
 	
 	-- Reset settings
 	if( QuickAuctionsDB.revision ) then
@@ -93,51 +109,6 @@ function QuickAuctions:OnInitialize()
 	end
 	
 	self:ShowInfoPanel()
-end
-
-function QuickAuctions:ShowInfoPanel()
-	if( QuickAuctions.db.global.warned ) then return end
-
-	local frame = CreateFrame("Frame", nil, UIParent)
-	frame:SetClampedToScreen(true)
-	frame:SetFrameStrata("HIGH")
-	frame:SetToplevel(true)
-	frame:SetWidth(400)
-	frame:SetHeight(285)
-	frame:SetBackdrop({
-		  bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
-		  edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-		  edgeSize = 26,
-		  insets = {left = 9, right = 9, top = 9, bottom = 9},
-	})
-	frame:SetBackdropColor(0, 0, 0, 0.85)
-	frame:SetPoint("CENTER", UIParent, "CENTER", 0, 100)
-
-	frame.titleBar = frame:CreateTexture(nil, "ARTWORK")
-	frame.titleBar:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Header")
-	frame.titleBar:SetPoint("TOP", 0, 8)
-	frame.titleBar:SetWidth(225)
-	frame.titleBar:SetHeight(45)
-
-	frame.title = frame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-	frame.title:SetPoint("TOP", 0, 0)
-	frame.title:SetText("Quick Auctions")
-
-	frame.text = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-	frame.text:SetText(L["Read me, important information below!\n\nAs of 3.3 Blizzard requires that you use a hardware event (key press or mouse click) to cancel auctions, currently there is a loophole that allows you to get around this by letting you cancel as many auctions as you need for one hardware event.\n\nOdds are this loophole will be closed eventually making it impossible to smart cancel, but for the time being the workaround has been implemented into this version of Quick Auctions, see /qa config for a few options related to this change.\n\nFrom now on, you will have to do a cancel scan then another hardware action to actually cancel auctions after it finishes scanning. Posting has not changed and still can be done automatically without your interaction.\n\nThe /qa cancelall slash command will continuing working as is without any special changes, provided you are using a key press to active and not some form of automated macro like /in # /qa cancelall\n\nYou will only see this message once."])
-	frame.text:SetPoint("TOPLEFT", 12, -22)
-	frame.text:SetWidth(frame:GetWidth() - 20)
-	frame.text:SetJustifyH("LEFT")
-
-	frame.hide = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-	frame.hide:SetText(L["Ok"])
-	frame.hide:SetHeight(20)
-	frame.hide:SetWidth(100)
-	frame.hide:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 6, 8)
-	frame.hide:SetScript("OnClick", function(self)
-		QuickAuctions.db.global.warned = true
-		self:GetParent():Hide()
-	end)
 end
 
 function QuickAuctions:WipeLog()
@@ -252,7 +223,7 @@ function QuickAuctions:AuctionHouseLoaded()
 	button:SetScript("OnEnter", showTooltip)
 	button:SetScript("OnLeave", hideTooltip) 
 	button:SetScript("OnShow", function(self)
-		if( QuickAuctions.db.profile.showStatus ) then
+		if( QuickAuctions.db.global.showStatus ) then
 			self:LockHighlight()
 
 			QuickAuctions:CreateStatus()
@@ -260,9 +231,9 @@ function QuickAuctions:AuctionHouseLoaded()
 		end
 	end)
 	button:SetScript("OnClick", function(self)
-		QuickAuctions.db.profile.showStatus = not QuickAuctions.db.profile.showStatus
+		QuickAuctions.db.global.showStatus = not QuickAuctions.db.global.showStatus
 
-		if( QuickAuctions.db.profile.showStatus ) then
+		if( QuickAuctions.db.global.showStatus ) then
 			self:LockHighlight()
 
 			QuickAuctions:CreateStatus()
@@ -335,12 +306,7 @@ function QuickAuctions:AuctionHouseLoaded()
 	button:SetScript("OnEnter", showTooltip)
 	button:SetScript("OnLeave", hideTooltip)
 	button:SetScript("OnClick", function(self)
-		-- Temporary, because people like to not restart and then complain :|
-		if( QuickAuctions.Status ) then
-			QuickAuctions.Status:Scan()
-		else
-			QuickAuctions.Status:Print("[WARNING!] You need to restart your game to use the status scan.")
-		end
+		QuickAuctions.Status:Scan()
 	end)
 	button.originalText = button:GetText()
 	
@@ -348,9 +314,7 @@ function QuickAuctions:AuctionHouseLoaded()
 end
 
 function QuickAuctions:GetSafeLink(link)
-	link = string.match(link or "", "|H(.-):([-0-9]+):([0-9]+)|h")
-	
-	-- If the link just has trailing zeros, then we don't need to store that data
+	link = link and string.match(link, "|H(.-):([-0-9]+):([0-9]+)|h")
 	return link and string.gsub(link, ":0:0:0:0:0:0", "")
 end
 
@@ -471,6 +435,59 @@ end
 
 function QuickAuctions:SetButtonProgress(type, current, total)
 	self.buttons[type]:SetFormattedText("%d/%d", current, total)
+end
+
+-- Change log warning to the user
+local infoMessages = {
+	L["Read me, important information below!\n\nAs of 3.3 Blizzard requires that you use a hardware event (key press or mouse click) to cancel auctions, currently there is a loophole that allows you to get around this by letting you cancel as many auctions as you need for one hardware event."],
+	L["This is a new info panel that will pop up when something changed in Quick Auctions that you should know, these messages will only show up once.\n\nSettings have been moved around to work better with profiles, groups and all misc smart cancel/etc settings are now global, while per-group settings are per profile.\nYou can change your profile depending on server or how aggressive you want to be without losing your general settings or your group through /quickauctions.\n\nBecause of the move in scope, general settings were reset, as well as auto mailing settings. Make sure you reconfigure them!"],
+}
+
+function QuickAuctions:ShowInfoPanel()
+	if( QuickAuctions.db.global.infoID >= #(infoMessages) ) then return end
+	QuickAuctions.db.global.infoID = #(infoMessages)
+	
+	local frame = CreateFrame("Frame", nil, UIParent)
+	frame:SetClampedToScreen(true)
+	frame:SetFrameStrata("HIGH")
+	frame:SetToplevel(true)
+	frame:SetWidth(400)
+	frame:SetHeight(285)
+	frame:SetBackdrop({
+		  bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+		  edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+		  edgeSize = 26,
+		  insets = {left = 9, right = 9, top = 9, bottom = 9},
+	})
+	frame:SetBackdropColor(0, 0, 0, 0.85)
+	frame:SetPoint("CENTER", UIParent, "CENTER", 0, 100)
+
+	frame.titleBar = frame:CreateTexture(nil, "ARTWORK")
+	frame.titleBar:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Header")
+	frame.titleBar:SetPoint("TOP", 0, 8)
+	frame.titleBar:SetWidth(225)
+	frame.titleBar:SetHeight(45)
+
+	frame.title = frame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+	frame.title:SetPoint("TOP", 0, 0)
+	frame.title:SetText("Quick Auctions")
+
+	frame.text = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	frame.text:SetText(infoMessages[QuickAuctions.db.global.infoID])
+	frame.text:SetPoint("TOPLEFT", 12, -22)
+	frame.text:SetWidth(frame:GetWidth() - 20)
+	frame.text:SetJustifyH("LEFT")
+	frame:SetHeight(frame.text:GetHeight() + 70)
+
+	frame.hide = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+	frame.hide:SetText(L["Ok"])
+	frame.hide:SetHeight(20)
+	frame.hide:SetWidth(100)
+	frame.hide:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 6, 8)
+	frame.hide:SetScript("OnClick", function(self)
+		QuickAuctions.db.global.infoID = #(infoMessages)
+		self:GetParent():Hide()
+	end)
 end
 
 -- Stolen from Tekkub!
