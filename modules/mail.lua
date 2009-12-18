@@ -1,10 +1,12 @@
 local QuickAuctions = select(2, ...)
 local Mail = QuickAuctions:NewModule("Mail", "AceEvent-3.0")
 local L = QuickAuctions.L
+
 local eventThrottle = CreateFrame("Frame")
 local reverseLookup = QuickAuctions.modules.Manage.reverseLookup
-local timeElapsed, itemTimer, cacheFrame
-local lockedItems = {}
+local timeElapsed, itemTimer, cacheFrame, activeMailTarget
+local allowTimerStart, lastTotal = true
+local lockedItems, mailTargets = {}, {}
 
 function Mail:OnInitialize()
 	local function showTooltip(self)
@@ -17,33 +19,39 @@ function Mail:OnInitialize()
 	end
 
 	local check = CreateFrame("CheckButton", "QuickAuctionsAutoMail", MailFrame, "OptionsCheckButtonTemplate")
-	check:SetHeight(24)
-	check:SetWidth(24)
+	check:SetHeight(26)
+	check:SetWidth(26)
 	check:SetChecked(false)
 	check:SetFrameStrata("HIGH")
 	check:SetHitRectInsets(0, -70, 0, 0)
 	check:SetScript("OnEnter", showTooltip)
 	check:SetScript("OnLeave", hideTooltip)
 	check:SetScript("OnHide", function()
-		check:SetChecked(false)
 		Mail:Stop()
-		QuickAuctions.Manage:UpdateReverseLookup()
+	end)
+	check:SetScript("OnShow", function(self)
+		if( QuickAuctions.db.global.autoMail ) then
+			self:SetChecked(true)
+			Mail:Start()
+		end
 	end)
 	check:SetScript("OnClick", function(self)
 		if( self:GetChecked() ) then
+			QuickAuctions.db.global.autoMail = true
 			Mail:Start()
 		else
+			QuickAuctions.db.global.autoMail = false
 			Mail:Stop()
 		end
 	end)
-	check:SetPoint("TOPLEFT", MailFrame, "TOPLEFT", 69, -14)
+	check:SetPoint("TOPLEFT", MailFrame, "TOPLEFT", 68, -13)
 	check.tooltip = L["Enables Quick Auctions auto mailer, the last patch of mails will take ~10 seconds to send.\n\n[WARNING!] You will not get any confirmation before it starts to send mails, it is your own fault if you mistype your bankers name."]
+	check:GetScript("OnShow")(check)
 	QuickAuctionsAutoMailText:SetText(L["Auto mail"])
-	QuickAuctions.Manage:UpdateReverseLookup()
-	
+
 	self.checkBox = check
 	
-	-- Hide Inbox/Send Mail text, it's wastes space and makes my lazyly done checkbox look bad. Also hide the too much mail warning
+	-- Hide Inbox/Send Mail text, it's wasted space and makes my lazyly done checkbox look bad. Also hide the too much mail warning
 	local noop = function() end
 	InboxTooMuchMail:Hide()
 	InboxTooMuchMail.Show = noop
@@ -62,6 +70,11 @@ function Mail:OnInitialize()
 		local seconds = self.endTime - GetTime()
 		if( seconds <= 0 ) then
 			self:Hide()
+
+			-- Look for new mail
+			if( QuickAuctions.db.global.autoCheck ) then
+				CheckInbox()
+			end
 			return
 		end
 		
@@ -76,7 +89,6 @@ function Mail:OnInitialize()
 	self:RegisterEvent("MAIL_INBOX_UPDATE")
 end
 
-local allowTimerStart, lastTotal = true
 function Mail:MAIL_INBOX_UPDATE()
 	local current, total = GetInboxNumItems()
 	-- Yay nothing else to loot, so nothing else to update the cache for!
@@ -87,7 +99,7 @@ function Mail:MAIL_INBOX_UPDATE()
 	elseif( ( cacheFrame.endTime and current >= 50 and lastTotal ~= total ) or ( current >= 50 and allowTimerStart ) ) then
 		allowTimerStart = nil
 		lastTotal = total
-		cacheFrame.endTime = GetTime() + 60
+		cacheFrame.endTime = GetTime() + 61
 		cacheFrame:Show()
 	end
 end
@@ -96,16 +108,52 @@ function Mail:MAIL_CLOSED()
 	allowTimerStart = true
 end
 
-function Mail:Start()
-	if( not QuickAuctions.db.factionrealm.bank ) then
-		QuickAucitons:Print(L["You have to set a banker before you can use the auto mailer."])
-		self.checkBox:SetChecked(false)
-		return
-	elseif( string.lower(QuickAuctions.db.factionrealm.bank) == string.lower(UnitName("player")) or QuickAuctions.db.factionrealm.bank == "" ) then
-		QuickAuctions:Print(L["You cannot use auto mailer on your banker as you cannot mail items to yourself."])
-		self.checkBox:SetChecked(false)
-		return
+function Mail:TargetHasItems(checkLocks)
+	for bag=0, 4 do
+		for slot=1, GetContainerNumSlots(bag) do
+			local link = QuickAuctions:GetSafeLink(GetContainerItemLink(bag, slot))
+			local locked = select(3, GetContainerItemInfo(bag, slot))
+			local target = QuickAuctions.db.factionrealm.mail[link] or reverseLookup[link] and QuickAuctions.db.factionrealm.mail[reverseLookup[link]]
+			if( target and activeMailTarget == target and ( not checkLocks or checkLocks and not locked ) ) then
+				return true
+			end
+		end
 	end
+	
+	return false
+end
+
+function Mail:FindNextMailTarget()
+	table.wipe(mailTargets)
+	for bag=0, 4 do
+		for slot=1, GetContainerNumSlots(bag) do
+			local link = QuickAuctions:GetSafeLink(GetContainerItemLink(bag, slot))
+			local locked = select(3, GetContainerItemInfo(bag, slot))
+			local target = QuickAuctions.db.factionrealm.mail[link] or reverseLookup[link] and QuickAuctions.db.factionrealm.mail[reverseLookup[link]]
+			if( not locked and target ) then
+				mailTargets[target] = (mailTargets[target] or 0) + 1
+			end
+		end
+	end
+
+	-- Obviously, we don't want to send mail to ourselves
+	mailTargets[UnitName("player")] = nil
+	
+	-- Find the highest one to dump as much inventory as we can to make more room for looting
+	local highestTarget, targetCount
+	for target, count in pairs(mailTargets) do
+		if( not highestTarget or targetCount < count ) then
+			highestTarget = target
+			targetCount = count
+		end
+	end
+	
+	return highestTarget
+end
+
+function Mail:Start()
+	QuickAuctions.Manage:UpdateReverseLookup()
+	activeMailTarget = self:FindNextMailTarget()
 	
 	self:RegisterEvent("BAG_UPDATE")
 	self:UpdateBags()
@@ -119,53 +167,37 @@ function Mail:Stop()
 	eventThrottle:Hide()
 end
 
-function Mail:FindTotalUnlocked()
-	local total = 0
-	
-	for bag=0, 4 do
-		for slot=1, GetContainerNumSlots(bag) do
-			local link = QuickAuctions:GetSafeLink(GetContainerItemLink(bag, slot))
-			local locked = select(3, GetContainerItemInfo(bag, slot))
-			if( reverseLookup[link] and QuickAuctions.Manage:GetBoolConfigValue(link, "mail") and not locked ) then
-				total = total + 1
-			end
-		end
-	end
-	
-	return total
-end
-
 function Mail:SendMail()
-	if( not QuickAuctions.db.factionrealm.bank or QuickAuctions.db.factionrealm.bank == "" ) then
-		return
-	end
-	
-	-- Make absolutely damn sure bank name is set
-	SendMailNameEditBox:SetText(QuickAuctions.db.factionrealm.bank)
-	SendMailFrame_SendMail()
-	SendMailNameEditBox:ClearFocus()
-	
+	QuickAuctions:Print(string.format(L["Auto mailed items off to %s!"], activeMailTarget))
+	SendMail(activeMailTarget, SendMailSubjectEditBox:GetText() or L["Mass mailing"], "")
 	itemTimer = nil
 end
 
 function Mail:UpdateBags()
+	-- If there is no mail targets or no more items left to send for this target, find a new one
+	if( not activeMailTarget or not self:TargetHasItems() ) then
+		activeMailTarget = self:FindNextMailTarget()
+		if( not activeMailTarget ) then return end
+	end
+
+	-- Otherwise see if we can send anything off
 	for bag=0, 4 do
 		for slot=1, GetContainerNumSlots(bag) do
 			local link = QuickAuctions:GetSafeLink(GetContainerItemLink(bag, slot))
 			local quantity, locked = select(2, GetContainerItemInfo(bag, slot))
 			
-			if( not locked ) then
-				lockedItems[bag .. slot] = nil
-			end
+			if( not locked ) then lockedItems[bag .. slot] = nil end
 			
 			-- Can't use something that's still locked
-			if( reverseLookup[link] and QuickAuctions.Manage:GetBoolConfigValue(link, "mail") ) then
+			local target = QuickAuctions.db.factionrealm.mail[link] or reverseLookup[link] and QuickAuctions.db.factionrealm.mail[reverseLookup[link]]
+			if( activeMailTarget and target == activeMailTarget ) then
 				-- When creating lots of glyphs, or anything that stacks really this will stop it from sending too early
 				if( locked and lockedItems[bag .. slot] and lockedItems[bag .. slot] ~= quantity ) then
 					lockedItems[bag .. slot] = quantity
-					itemTimer = 10
+					itemTimer = GetTradeSkillLine() == "UNKNOWN" and 1 or 10
 					eventThrottle:Show()
-				else
+				-- Not locked, let's add it up!
+				elseif( not locked ) then
 					local totalAttached = 0
 					for i=1, ATTACHMENTS_MAX_SEND do
 						if( GetSendMailItem(i) ) then
@@ -179,17 +211,14 @@ function Mail:UpdateBags()
 					PickupContainerItem(bag, slot)
 					ClickSendMailItemButton()
 					
-					totalAttached = totalAttached + 1
 					lockedItems[bag .. slot] = quantity
-					
+															
 					-- Hit cap, send us off
-					if( totalAttached >= ATTACHMENTS_MAX_SEND ) then
+					if( (totalAttached + 1) >= ATTACHMENTS_MAX_SEND ) then
 						self:SendMail()
-						
-					-- We ran out of items that can be posted, wait 10 seconds to make no more are being crafted still
-					-- then send them off
-					elseif( self:FindTotalUnlocked() <= 0 ) then
-						itemTimer = 10
+					-- No more unlocked items to send for this target, wait TargetHasItems
+					elseif( not self:TargetHasItems(true) ) then
+						itemTimer = GetTradeSkillLine() == "UNKNOWN" and 1 or 10
 						eventThrottle:Show()
 					end
 				end
@@ -216,7 +245,6 @@ eventThrottle:SetScript("OnUpdate", function(self, elapsed)
 	if( itemTimer ) then
 		itemTimer = itemTimer - elapsed
 		if( itemTimer <= 0 ) then
-			itemTimer = nil
 			Mail:SendMail()
 		end
 	end
