@@ -7,6 +7,7 @@ local reverseLookup = QuickAuctions.modules.Manage.reverseLookup
 local timeElapsed, itemTimer, cacheFrame, activeMailTarget
 local allowTimerStart, lastTotal = true
 local lockedItems, mailTargets = {}, {}
+local playerName = string.lower(UnitName("player"))
 
 function Mail:OnInitialize()
 	local function showTooltip(self)
@@ -131,13 +132,14 @@ function Mail:FindNextMailTarget()
 			local locked = select(3, GetContainerItemInfo(bag, slot))
 			local target = QuickAuctions.db.factionrealm.mail[link] or reverseLookup[link] and QuickAuctions.db.factionrealm.mail[reverseLookup[link]]
 			if( not locked and target ) then
+				target = string.lower(target)
 				mailTargets[target] = (mailTargets[target] or 0) + 1
 			end
 		end
 	end
 
 	-- Obviously, we don't want to send mail to ourselves
-	mailTargets[UnitName("player")] = nil
+	mailTargets[playerName] = nil
 	
 	-- Find the highest one to dump as much inventory as we can to make more room for looting
 	local highestTarget, targetCount
@@ -190,7 +192,7 @@ function Mail:UpdateBags()
 			
 			-- Can't use something that's still locked
 			local target = QuickAuctions.db.factionrealm.mail[link] or reverseLookup[link] and QuickAuctions.db.factionrealm.mail[reverseLookup[link]]
-			if( activeMailTarget and target == activeMailTarget ) then
+			if( target and activeMailTarget and string.lower(target) == activeMailTarget ) then
 				-- When creating lots of glyphs, or anything that stacks really this will stop it from sending too early
 				if( locked and lockedItems[bag .. slot] and lockedItems[bag .. slot] ~= quantity ) then
 					lockedItems[bag .. slot] = quantity
