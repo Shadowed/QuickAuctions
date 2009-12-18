@@ -21,6 +21,7 @@ function QuickAuctions:OnInitialize()
 			postCap = {default = 4},
 			perAuction = {default = 1},
 			priceThreshold = {default = 10},
+			ignoreStacks = {default = 1000},
 			categories = {},
 		},
 		global = {
@@ -444,7 +445,7 @@ local infoMessages = {
 }
 
 function QuickAuctions:ShowInfoPanel()
-	if( QuickAuctions.db.global.infoID >= #(infoMessages) ) then return end
+	if( QuickAuctions.db.global.infoID >= #(infoMessages) or not self.modules.Config ) then return end
 	QuickAuctions.db.global.infoID = #(infoMessages)
 	
 	local frame = CreateFrame("Frame", nil, UIParent)
@@ -485,7 +486,6 @@ function QuickAuctions:ShowInfoPanel()
 	frame.hide:SetWidth(100)
 	frame.hide:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 6, 8)
 	frame.hide:SetScript("OnClick", function(self)
-		QuickAuctions.db.global.infoID = #(infoMessages)
 		self:GetParent():Hide()
 	end)
 end
