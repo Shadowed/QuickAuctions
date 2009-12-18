@@ -261,8 +261,9 @@ do
 					for rID=1, GetTradeSkillNumReagents(i) do
 						local perOne = select(3, GetTradeSkillReagentInfo(i, rID))
 						local link = QuickAuctions:GetSafeLink(GetTradeSkillReagentItemLink(i, rID))
-
-						materials[link] = (materials[link] or 0) + (QuickAuctions.db.realm.craftQueue[itemid] * perOne)
+						if( link ) then
+							materials[link] = (materials[link] or 0) + (QuickAuctions.db.realm.craftQueue[itemid] * perOne)
+						end
 					end
 				end
 				
