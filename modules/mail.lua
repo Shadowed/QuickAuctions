@@ -4,10 +4,10 @@ local L = QuickAuctions.L
 
 local eventThrottle = CreateFrame("Frame", nil, MailFrame)
 local reverseLookup = QuickAuctions.modules.Manage.reverseLookup
-local timeElapsed, itemTimer, cacheFrame, activeMailTarget
-local allowTimerStart, lastTotal, autoLootTotal = true
+local timeElapsed, itemTimer, cacheFrame, activeMailTarget, mailTimer, lastTotal, autoLootTotal
 local lockedItems, mailTargets = {}, {}
 local playerName = string.lower(UnitName("player"))
+local allowTimerStart = true
 local LOOT_MAIL_INDEX = 1
 
 function Mail:OnInitialize()
@@ -55,11 +55,11 @@ function Mail:OnInitialize()
 	end
 		
 	-- Mass opening
-	local button = CreateFrame("Button", nil, MailFrame, "UIPanelButtonTemplate")
+	local button = CreateFrame("Button", nil, InboxFrame, "UIPanelButtonTemplate")
 	button:SetText(L["Open all"])
 	button:SetHeight(24)
 	button:SetWidth(130)
-	button:SetPoint("BOTTOM", MailFrame, "CENTER", -10, -165)
+	button:SetPoint("BOTTOM", InboxFrame, "CENTER", -10, -165)
 	button:SetScript("OnClick", function(self) Mail:StartAutoLooting() end)
 
 	-- Don't show mass opening if Postal is enabled since postals button will block QAs
@@ -109,24 +109,52 @@ end
 
 function Mail:StartAutoLooting()
 	if( GetInboxNumItems() == 0 ) then return end
-	self.massOpening:Disable()
-
 	autoLootTotal = GetInboxNumItems()
+
+	self:RegisterEvent("UI_ERROR_MESSAGE")
+	self.massOpening:Disable()
 	self:AutoLoot()
 end
 
 function Mail:AutoLoot()
+	-- Already looted everything after the invalid indexes we had, so fail it
+	if( LOOT_MAIL_INDEX > 1 and LOOT_MAIL_INDEX > GetInboxNumItems() ) then
+		self:StopAutoLooting(true)
+		return
+	end
+	
 	local money, cod, _, items, _, _, _, _, isGM = select(5, GetInboxHeaderInfo(LOOT_MAIL_INDEX))
 	if( ( not cod or cod <= 0 ) and not isGM and ( ( money and money > 0 ) or ( items and items > 0 ) ) ) then
+		mailTimer = nil
 		self.massOpening:SetText(L["Opening..."])
 		AutoLootMailItem(LOOT_MAIL_INDEX)
 	end
 end
 
-function Mail:StopAutoLooting()
+function Mail:StopAutoLooting(failed)
+	if( failed ) then
+		QuickAuctions:Print(L["Cannot finish auto looting, inventory is full or too many unique items."])
+	end
+	
 	autoLootTotal = nil
+	LOOT_MAIL_INDEX = 1
+	
+	self:UnregisterEvent("UI_ERROR_MESSAGE")
 	self.massOpening:SetText(L["Open all"])
 	self.massOpening:Enable()
+end
+
+function Mail:UI_ERROR_MESSAGE(event, msg)
+	if( msg == ERR_INV_FULL or msg == ERR_ITEM_MAX_COUNT ) then
+		LOOT_MAIL_INDEX = LOOT_MAIL_INDEX + 1
+		if( LOOT_MAIL_INDEX > GetInboxNumItems() ) then
+			self:StopAutoLooting(true)
+			return
+		end
+		
+		mailTimer = 0.30
+		eventThrottle:Show()
+	end
 end
 
 function Mail:MAIL_INBOX_UPDATE()
@@ -143,13 +171,15 @@ function Mail:MAIL_INBOX_UPDATE()
 		cacheFrame:Show()
 	end
 	
-	-- Handle auto looting once it finishes a mail
+	-- The last item we setup to auto loot is finished, time for the next one
 	if( self.massOpening:IsEnabled() == 0 and autoLootTotal ~= current ) then
 		autoLootTotal = GetInboxNumItems()
-		if( current == 0 and total == 0 ) then
-			self:StopAutoLooting()
-		elseif( current == 0 and total > 0 ) then
+		
+		-- If we're auto checking mail when new data is available, will wait and continue auto looting, otherwise we just stop now
+		if( QuickAuctions.db.global.autoCheck and current == 0 and total > 0 ) then
 			self.massOpening:SetText(L["Waiting..."])
+		elseif( current == 0 and ( not QuickAuctions.db.global.autoCheck or total == 0 ) ) then
+			self:StopAutoLooting()
 		else
 			self:AutoLoot()
 		end
@@ -209,6 +239,11 @@ function Mail:Start()
 	QuickAuctions.Manage:UpdateReverseLookup()
 	activeMailTarget = self:FindNextMailTarget()
 	
+	-- This is more to give users the visual que that hey, it's actually going to send to this person, even thought this field has no bearing on who it's sent to
+	if( activeMailTarget ) then
+		SendMailNameEditBox:SetText(activeMailTarget)
+	end
+	
 	self:RegisterEvent("BAG_UPDATE")
 	self:UpdateBags()
 end
@@ -233,6 +268,8 @@ function Mail:UpdateBags()
 	if( not activeMailTarget or not self:TargetHasItems() ) then
 		activeMailTarget = self:FindNextMailTarget()
 		if( not activeMailTarget ) then return end
+		
+		SendMailNameEditBox:SetText(activeMailTarget)
 	end
 
 	-- Otherwise see if we can send anything off
@@ -304,7 +341,14 @@ eventThrottle:SetScript("OnUpdate", function(self, elapsed)
 		end
 	end
 	
-	if( not timeElapsed and not itemTimer ) then
+	if( mailTimer ) then
+		mailTimer = mailTimer - elapsed
+		if( mailTimer <= 0 ) then
+			Mail:AutoLoot()
+		end
+	end
+	
+	if( not timeElapsed and not itemTimer and not mailTimer ) then
 		self:Hide()
 	end
 end)
