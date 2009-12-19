@@ -96,7 +96,7 @@ local function setGroupOverride(info, value)
 	end
 end
 
-function getGroupOverride(info)
+local function getGroupOverride(info)
 	if( info[1] == "general" ) then return false end
 	
 	return QuickAuctions.db.profile[info.arg][idToGroup[info[2]]] ~= nil
