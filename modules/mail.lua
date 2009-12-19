@@ -2,12 +2,13 @@ local QuickAuctions = select(2, ...)
 local Mail = QuickAuctions:NewModule("Mail", "AceEvent-3.0")
 local L = QuickAuctions.L
 
-local eventThrottle = CreateFrame("Frame")
+local eventThrottle = CreateFrame("Frame", nil, MailFrame)
 local reverseLookup = QuickAuctions.modules.Manage.reverseLookup
 local timeElapsed, itemTimer, cacheFrame, activeMailTarget
-local allowTimerStart, lastTotal = true
+local allowTimerStart, lastTotal, autoLootTotal = true
 local lockedItems, mailTargets = {}, {}
 local playerName = string.lower(UnitName("player"))
+local LOOT_MAIL_INDEX = 1
 
 function Mail:OnInitialize()
 	local function showTooltip(self)
@@ -47,10 +48,26 @@ function Mail:OnInitialize()
 	end)
 	check:SetPoint("TOPLEFT", MailFrame, "TOPLEFT", 68, -13)
 	check.tooltip = L["Enables Quick Auctions auto mailer, the last patch of mails will take ~10 seconds to send.\n\n[WARNING!] You will not get any confirmation before it starts to send mails, it is your own fault if you mistype your bankers name."]
-	check:GetScript("OnShow")(check)
 	QuickAuctionsAutoMailText:SetText(L["Auto mail"])
 
-	self.checkBox = check
+	if( MailFrame:IsVisible() ) then
+		check:GetScript("OnShow")(check)
+	end
+		
+	-- Mass opening
+	local button = CreateFrame("Button", nil, MailFrame, "UIPanelButtonTemplate")
+	button:SetText(L["Open all"])
+	button:SetHeight(24)
+	button:SetWidth(130)
+	button:SetPoint("BOTTOM", MailFrame, "CENTER", -10, -165)
+	button:SetScript("OnClick", function(self) Mail:StartAutoLooting() end)
+
+	-- Don't show mass opening if Postal is enabled since postals button will block QAs
+	if( select(6, GetAddOnInfo("Postal")) == nil ) then
+		button:Hide()
+	end
+	
+	self.massOpening = button
 	
 	-- Hide Inbox/Send Mail text, it's wasted space and makes my lazyly done checkbox look bad. Also hide the too much mail warning
 	local noop = function() end
@@ -90,6 +107,28 @@ function Mail:OnInitialize()
 	self:RegisterEvent("MAIL_INBOX_UPDATE")
 end
 
+function Mail:StartAutoLooting()
+	if( GetInboxNumItems() == 0 ) then return end
+	self.massOpening:Disable()
+
+	autoLootTotal = GetInboxNumItems()
+	self:AutoLoot()
+end
+
+function Mail:AutoLoot()
+	local money, cod, _, items, _, _, _, _, isGM = select(5, GetInboxHeaderInfo(LOOT_MAIL_INDEX))
+	if( ( not cod or cod <= 0 ) and not isGM and ( ( money and money > 0 ) or ( items and items > 0 ) ) ) then
+		self.massOpening:SetText(L["Opening..."])
+		AutoLootMailItem(LOOT_MAIL_INDEX)
+	end
+end
+
+function Mail:StopAutoLooting()
+	autoLootTotal = nil
+	self.massOpening:SetText(L["Open all"])
+	self.massOpening:Enable()
+end
+
 function Mail:MAIL_INBOX_UPDATE()
 	local current, total = GetInboxNumItems()
 	-- Yay nothing else to loot, so nothing else to update the cache for!
@@ -103,10 +142,23 @@ function Mail:MAIL_INBOX_UPDATE()
 		cacheFrame.endTime = GetTime() + 61
 		cacheFrame:Show()
 	end
+	
+	-- Handle auto looting once it finishes a mail
+	if( self.massOpening:IsEnabled() == 0 and autoLootTotal ~= current ) then
+		autoLootTotal = GetInboxNumItems()
+		if( current == 0 and total == 0 ) then
+			self:StopAutoLooting()
+		elseif( current == 0 and total > 0 ) then
+			self.massOpening:SetText(L["Waiting..."])
+		else
+			self:AutoLoot()
+		end
+	end
 end
 
 function Mail:MAIL_CLOSED()
 	allowTimerStart = true
+	self:StopAutoLooting()
 end
 
 function Mail:TargetHasItems(checkLocks)
@@ -170,9 +222,10 @@ function Mail:Stop()
 end
 
 function Mail:SendMail()
+	itemTimer = nil
+
 	QuickAuctions:Print(string.format(L["Auto mailed items off to %s!"], activeMailTarget))
 	SendMail(activeMailTarget, SendMailSubjectEditBox:GetText() or L["Mass mailing"], "")
-	itemTimer = nil
 end
 
 function Mail:UpdateBags()
