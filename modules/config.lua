@@ -504,22 +504,6 @@ local function loadGeneralOptions()
 						width = "full",
 						hidden = hideIfConflictingMail,
 					},
-					mailLatency = {
-						order = 2,
-						type = "toggle",
-						name = L["Interval off latency"],
-						desc = L["Instead of mail opening interval being based off a static amount, it will use your latency. For example, if you have 150 MS latency it will loot an item every 0.175 seconds, if you have 20 MS latency it will loot an item every 0.035 seconds."],
-						hidden = hideIfConflictingMail,
-					},
-					mailInterval = {
-						order = 3,
-						type = "range",
-						min = 0.10, max = 2, step = 0.05,
-						name = L["Open interval"],
-						desc = L["How many seconds Quick Auctions should wait between looting mail."],
-						hidden = hideIfConflictingMail,
-						disabled = function(info) return QuickAuctions.db.global.mailLatency end,
-					},
 				},
 			},
 			cancel = {

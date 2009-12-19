@@ -38,9 +38,6 @@ function QuickAuctions:OnInitialize()
 			superScan = false,
 			hideHelp = false,
 			autoMail = false,
-			autoCheck = true,
-			mailLatency = false,
-			mailInterval = 0.30,
 		},
 		realm = {
 			crafts = {},
