@@ -1,14 +1,16 @@
+-- This will need a lot of rewriting before it's done
 local QuickAuctions = select(2, ...)
 local Mail = QuickAuctions:NewModule("Mail", "AceEvent-3.0")
 local L = QuickAuctions.L
 
 local eventThrottle = CreateFrame("Frame", nil, MailFrame)
 local reverseLookup = QuickAuctions.modules.Manage.reverseLookup
-local timeElapsed, itemTimer, cacheFrame, activeMailTarget, mailTimer, lastTotal, autoLootTotal
+local bagTimer, itemTimer, cacheFrame, activeMailTarget, mailTimer, lastTotal, autoLootTotal, lootAfterSend
 local lockedItems, mailTargets = {}, {}
 local playerName = string.lower(UnitName("player"))
 local allowTimerStart = true
 local LOOT_MAIL_INDEX = 1
+local MAIL_WAIT_TIME = 0.30
 
 function Mail:OnInitialize()
 	local function showTooltip(self)
@@ -107,6 +109,7 @@ function Mail:OnInitialize()
 	self:RegisterEvent("MAIL_INBOX_UPDATE")
 end
 
+-- Deal swith auto looting of mail!
 function Mail:StartAutoLooting()
 	if( GetInboxNumItems() == 0 ) then return end
 	autoLootTotal = GetInboxNumItems()
@@ -137,6 +140,7 @@ function Mail:StopAutoLooting(failed)
 	end
 	
 	autoLootTotal = nil
+	lootAfterSend = nil
 	LOOT_MAIL_INDEX = 1
 	
 	self:UnregisterEvent("UI_ERROR_MESSAGE")
@@ -146,13 +150,26 @@ end
 
 function Mail:UI_ERROR_MESSAGE(event, msg)
 	if( msg == ERR_INV_FULL or msg == ERR_ITEM_MAX_COUNT ) then
+		-- Send off our pending mail first to free up more room to auto loot
+		if( msg == ERR_INV_FULL and activeMailTarget and self:GetPendingAttachments() > 0 ) then
+			self.massOpening:SetText(L["Waiting..."])
+			lootAfterSend = true
+			autoLootTotal = -1
+			bagTimer = MAIL_WAIT_TIME
+			eventThrottle:Show()
+
+			self:SendMail()
+			return
+		end
+		
+		-- Try the next index in case we can still loot more such as in the case of glyphs
 		LOOT_MAIL_INDEX = LOOT_MAIL_INDEX + 1
 		if( LOOT_MAIL_INDEX > GetInboxNumItems() ) then
 			self:StopAutoLooting(true)
 			return
 		end
 		
-		mailTimer = 0.30
+		mailTimer = MAIL_WAIT_TIME
 		eventThrottle:Show()
 	end
 end
@@ -172,7 +189,7 @@ function Mail:MAIL_INBOX_UPDATE()
 	end
 	
 	-- The last item we setup to auto loot is finished, time for the next one
-	if( self.massOpening:IsEnabled() == 0 and autoLootTotal ~= current ) then
+	if( self.massOpening:IsEnabled() == 0 and not lootAfterSend and autoLootTotal ~= current ) then
 		autoLootTotal = GetInboxNumItems()
 		
 		-- If we're auto checking mail when new data is available, will wait and continue auto looting, otherwise we just stop now
@@ -191,6 +208,7 @@ function Mail:MAIL_CLOSED()
 	self:StopAutoLooting()
 end
 
+-- Deals with auto sending mail to people
 function Mail:TargetHasItems(checkLocks)
 	for bag=0, 4 do
 		for slot=1, GetContainerNumSlots(bag) do
@@ -251,7 +269,7 @@ end
 function Mail:Stop()
 	self:UnregisterEvent("BAG_UPDATE")
 	
-	timeElapsed = nil
+	bagTimer = nil
 	itemTimer = nil
 	eventThrottle:Hide()
 end
@@ -263,14 +281,37 @@ function Mail:SendMail()
 	SendMail(activeMailTarget, SendMailSubjectEditBox:GetText() or L["Mass mailing"], "")
 end
 
+function Mail:GetPendingAttachments()
+	local totalAttached = 0
+	for i=1, ATTACHMENTS_MAX_SEND do
+		if( GetSendMailItem(i) ) then
+			totalAttached = totalAttached + 1
+		end
+	end
+	
+	return totalAttached
+end
+
 function Mail:UpdateBags()
 	-- If there is no mail targets or no more items left to send for this target, find a new one
 	if( not activeMailTarget or not self:TargetHasItems() ) then
 		activeMailTarget = self:FindNextMailTarget()
-		if( not activeMailTarget ) then return end
-		
-		SendMailNameEditBox:SetText(activeMailTarget)
+		if( activeMailTarget ) then
+			SendMailNameEditBox:SetText(activeMailTarget)
+		end
 	end
+	
+	-- We sent off our pending mail early because we ran out of space, can resume sending now
+	if( lootAfterSend and self:GetPendingAttachments() == 0 ) then
+		lootAfterSend = nil
+		autoLootTotal = GetInboxNumItems()
+		mailTimer = MAIL_WAIT_TIME
+		eventThrottle:Show()
+		return
+	end
+
+	-- If we exit before the loot after send checks then it will stop too early
+	if( not activeMailTarget ) then return end
 
 	-- Otherwise see if we can send anything off
 	for bag=0, 4 do
@@ -286,16 +327,11 @@ function Mail:UpdateBags()
 				-- When creating lots of glyphs, or anything that stacks really this will stop it from sending too early
 				if( locked and lockedItems[bag .. slot] and lockedItems[bag .. slot] ~= quantity ) then
 					lockedItems[bag .. slot] = quantity
-					itemTimer = GetTradeSkillLine() == "UNKNOWN" and 1 or 10
+					itemTimer = self.massOpening:IsEnabled() == 0 and 3 or GetTradeSkillLine() == "UNKNOWN" and 1 or 10
 					eventThrottle:Show()
 				-- Not locked, let's add it up!
 				elseif( not locked ) then
-					local totalAttached = 0
-					for i=1, ATTACHMENTS_MAX_SEND do
-						if( GetSendMailItem(i) ) then
-							totalAttached = totalAttached + 1
-						end
-					end
+					local totalAttached = self:GetPendingAttachments()
 					
 					-- Too many attached, nothing we can do yet
 					if( totalAttached >= ATTACHMENTS_MAX_SEND ) then return end
@@ -310,7 +346,7 @@ function Mail:UpdateBags()
 						self:SendMail()
 					-- No more unlocked items to send for this target, wait TargetHasItems
 					elseif( not self:TargetHasItems(true) ) then
-						itemTimer = GetTradeSkillLine() == "UNKNOWN" and 1 or 10
+						itemTimer = self.massOpening:IsEnabled() == 0 and 3 or GetTradeSkillLine() == "UNKNOWN" and 1 or 10
 						eventThrottle:Show()
 					end
 				end
@@ -321,15 +357,15 @@ end
 
 -- Bag updates are fun and spammy, throttle them to every 0.20 seconds
 function Mail:BAG_UPDATE()
-	timeElapsed = 0.20
+	bagTimer = 0.20
 	eventThrottle:Show()
 end
 
 eventThrottle:SetScript("OnUpdate", function(self, elapsed)
-	if( timeElapsed ) then
-		timeElapsed = timeElapsed - elapsed
-		if( timeElapsed <= 0 ) then
-			timeElapsed = nil
+	if( bagTimer ) then
+		bagTimer = bagTimer - elapsed
+		if( bagTimer <= 0 ) then
+			bagTimer = nil
 			Mail:UpdateBags()
 		end
 	end
@@ -348,7 +384,7 @@ eventThrottle:SetScript("OnUpdate", function(self, elapsed)
 		end
 	end
 	
-	if( not timeElapsed and not itemTimer and not mailTimer ) then
+	if( not bagTimer and not itemTimer and not mailTimer ) then
 		self:Hide()
 	end
 end)
