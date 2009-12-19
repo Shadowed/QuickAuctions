@@ -1324,6 +1324,7 @@ local function loadPreloadOptions()
 		order = 3,
 		type = "group",
 		name = L["Preload groups"],
+		hidden = true,
 		args = {
 		
 		},
@@ -1345,7 +1346,7 @@ local function loadOptions()
 	loadGroupOptions()
 	
 	options.args.profile = LibStub("AceDBOptions-3.0"):GetOptionsTable(QuickAuctions.db, true)
-	options.args.profile.order = 5
+	options.args.profile.order = 1.5
 end
 
 SLASH_QA1 = nil
