@@ -955,6 +955,37 @@ end
 
 local updateGroups
 
+-- Remove management
+local removeItemTable = {
+	type = "execute",
+	name = function(info) return (select(2, GetItemInfo(info[#(info)]))) or info[#(info)] end,
+	image = function(info) return (select(10, GetItemInfo(info[#(info)]))) or "Interface\\Icons\\INV_Misc_QuestionMark" end,
+	hidden = false,
+	imageHeight = 24,
+	imageWidth = 24,
+	func = function(info)
+		QuickAuctions.db.global.groups[idToGroup[info[2]]][info[#(info)]] = nil
+		options.args.groups.args[info[2]].args.remove.args.list.args[info[#(info)]] = nil
+		
+		local hasItems
+		for itemID in pairs(QuickAuctions.db.global.groups[idToGroup[info[2]]]) do
+			hasItems = true
+			break
+		end
+		
+		if( not hasItems ) then
+			options.args.groups.args[info[2]].args.remove.args.list.args.help = {
+				order = 0,
+				type = "description",
+				name = L["No items have been added to this group yet."],
+			}	
+		end
+		
+		Config:RebuildItemList(true)
+	end,
+	width = "half",
+}
+
 
 local throttle
 local addItemsTable = {
@@ -982,37 +1013,9 @@ local addItem = {
 		QuickAuctions.db.global.groups[idToGroup[info[2]]][info[#(info)]] = true
 		options.args.groups.args[info[2]].args.remove.args.list.args[info[#(info)]] = removeItemTable
 		options.args.groups.args[info[2]].args.remove.args.list.args.help = nil
-		addItemsTable.args[info[#(info)]] = nil
-	end,
-	width = "half",
-}
 
--- Remove management
-local removeItemTable = {
-	type = "execute",
-	name = function(info) return (select(2, GetItemInfo(info[#(info)]))) or info[#(info)] end,
-	image = function(info) return (select(10, GetItemInfo(info[#(info)]))) or "Interface\\Icons\\INV_Misc_QuestionMark" end,
-	hidden = false,
-	imageHeight = 24,
-	imageWidth = 24,
-	func = function(info)
-		QuickAuctions.db.global.groups[idToGroup[info[2]]][info[#(info)]] = nil
-		options.args.groups.args[info[2]].args.remove.args.list.args[info[#(info)]] = nil
-		addItemsTable.args[info[#(info)]] = addItem
-		
-		local hasItems
-		for itemID in pairs(QuickAuctions.db.global.groups[idToGroup[info[2]]]) do
-			hasItems = true
-			break
-		end
-		
-		if( not hasItems ) then
-			options.args.groups.args[info[2]].args.remove.args.list.args.help = {
-				order = 0,
-				type = "description",
-				name = L["No items have been added to this group yet."],
-			}	
-		end
+		updateGroups()
+		Config:RebuildItemList()
 	end,
 	width = "half",
 }
@@ -1043,6 +1046,11 @@ end
 
 local function renameGroup(info, value)
 	local oldName = idToGroup[info[2]]
+	local target = QuickAuctions.db.factionrealm.mail[oldName]
+	if( oldTarget ) then
+		QuickAuctions.db.factionrealm.mail[oldName] = nil
+		QuickAuctions.db.factionreaml.mail[value] = target
+	end
 	
 	QuickAuctions.db.global.groups[value] = CopyTable(QuickAuctions.db.global.groups[oldName])
 	QuickAuctions.db.global.groups[oldName] = nil
@@ -1084,7 +1092,7 @@ end
 function Config:RebuildItemList(updateOnChange)
 	QuickAuctions.Manage:UpdateReverseLookup()
 	table.wipe(addItemsTable.args)
-
+	
 	local addedItem, hasItems
 	for bag=4, 0, -1 do
 		for slot=1, GetContainerNumSlots(bag) do
@@ -1273,7 +1281,7 @@ updateGroups = function()
 			end
 
 			groupID = groupID + 1
-				end
+		end
 	end
 end
 
@@ -1307,6 +1315,7 @@ local function loadGroupOptions()
 						end,
 						set = function(info, value)
 							QuickAuctions.db.global.groups[value] = {}
+							updateGroups()
 						end,
 						get = false,
 					},
