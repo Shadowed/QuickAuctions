@@ -27,7 +27,7 @@ function QuickAuctions:OnInitialize()
 		global = {
 			summaryItems = {},
 			groups = {},
-			infoID = 0,
+			infoID = -1,
 			hideUncraft = false,
 			playSound = true,
 			cancelBinding = "",
@@ -442,8 +442,9 @@ local infoMessages = {
 }
 
 function QuickAuctions:ShowInfoPanel()
-	if( QuickAuctions.db.global.infoID >= #(infoMessages) or not self.modules.Config ) then return end
+	local infoID = QuickAuctions.db.global.infoID
 	QuickAuctions.db.global.infoID = #(infoMessages)
+	if( infoID < 0 or infoID >= #(infoMessages) ) then return end
 	
 	local frame = CreateFrame("Frame", nil, UIParent)
 	frame:SetClampedToScreen(true)

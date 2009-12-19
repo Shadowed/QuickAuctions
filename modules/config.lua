@@ -9,7 +9,6 @@ local scanTooltip
 local resultsCache = {}
 local function isSoulbound(bag, slot)
 	if( resultsCache[bag .. slot] ~= nil ) then return resultsCache[bag .. slot] end
-	
 	if( not scanTooltip ) then
 		scanTooltip = CreateFrame("GameTooltip", "QuickAuctionsScanTooltip", UIParent, "GameTooltipTemplate")
 		scanTooltip:SetOwner(UIParent, "ANCHOR_NONE")	
