@@ -373,7 +373,11 @@ eventThrottle:SetScript("OnUpdate", function(self, elapsed)
 	if( itemTimer ) then
 		itemTimer = itemTimer - elapsed
 		if( itemTimer <= 0 ) then
-			Mail:SendMail()
+			itemTimer = nil
+			
+			if( activeMailTarget ) then
+				Mail:SendMail()
+			end
 		end
 	end
 	
