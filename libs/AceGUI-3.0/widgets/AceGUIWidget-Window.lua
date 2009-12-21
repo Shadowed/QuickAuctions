@@ -1,5 +1,15 @@
 local AceGUI = LibStub("AceGUI-3.0")
 
+-- Lua APIs
+local pairs, assert, type = pairs, assert, type
+
+-- WoW APIs
+local CreateFrame, UIParent = CreateFrame, UIParent
+
+-- Global vars/functions that we don't upvalue since they might get hooked, or upgraded
+-- List them here for Mikk's FindGlobals script
+-- GLOBALS: GameFontNormal
+
 ----------------
 -- Main Frame --
 ----------------
@@ -10,7 +20,7 @@ local AceGUI = LibStub("AceGUI-3.0")
 ]]
 do
 	local Type = "Window"
-	local Version = 1
+	local Version = 2
 
 	local function frameOnClose(this)
 		this.obj:Fire("OnClose")
@@ -79,6 +89,7 @@ do
 		self.frame:SetParent(UIParent)
 		self.frame:SetFrameStrata("FULLSCREEN_DIALOG")
 		self:ApplyStatus()
+		self:EnableResize(true)
 	end
 	
 	local function OnRelease(self)
@@ -129,6 +140,13 @@ do
 		content.height = contentheight
 	end
 	
+	local function EnableResize(self, state)
+		local func = state and "Show" or "Hide"
+		self.sizer_se[func](self.sizer_se)
+		self.sizer_s[func](self.sizer_s)
+		self.sizer_e[func](self.sizer_e)
+	end
+	
 	local function Constructor()
 		local frame = CreateFrame("Frame",nil,UIParent)
 		local self = {}
@@ -144,6 +162,7 @@ do
 		self.ApplyStatus = ApplyStatus
 		self.OnWidthSet = OnWidthSet
 		self.OnHeightSet = OnHeightSet
+		self.EnableResize = EnableResize
 		
 		self.localstatus = {}
 		

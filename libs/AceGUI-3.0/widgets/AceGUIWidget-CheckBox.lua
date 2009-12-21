@@ -1,5 +1,15 @@
 local AceGUI = LibStub("AceGUI-3.0")
 
+-- Lua APIs
+local select = select
+
+-- WoW APIs
+local CreateFrame, UIParent = CreateFrame, UIParent
+
+-- Global vars/functions that we don't upvalue since they might get hooked, or upgraded
+-- List them here for Mikk's FindGlobals script
+-- GLOBALS: SetDesaturation, GameFontHighlight
+
 --------------------------
 -- Check Box			--
 --------------------------
@@ -10,13 +20,14 @@ local AceGUI = LibStub("AceGUI-3.0")
 ]]
 do
 	local Type = "CheckBox"
-	local Version = 11
+	local Version = 13
 	
 	local function OnAcquire(self)
 		self:SetValue(false)
 		self.tristate = nil
 		self:SetHeight(24)
 		self:SetWidth(200)
+		self:SetImage()
 	end
 	
 	local function OnRelease(self)
@@ -84,20 +95,14 @@ do
 		self.checked = value
 		if value then
 			SetDesaturation(self.check, false)
-			check:SetWidth(24)
-			check:SetHeight(24)
 			self.check:Show()
 		else
 			--Nil is the unknown tristate value
 			if self.tristate and value == nil then
 				SetDesaturation(self.check, true)
-				check:SetWidth(24)
-				check:SetHeight(24)
 				self.check:Show()
 			else
 				SetDesaturation(self.check, false)
-				check:SetWidth(24)
-				check:SetHeight(24)
 				self.check:Hide()
 			end
 		end
@@ -118,16 +123,24 @@ do
 		local highlight = self.highlight
 	
 		if type == "radio" then
+			checkbg:SetHeight(16)
+			checkbg:SetWidth(16)
 			checkbg:SetTexture("Interface\\Buttons\\UI-RadioButton")
 			checkbg:SetTexCoord(0,0.25,0,1)
+			check:SetHeight(16)
+			check:SetWidth(16)
 			check:SetTexture("Interface\\Buttons\\UI-RadioButton")
-			check:SetTexCoord(0.5,0.75,0,1)
+			check:SetTexCoord(0.25,0.5,0,1)
 			check:SetBlendMode("ADD")
 			highlight:SetTexture("Interface\\Buttons\\UI-RadioButton")
 			highlight:SetTexCoord(0.5,0.75,0,1)
 		else
+			checkbg:SetHeight(24)
+			checkbg:SetWidth(24)
 			checkbg:SetTexture("Interface\\Buttons\\UI-CheckBox-Up")
 			checkbg:SetTexCoord(0,1,0,1)
+			check:SetHeight(24)
+			check:SetWidth(24)
 			check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
 			check:SetTexCoord(0,1,0,1)
 			check:SetBlendMode("BLEND")
@@ -161,7 +174,7 @@ do
 			if not self.desc then
 				local desc = self.frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 				desc:ClearAllPoints()
-				desc:SetPoint("TOPLEFT", self.check, "TOPRIGHT", 5, -20)
+				desc:SetPoint("TOPLEFT", self.check, "TOPRIGHT", 5, -21)
 				desc:SetWidth(self.frame.width - 30)
 				desc:SetJustifyH("LEFT")
 				desc:SetJustifyV("TOP")
@@ -170,7 +183,7 @@ do
 			self.desc:Show()
 			--self.text:SetFontObject(GameFontNormal)
 			self.desc:SetText(desc)
-			self:SetHeight(24 + self.desc:GetHeight())
+			self:SetHeight(28 + self.desc:GetHeight())
 		else
 			if self.desc then
 				self.desc:SetText("")
@@ -181,10 +194,37 @@ do
 		end
 	end
 	
+	local function SetImage(self, path, ...)
+		local image = self.image
+		image:SetTexture(path)
+		
+		if image:GetTexture() then
+			local n = select('#', ...)
+			if n == 4 or n == 8 then
+				image:SetTexCoord(...)
+			else
+				image:SetTexCoord(0, 1, 0, 1)
+			end
+		end
+		self:AlignImage()
+	end
+	
+	local function AlignImage(self)
+		local img = self.image:GetTexture()
+		self.text:ClearAllPoints()
+		if not img then
+			self.text:SetPoint("LEFT", self.check, "RIGHT", 0, 0)
+			self.text:SetPoint("RIGHT", self.frame, "RIGHT", 0, 0)
+		else
+			self.text:SetPoint("LEFT", self.image,"RIGHT", 1, 0)
+			self.text:SetPoint("RIGHT", self.frame,"RIGHT", 0, 0)
+		end
+	end
+	
 	local function OnWidthSet(self, width)
 		if self.desc and self.desc:GetText() ~= "" then
 			self.desc:SetWidth(width - 30)
-			self:SetHeight(24 + self.desc:GetHeight())
+			self:SetHeight(28 + self.desc:GetHeight())
 		end
 	end
 	
@@ -205,6 +245,8 @@ do
 		self.SetTriState = SetTriState
 		self.SetDescription = SetDescription
 		self.OnWidthSet = OnWidthSet
+		self.SetImage = SetImage
+		self.AlignImage = AlignImage
 		
 		self.frame = frame
 		frame.obj = self
@@ -236,6 +278,12 @@ do
 		highlight:SetBlendMode("ADD")
 		highlight:SetAllPoints(checkbg)
 		highlight:Hide()
+		
+		local image = frame:CreateTexture(nil, "OVERLAY")
+		self.image = image
+		image:SetHeight(16)
+		image:SetWidth(16)
+		image:SetPoint("LEFT", check, "RIGHT", 1, 0)
 		
 		text:SetJustifyH("LEFT")
 		frame:SetHeight(24)

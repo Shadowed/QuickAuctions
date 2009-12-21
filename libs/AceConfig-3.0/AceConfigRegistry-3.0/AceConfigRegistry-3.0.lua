@@ -8,7 +8,7 @@
 -- :IterateOptionsTables() (and :GetOptionsTable() if only given one argument) return a function reference that the requesting config handling addon must call with valid "uiType", "uiName".
 -- @class file
 -- @name AceConfigRegistry-3.0
--- @release $Id: AceConfigRegistry-3.0.lua 832 2009-09-01 11:03:04Z nevcairiel $
+-- @release $Id: AceConfigRegistry-3.0.lua 890 2009-12-06 12:50:05Z nevcairiel $
 local MAJOR, MINOR = "AceConfigRegistry-3.0", 11
 local AceConfigRegistry = LibStub:NewLibrary(MAJOR, MINOR)
 
@@ -21,6 +21,12 @@ local CallbackHandler = LibStub:GetLibrary("CallbackHandler-1.0")
 if not AceConfigRegistry.callbacks then
 	AceConfigRegistry.callbacks = CallbackHandler:New(AceConfigRegistry)
 end
+
+-- Lua APIs
+local tinsert, tconcat = table.insert, table.concat
+local strfind, strmatch = string.find, string.match
+local type, tostring, select, pairs = type, tostring, select, pairs
+local error, assert = error, assert
 
 -----------------------------------------------------------------------
 -- Validating options table consistency:
@@ -41,7 +47,7 @@ local function err(msg, errlvl, ...)
 	for i=select("#",...),1,-1 do
 		tinsert(t, (select(i, ...)))
 	end
-	error(MAJOR..":ValidateOptionsTable(): "..table.concat(t,".")..msg, errlvl+2)
+	error(MAJOR..":ValidateOptionsTable(): "..tconcat(t,".")..msg, errlvl+2)
 end
 
 
@@ -121,6 +127,8 @@ local typedkeys={
 	},
 	toggle={
 		tristate=optbool,
+		image=optstringfunc,
+		imageCoords=optmethodtable,
 	},
 	tristate={
 	},

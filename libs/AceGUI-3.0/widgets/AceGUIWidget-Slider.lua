@@ -1,11 +1,22 @@
 local AceGUI = LibStub("AceGUI-3.0")
 
+-- Lua APIs
+local min, max, floor = math.min, math.max, math.floor
+local tonumber = tonumber
+
+-- WoW APIs
+local CreateFrame, UIParent = CreateFrame, UIParent
+
+-- Global vars/functions that we don't upvalue since they might get hooked, or upgraded
+-- List them here for Mikk's FindGlobals script
+-- GLOBALS: GameFontHighlightSmall
+
 --------------------------
 -- Slider  	            --
 --------------------------
 do
 	local Type = "Slider"
-	local Version = 8
+	local Version = 9
 	
 	local function OnAcquire(self)
 		self:SetWidth(200)
@@ -34,9 +45,9 @@ do
 	local function UpdateText(self)
 		local value = self.value or 0
 		if self.ispercent then
-			self.editbox:SetText(("%s%%"):format(math.floor(value*1000+0.5)/10))
+			self.editbox:SetText(("%s%%"):format(floor(value*1000+0.5)/10))
 		else
-			self.editbox:SetText(math.floor(value*100+0.5)/100)
+			self.editbox:SetText(floor(value*100+0.5)/100)
 		end
 	end
 	
@@ -77,9 +88,9 @@ do
 		if not self.disabled then
 			local value = self.value
 			if v > 0 then
-				value = math.min(value + (self.step or 1),self.max)
+				value = min(value + (self.step or 1),self.max)
 			else
-				value = math.max(value - (self.step or 1), self.min)
+				value = max(value - (self.step or 1), self.min)
 			end
 			self.slider:SetValue(value)
 		end
@@ -153,6 +164,14 @@ do
 		end
 	end
 	
+	local function EditBox_OnEnter(this)
+		this:SetBackdropBorderColor(0.5,0.5,0.5,1)
+	end
+	
+	local function EditBox_OnLeave(this)
+		this:SetBackdropBorderColor(0.3,0.3,0.3,0.8)
+	end
+	
 	local function SetIsPercent(self, value)
 		self.ispercent = value
 		UpdateLabels(self)
@@ -169,6 +188,12 @@ do
 		edgeFile = "Interface\\Buttons\\UI-SliderBar-Border",
 		tile = true, tileSize = 8, edgeSize = 8,
 		insets = { left = 3, right = 3, top = 6, bottom = 6 }
+	}
+	
+	local ManualBackdrop = {
+		bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+		edgeFile = "Interface\\ChatFrame\\ChatFrameBackground",
+		tile = true, edgeSize = 1, tileSize = 5,
 	}
 	
 	local function Constructor()
@@ -229,14 +254,13 @@ do
 		editbox:EnableMouse(true)
 		editbox:SetScript("OnEscapePressed",EditBox_OnEscapePressed)
 		editbox:SetScript("OnEnterPressed",EditBox_OnEnterPressed)
+		editbox:SetScript("OnEnter",EditBox_OnEnter)
+		editbox:SetScript("OnLeave",EditBox_OnLeave)
+		editbox:SetBackdrop(ManualBackdrop)
+		editbox:SetBackdropColor(0,0,0,0.5)
+		editbox:SetBackdropBorderColor(0.3,0.3,0.30,0.80)
 		self.editbox = editbox
 		editbox.obj = self
-		
-		local bg = editbox:CreateTexture(nil,"BACKGROUND")
-		editbox.bg = bg
-		bg:SetTexture("Interface\\ChatFrame\\ChatFrameBackground")
-		bg:SetVertexColor(0,0,0,0.25)
-		bg:SetAllPoints(editbox)
 		
 		slider:SetThumbTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
 	

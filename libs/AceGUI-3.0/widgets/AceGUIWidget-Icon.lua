@@ -1,11 +1,17 @@
 local AceGUI = LibStub("AceGUI-3.0")
 
+-- Lua APIs
+local select = select
+
+-- WoW APIs
+local CreateFrame, UIParent = CreateFrame, UIParent
+
 --------------------------
 -- Label 	 			--
 --------------------------
 do
 	local Type = "Icon"
-	local Version = 10
+	local Version = 11
 	
 	local function OnAcquire(self)
 		self:SetHeight(110)
@@ -41,6 +47,8 @@ do
 			local n = select('#', ...)
 			if n == 4 or n == 8 then
 				image:SetTexCoord(...)
+			else
+				image:SetTexCoord(0, 1, 0, 1)
 			end
 		else
 			self.imageshown = nil

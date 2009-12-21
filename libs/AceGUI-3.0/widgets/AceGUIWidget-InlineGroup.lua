@@ -1,5 +1,7 @@
 local AceGUI = LibStub("AceGUI-3.0")
 
+-- WoW APIs
+local CreateFrame, UIParent = CreateFrame, UIParent
 
 -------------
 -- Widgets --
@@ -35,7 +37,7 @@ local AceGUI = LibStub("AceGUI-3.0")
 
 do
 	local Type = "InlineGroup"
-	local Version = 5
+	local Version = 6
 	
 	local function OnAcquire(self)
 		self:SetWidth(300)
@@ -114,8 +116,8 @@ do
 		
 		local border = CreateFrame("Frame",nil,frame)
 		self.border = border
-		border:SetPoint("TOPLEFT",frame,"TOPLEFT",3,-17)
-		border:SetPoint("BOTTOMRIGHT",frame,"BOTTOMRIGHT",-3,3)
+		border:SetPoint("TOPLEFT",frame,"TOPLEFT",0,-17)
+		border:SetPoint("BOTTOMRIGHT",frame,"BOTTOMRIGHT",-1,3)
 		
 		border:SetBackdrop(PaneBackdrop)
 		border:SetBackdropColor(0.1,0.1,0.1,0.5)

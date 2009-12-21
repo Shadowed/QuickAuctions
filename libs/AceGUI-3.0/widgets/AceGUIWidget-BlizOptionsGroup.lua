@@ -32,9 +32,12 @@ local AceGUI = LibStub("AceGUI-3.0")
 	Group Designed to be added to the bliz interface options panel
 ]]
 
+-- WoW APIs
+local CreateFrame = CreateFrame
+
 do
 	local Type = "BlizOptionsGroup"
-	local Version = 7
+	local Version = 10
 	
 	local function OnAcquire(self)
 
@@ -130,7 +133,7 @@ do
 		
 		local label = frame:CreateFontString(nil,"OVERLAY","GameFontNormalLarge")
 		self.label = label
-		label:SetPoint("TOPLEFT", frame, "TOPLEFT", 15, -15)
+		label:SetPoint("TOPLEFT", frame, "TOPLEFT", 10, -15)
 		label:SetPoint("BOTTOMRIGHT", frame, "TOPRIGHT", 10, -45)
 		label:SetJustifyH("LEFT")
 		label:SetJustifyV("TOP")

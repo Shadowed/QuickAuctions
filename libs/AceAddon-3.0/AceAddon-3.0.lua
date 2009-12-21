@@ -28,7 +28,8 @@
 -- end
 -- @class file
 -- @name AceAddon-3.0.lua
--- @release $Id: AceAddon-3.0.lua 777 2009-04-04 20:16:09Z nevcairiel $
+-- @release $Id: AceAddon-3.0.lua 895 2009-12-06 16:28:55Z nevcairiel $
+
 local MAJOR, MINOR = "AceAddon-3.0", 5
 local AceAddon, oldminor = LibStub:NewLibrary(MAJOR, MINOR)
 
@@ -41,9 +42,16 @@ AceAddon.initializequeue = AceAddon.initializequeue or {} -- addons that are new
 AceAddon.enablequeue = AceAddon.enablequeue or {} -- addons that are initialized and waiting to be enabled
 AceAddon.embeds = AceAddon.embeds or setmetatable({}, {__index = function(tbl, key) tbl[key] = {} return tbl[key] end }) -- contains a list of libraries embedded in an addon
 
-local tinsert, tconcat = table.insert, table.concat
-local fmt = string.format
-local pairs, next, type = pairs, next, type
+-- Lua APIs
+local tinsert, tconcat, tremove = table.insert, table.concat, table.remove
+local fmt, tostring = string.format, tostring
+local select, pairs, next, type, unpack = select, pairs, next, type, unpack
+local loadstring, assert, error = loadstring, assert, error
+local setmetatable, getmetatable, rawset, rawget = setmetatable, getmetatable, rawset, rawget
+
+-- Global vars/functions that we don't upvalue since they might get hooked, or upgraded
+-- List them here for Mikk's FindGlobals script
+-- GLOBALS: LibStub, IsLoggedIn, geterrorhandler
 
 --[[
 	 xpcall safecall implementation

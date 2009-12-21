@@ -3,33 +3,20 @@
 --Multiline Editbox Widget, Originally by bam
 
 --]]
-local assert, error, ipairs, next, pairs, select, tonumber, tostring, type, unpack, pcall, xpcall =
-		assert, error, ipairs, next, pairs, select, tonumber, tostring, type, unpack, pcall, xpcall
-local getmetatable, setmetatable, rawequal, rawget, rawset, getfenv, setfenv, loadstring, debugstack =
-		getmetatable, setmetatable, rawequal, rawget, rawset, getfenv, setfenv, loadstring, debugstack
-local math, string, table = math, string, table
-local find, format, gmatch, gsub, tolower, match, toupper, join, split, trim =
-		string.find, string.format, string.gmatch, string.gsub, string.lower, string.match, string.upper, string.join, string.split, string.trim
-local concat, insert, maxn, remove, sort = table.concat, table.insert, table.maxn, table.remove, table.sort
-local max, min, abs, ceil, floor = math.max, math.min, math.abs, math.ceil, math.floor
-
-local LibStub = assert(LibStub)
-
-local ChatFontNormal = ChatFontNormal
-local ClearCursor = ClearCursor
-local CreateFrame = CreateFrame
-local GetCursorInfo = GetCursorInfo
-local GetSpellName = GetSpellName
-local UIParent = UIParent
-local UISpecialFrames = UISpecialFrames
-
--- No global variables after this!
-
-local _G = getfenv()
-
 local AceGUI = LibStub("AceGUI-3.0")
 
-local Version = 10
+-- Lua APIs
+local format, pairs, tostring = string.format, pairs, tostring
+
+-- WoW APIs
+local GetCursorInfo, ClearCursor, GetSpellName = GetCursorInfo, ClearCursor, GetSpellName
+local CreateFrame, UIParent = CreateFrame, UIParent
+
+-- Global vars/functions that we don't upvalue since they might get hooked, or upgraded
+-- List them here for Mikk's FindGlobals script
+-- GLOBALS: ChatFontNormal, ACCEPT
+
+local Version = 11
 ---------------------
 -- Common Elements --
 ---------------------
@@ -127,11 +114,13 @@ do
 			self.editbox:ClearFocus()
 			self.editbox:SetTextColor(0.5, 0.5, 0.5)
 			self.label:SetTextColor(0.5,0.5,0.5)
+			self.button:Disable()
 		else
 			self.editbox:EnableMouse(true)
 			self.scrollframe:EnableMouse(true)
 			self.editbox:SetTextColor(1, 1, 1)
 			self.label:SetTextColor(1,.82,0)
+			self.button:Enable()
 		end
 	end
 
@@ -263,7 +252,9 @@ do
 			if value ~= self.lasttext then
 				self:Fire("OnTextChanged", value)
 				self.lasttext = value
-				self.button:Enable()
+				if not self.disabled then
+					self.button:Enable()
+				end
 			end
 		end)
 	

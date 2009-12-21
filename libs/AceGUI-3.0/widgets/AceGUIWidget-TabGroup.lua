@@ -1,5 +1,16 @@
 local AceGUI = LibStub("AceGUI-3.0")
 
+-- Lua APIs
+local pairs, ipairs, assert, type = pairs, ipairs, assert, type
+
+-- WoW APIs
+local CreateFrame, UIParent = CreateFrame, UIParent
+local _G = _G
+
+-- Global vars/functions that we don't upvalue since they might get hooked, or upgraded
+-- List them here for Mikk's FindGlobals script
+-- GLOBALS: PanelTemplates_TabResize, PanelTemplates_SetDisabledTabState, PanelTemplates_SelectTab, PanelTemplates_DeselectTab
+
 -------------
 -- Widgets --
 -------------
@@ -30,7 +41,7 @@ local AceGUI = LibStub("AceGUI-3.0")
 
 do
 	local Type = "TabGroup"
-	local Version = 22
+	local Version = 24
 
 	local PaneBackdrop  = {
 		bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
@@ -273,7 +284,7 @@ do
 		end
 		
 		self.borderoffset = (hastitle and 17 or 10)+((numrows)*20)
-		self.border:SetPoint("TOPLEFT",self.frame,"TOPLEFT",3,-self.borderoffset)
+		self.border:SetPoint("TOPLEFT",self.frame,"TOPLEFT",1,-self.borderoffset)
 	end
 	
 	local function BuildTabsOnUpdate(this)
@@ -352,8 +363,8 @@ do
 		local border = CreateFrame("Frame",nil,frame)
 		self.border = border
 		self.borderoffset = 27
-		border:SetPoint("TOPLEFT",frame,"TOPLEFT",3,-27)
-		border:SetPoint("BOTTOMRIGHT",frame,"BOTTOMRIGHT",-3,3)
+		border:SetPoint("TOPLEFT",frame,"TOPLEFT",1,-27)
+		border:SetPoint("BOTTOMRIGHT",frame,"BOTTOMRIGHT",-1,3)
 		
 		border:SetBackdrop(PaneBackdrop)
 		border:SetBackdropColor(0.1,0.1,0.1,0.5)
@@ -365,8 +376,8 @@ do
 		local content = CreateFrame("Frame",nil,border)
 		self.content = content
 		content.obj = self
-		content:SetPoint("TOPLEFT",border,"TOPLEFT",10,-10)
-		content:SetPoint("BOTTOMRIGHT",border,"BOTTOMRIGHT",-10,10)
+		content:SetPoint("TOPLEFT",border,"TOPLEFT",10,-7)
+		content:SetPoint("BOTTOMRIGHT",border,"BOTTOMRIGHT",-10,7)
 		
 		AceGUI:RegisterAsContainer(self)
 		return self

@@ -1,6 +1,12 @@
---[[ $Id: AceGUIWidget-DropDown-Items.lua 808 2009-05-07 14:45:15Z ammo $ ]]--
+--[[ $Id: AceGUIWidget-DropDown-Items.lua 877 2009-11-02 15:56:50Z nevcairiel $ ]]--
 
 local AceGUI = LibStub("AceGUI-3.0")
+
+-- Lua APIs
+local select, assert = select, assert
+
+-- WoW APIs
+local CreateFrame = CreateFrame
 
 local function fixlevels(parent,...)
 	local i = 1

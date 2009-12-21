@@ -1,7 +1,7 @@
 --- AceConfigCmd-3.0 handles access to an options table through the "command line" interface via the ChatFrames.
 -- @class file
 -- @name AceConfigCmd-3.0
--- @release $Id: AceConfigCmd-3.0.lua 801 2009-04-09 20:34:28Z nevcairiel $
+-- @release $Id: AceConfigCmd-3.0.lua 904 2009-12-13 11:56:37Z nevcairiel $
 
 --[[
 AceConfigCmd-3.0
@@ -12,12 +12,10 @@ REQUIRES: AceConsole-3.0 for command registration (loaded on demand)
 
 ]]
 
--- TODO: handle disabled / hidden
--- TODO: implement handlers for all types
 -- TODO: plugin args
 
 
-local MAJOR, MINOR = "AceConfigCmd-3.0", 9
+local MAJOR, MINOR = "AceConfigCmd-3.0", 12
 local AceConfigCmd = LibStub:NewLibrary(MAJOR, MINOR)
 
 if not AceConfigCmd then return end
@@ -29,6 +27,20 @@ local cfgreg = LibStub("AceConfigRegistry-3.0")
 local AceConsole -- LoD
 local AceConsoleName = "AceConsole-3.0"
 
+-- Lua APIs
+local strsub, strsplit, strlower, strmatch, strtrim = string.sub, string.split, string.lower, string.match, string.trim
+local format, tonumber, tostring = string.format, tonumber, tostring
+local tsort, tinsert = table.sort, table.insert
+local select, pairs, next, type = select, pairs, next, type
+local error, assert = error, assert
+
+-- WoW APIs
+local _G = _G
+
+-- Global vars/functions that we don't upvalue since they might get hooked, or upgraded
+-- List them here for Mikk's FindGlobals script
+-- GLOBALS: LibStub, SELECTED_CHAT_FRAME, DEFAULT_CHAT_FRAME
+
 
 local L = setmetatable({}, {	-- TODO: replace with proper locale
 	__index = function(self,k) return k end
@@ -39,6 +51,14 @@ local L = setmetatable({}, {	-- TODO: replace with proper locale
 local function print(msg)
 	(SELECTED_CHAT_FRAME or DEFAULT_CHAT_FRAME):AddMessage(msg)
 end
+
+-- constants used by getparam() calls below
+
+local handlertypes = {["table"]=true}
+local handlermsg = "expected a table"
+
+local functypes = {["function"]=true, ["string"]=true}
+local funcmsg = "expected function or member name"
 
 
 -- pickfirstset() - picks the first non-nil value and returns it
@@ -169,7 +189,20 @@ local function iterateargs(tab)
 	end
 end
 
-local function showhelp(info, inputpos, tab, noHead)
+local function checkhidden(info, inputpos, tab)
+	if tab.cmdHidden~=nil then
+		return tab.cmdHidden
+	end
+	local hidden = tab.hidden
+	if type(hidden) == "function" or type(hidden) == "string" then
+		info.hidden = hidden
+		hidden = callmethod(info, inputpos, tab, 'hidden')
+		info.hidden = nil
+	end
+	return hidden
+end
+
+local function showhelp(info, inputpos, tab, depth, noHead)
 	if not noHead then
 		print("|cff33ff99"..info.appName.."|r: Arguments to |cffffff78/"..info[0].."|r "..strsub(info.input,1,inputpos-1)..":")
 	end
@@ -179,12 +212,12 @@ local function showhelp(info, inputpos, tab, noHead)
 	
 	for k,v in iterateargs(tab) do
 		if not refTbl[k] then	-- a plugin overriding something in .args
-			table.insert(sortTbl, k)
+			tinsert(sortTbl, k)
 			refTbl[k] = v
 		end
 	end
 	
-	table.sort(sortTbl, function(one, two) 
+	tsort(sortTbl, function(one, two) 
 		local o1 = refTbl[one].order or 100
 		local o2 = refTbl[two].order or 100
 		if type(o1) == "function" or type(o1) == "string" then
@@ -208,23 +241,28 @@ local function showhelp(info, inputpos, tab, noHead)
 		return o1<o2
 	end)
 	
-	for _,k in ipairs(sortTbl) do
+	for i = 1, #sortTbl do
+		local k = sortTbl[i]
 		local v = refTbl[k]
-		if not pickfirstset(v.cmdHidden, v.hidden, false) then
-			-- recursively show all inline groups
-			local name, desc = v.name, v.desc
-			if type(name) == "function" then
-				name = callfunction(info, v, 'name')
-			end
-			if type(desc) == "function" then
-				desc = callfunction(info, v, 'desc')
-			end
-			if v.type == "group" and pickfirstset(v.cmdInline, v.inline, false) then
-				print("  "..(desc or name)..":")
-				showhelp(info, inputpos, v, true)
-			elseif v.type ~= "description" and v.type ~= "header" then
-				local key = k:gsub(" ", "_")
-				print("  |cffffff78"..key.."|r - "..(desc or name or ""))
+		if not checkhidden(info, inputpos, v) then
+			if v.type ~= "description" and v.type ~= "header" then
+				-- recursively show all inline groups
+				local name, desc = v.name, v.desc
+				if type(name) == "function" then
+					name = callfunction(info, v, 'name')
+				end
+				if type(desc) == "function" then
+					desc = callfunction(info, v, 'desc')
+				end
+				if v.type == "group" and pickfirstset(v.cmdInline, v.inline, false) then
+					print("  "..(desc or name)..":")
+					local oldhandler,oldhandler_at = getparam(info, inputpos, v, depth, "handler", handlertypes, handlermsg)
+					showhelp(info, inputpos, v, depth, true)
+					info.handler,info.handler_at = oldhandler,oldhandler_at
+				else
+					local key = k:gsub(" ", "_")
+					print("  |cffffff78"..key.."|r - "..(desc or name or ""))
+				end
 			end
 		end
 	end
@@ -289,14 +327,6 @@ local function keybindingValidateFunc(text)
 	return s
 end
 
--- constants used by getparam() calls below
-
-local handlertypes = {["table"]=true}
-local handlermsg = "expected a table"
-
-local functypes = {["function"]=true, ["string"]=true}
-local funcmsg = "expected function or member name"
-
 -- handle() - selfrecursing function that processes input->optiontable 
 -- - depth - starts at 0
 -- - retfalse - return false rather than produce error if a match is not found (used by inlined groups)
@@ -327,9 +357,9 @@ local function handle(info, inputpos, tab, depth, retfalse)
 		if tab.plugins and type(tab.plugins)~="table" then err(info,inputpos) end
 		
 		-- grab next arg from input
-		local _,nextpos,arg = string.find(info.input, " *([^ ]+) *", inputpos)
+		local _,nextpos,arg = (info.input):find(" *([^ ]+) *", inputpos)
 		if not arg then
-			showhelp(info, inputpos, tab)
+			showhelp(info, inputpos, tab, depth)
 			return
 		end
 		nextpos=nextpos+1
@@ -525,9 +555,9 @@ local function handle(info, inputpos, tab, depth, retfalse)
 		--parse for =on =off =default in the process
 		--table will be key = true for options that should toggle, key = [on|off|default] for options to be set
 		local sels = {}
-		for v in string.gmatch(str, "[^ ]+") do
+		for v in str:gmatch("[^ ]+") do
 			--parse option=on etc
-			local opt, val = string.match(v,'(.+)=(.+)')
+			local opt, val = v:match('(.+)=(.+)')
 			--get option if toggling
 			if not opt then 
 				opt = v 
