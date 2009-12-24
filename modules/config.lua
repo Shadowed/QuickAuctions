@@ -434,7 +434,7 @@ local groupSettings = {
 			overrideFallCap = {
 				order = 7,
 				type = "toggle",
-				name = L["Override fallback"],
+				name = L["Override max price"],
 				desc = L["Allows you to override the fallback price for this group."],
 				hidden = hideForDefault,
 				disabled = false,
@@ -453,7 +453,6 @@ local groupSettings = {
 	},
 }
 
-local function hideIfConflictingMail() return select(6, GetAddOnInfo("Postal")) ~= nil end
 local function loadGeneralOptions()
 	options.args.general = {
 		order = 1,
@@ -468,35 +467,21 @@ local function loadGeneralOptions()
 				inline = true,
 				name = L["General"],
 				args = {
-					hideHelp = {
-						order = 1,
-						type = "toggle",
-						name = L["Hide help text"],
-						desc = L["Hides auction setting help text throughout the group settings options."],
-					},
 					superScan = {
 						order = 1,
 						type = "toggle",
 						name = L["Enable super scan"],
 						desc = L["Super scanning will speed up your auction scanning, but it will no longer get accurate poster name data.\n\nWhitelist functions and matching your alts will no longer work if you enable this."],
-						hidden = true,
+						hidden = function(info) return not IsAddOnLoaded("TestCode") end,
 					},
-				},
-			},
-			mail = {
-				order = 3,
-				type = "group",
-				inline = true,
-				name = L["Auto mail looter"],
-				args = {
-					postal = {
-						order = 0,
-						type = "description",
-						hidden = function(info) return not hideIfConflictingMail(info) end,
-						name = L["You cannot use the mailing features with Postal enabled."],
+					hideHelp = {
+						order = 2,
+						type = "toggle",
+						name = L["Hide help text"],
+						desc = L["Hides auction setting help text throughout the group settings options."],
 					},
 					autoCheck = {
-						order = 1,
+						order = 3,
 						type = "toggle",
 						name = L["Auto recheck mail"],
 						desc = L["Automatically rechecks mail every 60 seconds when you have too much mail.\n\nIf you loot all mail with this enabled, it will wait and recheck then keep auto looting."],
