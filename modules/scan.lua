@@ -3,7 +3,7 @@ local Scan = QuickAuctions:NewModule("Scan", "AceEvent-3.0")
 local L = QuickAuctions.L
 local status = QuickAuctions.status
 local auctionData = {}
-local alreadyScanned
+local alreadyScanned, querySent, isBadQuery
 local BASE_DELAY = 0.50
 Scan.auctionData = auctionData
 
@@ -19,18 +19,17 @@ function Scan:OnInitialize()
 end
 
 function Scan:AuctionHouseLoaded()
-	--[[
 	-- Hook the query function so we know what we last sent a search on
 	local orig_QueryAuctionItems = QueryAuctionItems
 	QueryAuctionItems = function(name, minLevel, maxLevel, invTypeIndex, classIndex, subClassIndex, page, isUsable, qualityIndex, getAll, ...)
-		-- So AH browsing mods will show the status correctly on longer scans
-		if( CanSendAuctionQuery() and status.active ) then
-			AuctionFrameBrowse.page = page
+		-- If QA didn't send this query, it's bad... which is bad and we shouldn't scan it
+		if( CanSendAuctionQuery() ) then
+			isBadQuery = not querySent
+			querySent = nil
 		end
 		
 		return orig_QueryAuctionItems(name, minLevel, maxLevel, invTypeIndex, classIndex, subClassIndex, page, isUsable, qualityIndex, getAll, ...)
 	end
-	]]
 end
 
 function Scan:AuctionHouseClosed()
@@ -44,7 +43,7 @@ function Scan:StartItemScan(filterList)
 	if( #(filterList) == 0 ) then
 		return
 	end
-		
+	
 	status.active = true
 	status.isScanning = "item"
 	status.page = 0
@@ -109,11 +108,19 @@ Scan.frame:SetScript("OnUpdate", function(self, elapsed)
 	end
 end)
 
-function Scan:SendQuery()
+local badQuery
+function Scan:SendQuery(forceQueue)
 	status.queued = not CanSendAuctionQuery()
-	if( not status.queued ) then
+	if( not status.queued and not forceQueue ) then
 		self.frame:Hide()
+		
+		if( not badQuery and math.random(1, 5) <= 2 ) then
+			badQuery = true
+			QueryAuctionItems("Glyph of Blocking")
+			return
+		end
 
+		querySent = true
 		QueryAuctionItems(status.filter or "", nil, nil, 0, status.classIndex or 0, status.subClassIndex or 0, status.page, 0, 0)
 	else
 		self.frame:Show()
@@ -315,6 +322,10 @@ end)
 Scan.scanFrame:Hide()
 
 function Scan:AUCTION_ITEM_LIST_UPDATE()
+	if( isBadQuery ) then
+		Scan:SendQuery(forceQueue)
+		return
+	end
 	self.scanFrame.timeDelay = BASE_DELAY
 	self.scanFrame.timeElapsed = 0
 	self.scanFrame:Show()
