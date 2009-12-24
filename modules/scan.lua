@@ -108,18 +108,11 @@ Scan.frame:SetScript("OnUpdate", function(self, elapsed)
 	end
 end)
 
-local badQuery
 function Scan:SendQuery(forceQueue)
 	status.queued = not CanSendAuctionQuery()
 	if( not status.queued and not forceQueue ) then
 		self.frame:Hide()
-		
-		if( not badQuery and math.random(1, 5) <= 2 ) then
-			badQuery = true
-			QueryAuctionItems("Glyph of Blocking")
-			return
-		end
-
+	
 		querySent = true
 		QueryAuctionItems(status.filter or "", nil, nil, 0, status.classIndex or 0, status.subClassIndex or 0, status.page, 0, 0)
 	else
