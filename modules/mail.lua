@@ -111,9 +111,14 @@ end
 
 -- Deal swith auto looting of mail!
 function Mail:StartAutoLooting()
-	if( GetInboxNumItems() == 0 ) then return end
-	autoLootTotal = GetInboxNumItems()
-
+	local total
+	autoLootTotal, total = GetInboxNumItems()
+	if( autoLootTotal == 0 and total == 0 ) then return end
+	
+	if( QuickAuctions.db.global.autoCheck and autoLootTotal == 0 and total > 0 ) then
+		self.massOpening:SetText(L["Waiting..."])
+	end
+	
 	self:RegisterEvent("UI_ERROR_MESSAGE")
 	self.massOpening:Disable()
 	self:AutoLoot()
@@ -131,6 +136,10 @@ function Mail:AutoLoot()
 		mailTimer = nil
 		self.massOpening:SetText(L["Opening..."])
 		AutoLootMailItem(LOOT_MAIL_INDEX)
+	-- Can't grab the first mail, but we have a second so increase it and try again
+	elseif( LOOT_MAIL_INDEX == 1 and GetInboxNumItems() > 1 ) then
+		LOOT_MAIL_INDEX = LOOT_MAIL_INDEX + 1
+		self:AutoLoot()
 	end
 end
 
