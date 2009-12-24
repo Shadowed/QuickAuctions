@@ -3,7 +3,7 @@ if( GetLocale() ~= "frFR" ) then
 end
 
 local QuickAuctions = select(2, ...)
-QuickAuctions.L.L = {
+QuickAuctions.L = setmetatable({
 	["%d (max %d) posted by yourself (%s)"] = "%d (max %d) post\195\169s par vous-m\195\170me (%s)",
 	["%d log messages waiting"] = "%d messages de log cach\195\169s",
 	["%s lowest buyout %s (threshold %s), total posted |cfffed000%d|r (%d by you)"] = "%s prix le plus bas %s (seuil %s), |cfffed000%d|r post\195\169s au total (%d par vous)",
@@ -210,4 +210,4 @@ QuickAuctions.L.L = {
 	["\n\n%d in inventory\n%d on the Auction House"] = "\n\n%d dans l'inventaire\n%d \195\160 l'H\195\180tel des Ventes",
 	["lowest price"] = "prix le plus bas",
 	["undercut"] = "concurrenc\195\169",
-}
+}, {__index = QuickAuctions.L})
