@@ -2,6 +2,7 @@ if( GetLocale() ~= "ruRU" ) then
 	return
 end
 
+local QuickAuctions = select(2, ...)
 QuickAuctions.L = setmetatable({
 	["Glyph"] = "Символы",
 	["Glyphs"] = "Символы",
