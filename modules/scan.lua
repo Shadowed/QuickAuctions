@@ -102,8 +102,8 @@ Scan.frame.timeElapsed = 0
 Scan.frame:Hide()
 Scan.frame:SetScript("OnUpdate", function(self, elapsed)
 	self.timeElapsed = self.timeElapsed + elapsed
-	if( self.timeElapsed >= 0.15 ) then
-		self.timeElapsed = 0
+	if( self.timeElapsed >= 0.05 ) then
+		self.timeElapsed = self.timeElapsed - 0.05
 		Scan:SendQuery()
 	end
 end)
