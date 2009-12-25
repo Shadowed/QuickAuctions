@@ -467,13 +467,6 @@ local function loadGeneralOptions()
 				inline = true,
 				name = L["General"],
 				args = {
-					superScan = {
-						order = 1,
-						type = "toggle",
-						name = L["Enable super scan"],
-						desc = L["Super scanning will speed up your auction scanning, but it will no longer get accurate poster name data.\n\nWhitelist functions and matching your alts will no longer work if you enable this."],
-						hidden = function(info) return not IsAddOnLoaded("TestCode") end,
-					},
 					hideHelp = {
 						order = 2,
 						type = "toggle",
