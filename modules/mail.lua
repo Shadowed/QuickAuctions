@@ -22,6 +22,21 @@ function Mail:OnInitialize()
 		GameTooltip:Hide()
 	end
 
+	-- Mass opening
+	local button = CreateFrame("Button", nil, InboxFrame, "UIPanelButtonTemplate")
+	button:SetText(L["Open all"])
+	button:SetHeight(24)
+	button:SetWidth(130)
+	button:SetPoint("BOTTOM", InboxFrame, "CENTER", -10, -165)
+	button:SetScript("OnClick", function(self) Mail:StartAutoLooting() end)
+
+	-- Don't show mass opening if Postal is enabled since postals button will block QAs
+	if( select(6, GetAddOnInfo("Postal")) == nil ) then
+		button:Hide()
+	end
+	
+	self.massOpening = button
+	
 	local check = CreateFrame("CheckButton", "QuickAuctionsAutoMail", MailFrame, "OptionsCheckButtonTemplate")
 	check:SetHeight(26)
 	check:SetWidth(26)
@@ -56,21 +71,6 @@ function Mail:OnInitialize()
 		check:GetScript("OnShow")(check)
 	end
 		
-	-- Mass opening
-	local button = CreateFrame("Button", nil, InboxFrame, "UIPanelButtonTemplate")
-	button:SetText(L["Open all"])
-	button:SetHeight(24)
-	button:SetWidth(130)
-	button:SetPoint("BOTTOM", InboxFrame, "CENTER", -10, -165)
-	button:SetScript("OnClick", function(self) Mail:StartAutoLooting() end)
-
-	-- Don't show mass opening if Postal is enabled since postals button will block QAs
-	if( select(6, GetAddOnInfo("Postal")) == nil ) then
-		button:Hide()
-	end
-	
-	self.massOpening = button
-	
 	-- Hide Inbox/Send Mail text, it's wasted space and makes my lazyly done checkbox look bad. Also hide the too much mail warning
 	local noop = function() end
 	InboxTooMuchMail:Hide()
