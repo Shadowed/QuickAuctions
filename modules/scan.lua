@@ -111,6 +111,7 @@ function Scan:SendQuery(forceQueue)
 		self.frame:Hide()
 	
 		querySent = true
+		status.queryName = status.filter or ""
 		QueryAuctionItems(status.filter or "", nil, nil, 0, status.classIndex or 0, status.subClassIndex or 0, status.page, 0, 0)
 	else
 		self.frame:Show()
@@ -328,6 +329,8 @@ function Scan:AUCTION_ITEM_LIST_UPDATE()
 	
 	if( not badData ) then
 		status.skipRetry = true
+
+		self.scanFrame:Hide()
 		self:ScanAuctions()
 		return
 	end
@@ -403,7 +406,7 @@ function Scan:ScanAuctions()
 	-- Scanned all the pages for this filter, remove what we were just looking for then
 	if( status.isScanning == "item" ) then
 		for i=#(status.filterList), 1, -1 do
-			if( status.filterList[i] == status.filter ) then
+			if( status.filterList[i] == status.queryName ) then
 				table.remove(status.filterList, i)
 				break
 			end
