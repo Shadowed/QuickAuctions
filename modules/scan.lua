@@ -319,20 +319,23 @@ function Scan:AUCTION_ITEM_LIST_UPDATE()
 		return
 	end
 	
-	local badData
-	for i=1, GetNumAuctionItems("list") do
-		local name, _, _, _, _, _, _, _, _, _, _, owner = GetAuctionItemInfo("list", i)     
-		if( not name or not owner ) then
-			badData = true
+	if( select(2, GetNumAuctionItems("list")) >= 5 ) then
+		local badData
+		for i=1, GetNumAuctionItems("list") do
+			local name, _, _, _, _, _, _, _, _, _, _, owner = GetAuctionItemInfo("list", i)     
+			if( not name or not owner ) then
+				badData = true
+				break
+			end
 		end
-	end
-	
-	if( not badData ) then
-		status.skipRetry = true
+		
+		if( not badData ) then
+			status.skipRetry = true
 
-		self.scanFrame:Hide()
-		self:ScanAuctions()
-		return
+			self.scanFrame:Hide()
+			self:ScanAuctions()
+			return
+		end
 	end
 	
 	self.scanFrame.timeDelay = BASE_DELAY
