@@ -3,7 +3,6 @@ local Scan = QuickAuctions:NewModule("Scan", "AceEvent-3.0")
 local L = QuickAuctions.L
 local status = QuickAuctions.status
 local auctionData = {}
-local alreadyScanned, querySent, isBadQuery
 Scan.auctionData = auctionData
 
 function Scan:OnInitialize()
@@ -18,17 +17,13 @@ function Scan:OnInitialize()
 end
 
 function Scan:AuctionHouseLoaded()
+	--[[
 	-- Hook the query function so we know what we last sent a search on
 	local orig_QueryAuctionItems = QueryAuctionItems
 	QueryAuctionItems = function(name, minLevel, maxLevel, invTypeIndex, classIndex, subClassIndex, page, isUsable, qualityIndex, getAll, ...)
-		-- If QA didn't send this query, it's bad... which is bad and we shouldn't scan it
-		if( CanSendAuctionQuery() ) then
-			isBadQuery = not querySent
-			querySent = nil
-		end
-		
 		return orig_QueryAuctionItems(name, minLevel, maxLevel, invTypeIndex, classIndex, subClassIndex, page, isUsable, qualityIndex, getAll, ...)
 	end
+	]]
 end
 
 function Scan:AuctionHouseClosed()
@@ -57,7 +52,6 @@ function Scan:StartItemScan(filterList)
 	table.wipe(auctionData)
 
 	self:SendMessage("QA_START_SCAN", "item", #(status.filterList))
-	self:RegisterEvent("AUCTION_ITEM_LIST_UPDATE")
 	self:SendQuery()
 end
 
@@ -77,13 +71,11 @@ function Scan:StartCategoryScan(classIndex, subClassList)
 	table.wipe(auctionData)
 	
 	self:SendMessage("QA_START_SCAN", "category")
-	self:RegisterEvent("AUCTION_ITEM_LIST_UPDATE")
 	self:SendQuery()
 end
 
 function Scan:StopScanning(interrupted)
 	if( not status.isScanning ) then return end
-	alreadyScanned = true
 	
 	status.active = nil
 	status.isScanning = nil
@@ -110,8 +102,8 @@ function Scan:SendQuery(forceQueue)
 	if( not status.queued and not forceQueue ) then
 		self.frame:Hide()
 	
-		querySent = true
 		status.queryName = status.filter or ""
+		self:RegisterEvent("AUCTION_ITEM_LIST_UPDATE")
 		QueryAuctionItems(status.filter or "", nil, nil, 0, status.classIndex or 0, status.subClassIndex or 0, status.page, 0, 0)
 	else
 		self.frame:Show()
@@ -314,12 +306,9 @@ end)
 Scan.scanFrame:Hide()
 
 function Scan:AUCTION_ITEM_LIST_UPDATE()
-	if( isBadQuery ) then
-		Scan:SendQuery(forceQueue)
-		return
-	end
+	self:UnregisterEvent("AUCTION_ITEM_LIST_UPDATE")
 	
-	if( select(2, GetNumAuctionItems("list")) >= 5 ) then
+	if( select(2, GetNumAuctionItems("list")) >= 1 ) then
 		local badData
 		for i=1, GetNumAuctionItems("list") do
 			local name, _, _, _, _, _, _, _, _, _, _, owner = GetAuctionItemInfo("list", i)     
