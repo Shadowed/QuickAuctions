@@ -1362,7 +1362,7 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 				--1 = <30 minutes, 2 = <2 hours, 3 = <12 hours, 4 = <13 hours
 				
 			elseif( parsedArg ~= "" ) then
-				for name in pairs(QuickAuctions.db.profile.groups) do
+				for name in pairs(QuickAuctions.db.global.groups) do
 					if( string.lower(name) == parsedArg ) then
 						groupName = name
 						break
