@@ -199,6 +199,7 @@ function Split:Stop()
 	status.isSplitting = nil
 	table.wipe(splitQueue)
 	self:UnregisterEvent("BAG_UPDATE")
+	eventThrottle:Hide()
 	
 	if( hadSplitFailure ) then
 		QuickAuctions:Log(L["Could not post all auctions, ran out of space."], true)
