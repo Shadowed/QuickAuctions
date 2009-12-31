@@ -79,9 +79,11 @@ function Scan:StopScanning(interrupted)
 	
 	status.active = nil
 	status.isScanning = nil
-
+	status.queued = nil
+	
 	self:SendMessage("QA_STOP_SCAN", interrupted)
 	self:UnregisterEvent("AUCTION_ITEM_LIST_UPDATE")
+	self.frame:Hide()
 	self.scanFrame:Hide()
 end
 
