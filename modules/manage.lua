@@ -99,7 +99,13 @@ function Manage:CancelScan()
 		return
 	end
 
+	QuickAuctions.Split:ScanStopped()
+	QuickAuctions.Split:Stop()
+	QuickAuctions.Post:Stop()
+
 	status.isCancelling = true
+	status.isPosting = nil
+	status.isSplitting = nil
 	status.totalScanQueue = #(scanList)
 	status.queueTable = scanList
 	QuickAuctions.Scan:StartItemScan(scanList)
