@@ -50,8 +50,12 @@ function Mail:OnInitialize()
 	end)
 	check:SetScript("OnShow", function(self)
 		if( QuickAuctions.db.global.autoMail ) then
-			self:SetChecked(true)
-			Mail:Start()
+			if( not IsShiftKeyDown() ) then
+				self:SetChecked(true)
+				Mail:Start()
+			else
+				QuickAuctions:Print(L["Disabling auto mail, SHIFT key was down when opening the mail box."])
+			end
 		end
 	end)
 	check:SetScript("OnClick", function(self)
@@ -280,7 +284,6 @@ function Mail:Stop()
 	
 	bagTimer = nil
 	itemTimer = nil
-	eventThrottle:Hide()
 end
 
 function Mail:SendMail()
@@ -302,8 +305,19 @@ function Mail:GetPendingAttachments()
 end
 
 function Mail:UpdateBags()
-	-- If there is no mail targets or no more items left to send for this target, find a new one
-	if( not activeMailTarget or not self:TargetHasItems() ) then
+	-- Nothing else to send to this person, so we can send off now
+	if( activeMailTarget and not self:TargetHasItems() ) then
+		if( self.massOpening:IsEnabled() == 0 ) then
+			itemTimer = itemTimer or 2
+			eventThrottle:Show()
+		else
+			self:SendMail()
+			activeMailTarget = nil
+		end
+	end
+	
+	-- No mail target, let's try and find one
+	if( not activeMailTarget ) then
 		activeMailTarget = self:FindNextMailTarget()
 		if( activeMailTarget ) then
 			SendMailNameEditBox:SetText(activeMailTarget)
