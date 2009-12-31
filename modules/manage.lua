@@ -13,10 +13,6 @@ function Manage:OnInitialize()
 end
 
 function Manage:AuctionHouseClosed()
-	if( status.isManaging and not status.isCancelling ) then
-		self:StopPosting()
-	end
-	
 	if( self.cancelFrame and self.cancelFrame:IsShown() ) then
 		QuickAuctions:Print(L["Cancelling interrupted due to Auction House being closed."])
 		QuickAuctions:Log("cancelstatus", L["Auction House closed before you could tell Quick Auctions to cancel."])
@@ -25,6 +21,8 @@ function Manage:AuctionHouseClosed()
 		self.cancelFrame:Hide()
 	elseif( status.isCancelling and status.isScanning ) then
 		self:StopCancelling()
+	elseif( status.isManaging and not status.isCancelling ) then
+		self:StopPosting()
 	end
 end
 
@@ -444,6 +442,7 @@ function Manage:PostScan()
 	
 	
 	status.isManaging = true
+	status.isCancelling = nil
 	status.totalPostQueued = 0
 	status.totalScanQueue = #(postQueue)
 	status.queueTable = postQueue
@@ -463,6 +462,7 @@ function Manage:StopPosting()
 	
 	QuickAuctions.Split:ScanStopped()
 	QuickAuctions.Split:Stop()
+	QuickAuctions.Post:Stop()
 	QuickAuctions:UnlockButtons()
 end
 
