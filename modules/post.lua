@@ -12,9 +12,8 @@ function Post:OnInitialize()
 end
 
 function Post:AuctionHouseClosed()
-	if( status.isPosting and not status.isScanning ) then
+	if( status.isPosting ) then
 		self:Stop()
-		QuickAuctions:Print(L["Posting was interrupted due to the Auction House was closed."])
 	end
 end
 
@@ -25,7 +24,7 @@ end
 function Post:ScanStopped()
 	scanRunning = nil
 	
-	if( #(postQueue) == 0 and overallTotal >= status.totalPostQueued ) then
+	if( #(postQueue) == 0 and not status.isSplitting and overallTotal >= status.totalPostQueued ) then
 		self:Stop()
 	end
 end
