@@ -287,10 +287,13 @@ function Mail:Stop()
 end
 
 function Mail:SendMail()
-	itemTimer = nil
-
+	if( not activeMailTarget ) then return end
+	
 	QuickAuctions:Print(string.format(L["Auto mailed items off to %s!"], activeMailTarget))
 	SendMail(activeMailTarget, SendMailSubjectEditBox:GetText() or L["Mass mailing"], "")
+
+	itemTimer = nil
+	activeMailTarget = nil
 end
 
 function Mail:GetPendingAttachments()
@@ -306,13 +309,12 @@ end
 
 function Mail:UpdateBags()
 	-- Nothing else to send to this person, so we can send off now
-	if( activeMailTarget and not self:TargetHasItems() ) then
+	if( activeMailTarget and not self:TargetHasItems() and not itemTimer ) then
 		if( self.massOpening:IsEnabled() == 0 ) then
-			itemTimer = itemTimer or 2
+			itemTimer = 2
 			eventThrottle:Show()
 		else
 			self:SendMail()
-			activeMailTarget = nil
 		end
 	end
 	
