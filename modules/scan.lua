@@ -348,6 +348,7 @@ function Scan:ScanAuctions()
 			local name, _, _, _, _, _, _, _, _, _, _, owner = GetAuctionItemInfo("list", i)     
 			if( not name or not owner ) then
 				badData = true
+				break
 			end
 		end
 		
