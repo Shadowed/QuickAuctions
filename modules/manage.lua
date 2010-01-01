@@ -79,6 +79,7 @@ function Manage:CancelScan()
 	
 	table.wipe(scanList)
 	table.wipe(tempList)
+	table.wipe(status)
 	
 	-- Add a scan based on items in the AH that match
 	for i=1, GetNumAuctionItems("owner") do
@@ -103,9 +104,8 @@ function Manage:CancelScan()
 	QuickAuctions.Split:Stop()
 	QuickAuctions.Post:Stop()
 
+	
 	status.isCancelling = true
-	status.isPosting = nil
-	status.isSplitting = nil
 	status.totalScanQueue = #(scanList)
 	status.queueTable = scanList
 	QuickAuctions.Scan:StartItemScan(scanList)
@@ -137,10 +137,12 @@ function Manage:CancelAll(group, duration)
 	QuickAuctions:WipeLog()
 	QuickAuctions:LockButtons()
 	self:RegisterEvent("CHAT_MSG_SYSTEM")
-	status.isCancelling = true
-	table.wipe(tempList)
-	
 	self:UpdateReverseLookup()
+
+	table.wipe(tempList)
+	table.wipe(status)
+
+	status.isCancelling = true
 	
 	if( duration ) then
 		QuickAuctions:Log("masscancel", string.format(L["Mass cancelling posted items with less than %d hours left"], duration == 3 and 12 or 2))
@@ -420,6 +422,7 @@ function Manage:PostScan()
 	table.wipe(postQueue)
 	table.wipe(scanList)
 	table.wipe(tempList)
+	table.wipe(status)
 	
 	for bag=0, 4 do
 		if( QuickAuctions:IsValidBag(bag) ) then
@@ -448,7 +451,6 @@ function Manage:PostScan()
 	
 	
 	status.isManaging = true
-	status.isCancelling = nil
 	status.totalPostQueued = 0
 	status.totalScanQueue = #(postQueue)
 	status.queueTable = postQueue
