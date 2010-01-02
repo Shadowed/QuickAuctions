@@ -49,7 +49,7 @@ function Mail:OnInitialize()
 		Mail:Stop()
 	end)
 	check:SetScript("OnShow", function(self)
-		if( QuickAuctions.db.global.autoMail ) then
+		if( QuickAuctions.db.char.autoMail ) then
 			if( not IsShiftKeyDown() ) then
 				self:SetChecked(true)
 				Mail:Start()
@@ -60,10 +60,10 @@ function Mail:OnInitialize()
 	end)
 	check:SetScript("OnClick", function(self)
 		if( self:GetChecked() ) then
-			QuickAuctions.db.global.autoMail = true
+			QuickAuctions.db.char.autoMail = true
 			Mail:Start()
 		else
-			QuickAuctions.db.global.autoMail = false
+			QuickAuctions.db.char.autoMail = false
 			Mail:Stop()
 		end
 	end)

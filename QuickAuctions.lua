@@ -24,6 +24,9 @@ function QuickAuctions:OnInitialize()
 			ignoreStacks = {default = 1000},
 			categories = {},
 		},
+		char = {
+			autoMail = false,
+		},
 		global = {
 			summaryItems = {},
 			groups = {},
