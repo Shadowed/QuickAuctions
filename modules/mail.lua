@@ -5,7 +5,7 @@ local L = QuickAuctions.L
 
 local eventThrottle = CreateFrame("Frame", nil, MailFrame)
 local reverseLookup = QuickAuctions.modules.Manage.reverseLookup
-local bagTimer, itemTimer, cacheFrame, activeMailTarget, mailTimer, lastTotal, autoLootTotal, lootAfterSend
+local bagTimer, itemTimer, cacheFrame, activeMailTarget, mailTimer, lastTotal, autoLootTotal, lootAfterSend, waitingForData
 local lockedItems, mailTargets = {}, {}
 local playerName = string.lower(UnitName("player"))
 local allowTimerStart = true
@@ -91,23 +91,41 @@ function Mail:OnInitialize()
 	cacheFrame:EnableMouse(true)
 	cacheFrame.tooltip = L["How many seconds until the mailbox will retrieve new data and you can continue looting mail."]
 	cacheFrame:SetScript("OnUpdate", function(self, elapsed)
-		local seconds = self.endTime - GetTime()
-		if( seconds <= 0 ) then
-			self:Hide()
-
-			-- Look for new mail
-			if( QuickAuctions.db.global.autoCheck ) then
+		if( not waitingForData ) then
+			local seconds = self.endTime - GetTime()
+			if( seconds <= 0 ) then
+				-- Look for new mail
+				-- Sometimes it fails and isn't available at exactly 60-61 seconds, and more like 62-64, will keep rechecking every 2 seconds
+				-- until data becomes available
+				if( QuickAuctions.db.global.autoCheck ) then
+					waitingForData = true
+					self.timeLeft = 2
+					cacheFrame.text:SetText(nil)
+					
+					CheckInbox()
+				else
+					self:Hide()
+				end
+				
+				return
+			end
+			
+			cacheFrame.text:SetFormattedText("%d", seconds)
+		else
+			local timeLeft = self.timeLeft - elapsed
+			if( timeLeft <= 0 ) then
+				self.timeLeft = 2
 				CheckInbox()
 			end
-			return
 		end
-		
-		cacheFrame.text:SetFormattedText("%d", seconds)
 	end)
 	cacheFrame.text = cacheFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	cacheFrame.text:SetFont(GameFontHighlight:GetFont(), 30, "THICKOUTLINE")
 	cacheFrame.text:SetPoint("CENTER", MailFrame, "TOPLEFT", 40, -35)
 	cacheFrame:Hide()
+	
+	self.totalMail = MailFrame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+	self.totalMail:SetPoint("TOPRIGHT", MailFrame, "TOPRIGHT", -60, -18)
 
 	self:RegisterEvent("MAIL_CLOSED")
 	self:RegisterEvent("MAIL_INBOX_UPDATE")
@@ -141,7 +159,8 @@ function Mail:AutoLoot()
 		self.massOpening:SetText(L["Opening..."])
 		AutoLootMailItem(LOOT_MAIL_INDEX)
 	-- Can't grab the first mail, but we have a second so increase it and try again
-	elseif( LOOT_MAIL_INDEX == 1 and GetInboxNumItems() > 1 ) then
+	elseif( GetInboxNumItems() > LOOT_MAIL_INDEX ) then
+		print("Trying the next slot")
 		LOOT_MAIL_INDEX = LOOT_MAIL_INDEX + 1
 		self:AutoLoot()
 	end
@@ -196,6 +215,7 @@ function Mail:MAIL_INBOX_UPDATE()
 	-- Start a timer since we're over the limit of 50 items before waiting for it to recache
 	elseif( ( cacheFrame.endTime and current >= 50 and lastTotal ~= total ) or ( current >= 50 and allowTimerStart ) ) then
 		allowTimerStart = nil
+		waitingForData = nil
 		lastTotal = total
 		cacheFrame.endTime = GetTime() + 61
 		cacheFrame:Show()
@@ -214,10 +234,13 @@ function Mail:MAIL_INBOX_UPDATE()
 			self:AutoLoot()
 		end
 	end
+	
+	self.totalMail:SetFormattedText(L["%d mail"], total)
 end
 
 function Mail:MAIL_CLOSED()
 	allowTimerStart = true
+	waitingForData = nil
 	self:StopAutoLooting()
 end
 

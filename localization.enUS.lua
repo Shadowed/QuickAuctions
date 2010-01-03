@@ -2,6 +2,7 @@ local QuickAuctions = select(2, ...)
 QuickAuctions.L = {
 	["%d (max %d) posted by yourself (%s)"] = "%d (max %d) posted by yourself (%s)",
 	["%d log messages waiting"] = "%d log messages waiting",
+	["%d mail"] = "%d mail",
 	["%s lowest buyout %s (threshold %s), total posted |cfffed000%d|r (%d by you)"] = "%s lowest buyout %s (threshold %s), total posted |cfffed000%d|r (%d by you)",
 	["/qa cancelall <group/12/2> - Cancels all active auctions, or cancels auctions in a group if you pass one, or cancels auctions with less than 12 or 2 hours left."] = "/qa cancelall <group/12/2> - Cancels all active auctions, or cancels auctions in a group if you pass one, or cancels auctions with less than 12 or 2 hours left.",
 	["/qa config - Toggles the configuration"] = "/qa config - Toggles the configuration",
