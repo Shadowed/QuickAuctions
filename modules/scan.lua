@@ -5,6 +5,13 @@ local status = QuickAuctions.status
 local auctionData = {}
 Scan.auctionData = auctionData
 
+local DEBUG_MODE = false
+local function debug(...)
+	if( DEBUG_MODE ) then
+		table.insert(TestLog, {GetTime(), ...})
+	end
+end
+
 function Scan:OnInitialize()
 	self:RegisterMessage("QA_AH_CLOSED", "AuctionHouseClosed")
 	if( IsAddOnLoaded("Blizzard_AuctionUI") ) then
@@ -38,6 +45,8 @@ function Scan:StartItemScan(filterList)
 		return
 	end
 	
+	if( DEBUG_MODE ) then table.wipe(TestLog) end
+	
 	status.active = true
 	status.isScanning = "item"
 	status.page = 0
@@ -56,6 +65,8 @@ function Scan:StartItemScan(filterList)
 end
 
 function Scan:StartCategoryScan(classIndex, subClassList)
+	if( DEBUG_MODE ) then table.wipe(TestLog) end
+	
 	status.active = true
 	status.isScanning = "category"
 	status.page = 0
@@ -322,12 +333,15 @@ function Scan:AUCTION_ITEM_LIST_UPDATE()
 		
 		if( not badData ) then
 			status.skipRetry = true
+			debug("Got all necessary data", status.queryName, status.page)
 
 			self.scanFrame:Hide()
 			self:ScanAuctions()
 			return
 		end
 	end
+	
+	debug("Delaying", BASE_DELAY, status.queryName, status.page)
 	
 	self.scanFrame.timeDelay = BASE_DELAY
 	self.scanFrame.timeElapsed = 0
@@ -357,6 +371,7 @@ function Scan:ScanAuctions()
 			
 			-- Hard retry
 			if( status.hardRetry ) then
+				debug("Bad data, hard retry", status.page, status.retries)
 				self:SendMessage("QA_QUERY_UPDATE", "retry", status.filter, status.page + 1, totalPages, status.retries, 3)
 				self:SendQuery()
 			-- Soft retry
@@ -364,6 +379,8 @@ function Scan:ScanAuctions()
 				self.scanFrame.timeElapsed = 0
 				self.scanFrame.timeDelay = status.retries * 0.66
 				self.scanFrame:Show()
+				
+				debug("Bad data, soft retry", status.page, status.retries, self.scanFrame.timeDelay)
 				
 				-- QA will wait 0.66 seconds per retry (0.66, 1.32, 1.98 = 3.96 seconds) more during a soft retry
 				-- if that still fails, it will fallback on a hard retry where it will requery 3 times, if the requeries
@@ -385,6 +402,7 @@ function Scan:ScanAuctions()
 	for i=1, shown do
 		local name, texture, quantity, _, _, _, bid, _, buyout, _, _, owner = GetAuctionItemInfo("list", i)     
 		self:AddAuctionRecord(name, QuickAuctions:GetSafeLink(GetAuctionItemLink("list", i)), (owner or ""), quantity, bid, buyout)
+		debug("Scanned data", name, owner or "none", quantity, bid, buyout)
 	end
 
 	-- This query has more pages to scan
