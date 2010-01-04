@@ -411,10 +411,11 @@ function Manage:Cancel(isTest)
 				local undercutBuyout, undercutBid, undercutOwner
 				if( QuickAuctions.db.factionrealm.player[lowestOwner] ) then
 					undercutBuyout, undercutBid, undercutOwner = QuickAuctions.Scan:GetSecondLowest(itemID, lowestBuyout)
-					undercutBuyout = undercutBuyout or lowestBuyout
-					undercutBid = undercutBid or lowestBid
-					undercutOwner = undercutOwner or lowestOwner
 				end
+
+				undercutBuyout = undercutBuyout or lowestBuyout
+				undercutBid = undercutBid or lowestBid
+				undercutOwner = undercutOwner or lowestOwner
 				
 				-- Don't cancel if the buyout is equal, or below our threshold
 				if( QuickAuctions.db.global.smartCancel and lowestBuyout <= threshold and not QuickAuctions.Scan:IsPlayerOnly(itemID)) then
