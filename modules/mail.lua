@@ -11,6 +11,7 @@ local playerName = string.lower(UnitName("player"))
 local allowTimerStart = true
 local LOOT_MAIL_INDEX = 1
 local MAIL_WAIT_TIME = 0.30
+local FOUND_POSTAL
 
 function Mail:OnInitialize()
 	local function showTooltip(self)
@@ -32,6 +33,7 @@ function Mail:OnInitialize()
 
 	-- Don't show mass opening if Postal is enabled since postals button will block QAs
 	if( select(6, GetAddOnInfo("Postal")) == nil ) then
+		FOUND_POSTAL = true
 		button:Hide()
 	end
 	
@@ -119,13 +121,14 @@ function Mail:OnInitialize()
 			end
 		end
 	end)
+	
 	cacheFrame.text = cacheFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	cacheFrame.text:SetFont(GameFontHighlight:GetFont(), 30, "THICKOUTLINE")
 	cacheFrame.text:SetPoint("CENTER", MailFrame, "TOPLEFT", 40, -35)
 	cacheFrame:Hide()
 	
 	self.totalMail = MailFrame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-	self.totalMail:SetPoint("TOPRIGHT", MailFrame, "TOPRIGHT", -60, -18)
+	self.totalMail:SetPoint("TOPRIGHT", MailFrame, "TOPRIGHT", -60 + (FOUND_POSTAL and -24 or 0), -18)
 
 	self:RegisterEvent("MAIL_CLOSED")
 	self:RegisterEvent("MAIL_INBOX_UPDATE")
@@ -234,7 +237,11 @@ function Mail:MAIL_INBOX_UPDATE()
 		end
 	end
 	
-	self.totalMail:SetFormattedText(L["%d mail"], total)
+	if( total > 0 ) then
+		self.totalMail:SetFormattedText(L["%d mail"], total)
+	else
+		self.totalMail:SetText(nil)
+	end
 end
 
 function Mail:MAIL_CLOSED()
