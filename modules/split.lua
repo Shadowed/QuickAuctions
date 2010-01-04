@@ -108,7 +108,7 @@ function Split:UpdateBags()
 
 	-- We had a bag locked, flag that we need to recheck in 0.10 seconds to see if it unlocked itself
 	if( recheck ) then
-		timeElapsed = 0.10
+		timeElapsed = 0.05
 		eventThrottle:Show()
 		return
 	end
@@ -139,7 +139,7 @@ function Split:UpdateBags()
 					return
 				end
 				
-				splitTimeout = GetTime() + 10
+				splitTimeout = GetTime() + 20
 
 				-- Move the split into the new spot
 				SplitContainerItem(bag, slot, splitData.quantity)
@@ -153,7 +153,7 @@ end
 
 -- Throttle bag updates because they are a pain and spammy
 function Split:BAG_UPDATE()
-	timeElapsed = 0.20
+	timeElapsed = 0.10
 	eventThrottle:Show()
 end
 
@@ -180,7 +180,7 @@ end
 function Split:Start()
 	if( status.isSplitting ) then return end
 	
-	splitTimeout = GetTime() + 10
+	splitTimeout = GetTime() + 20
 	hadSplitFailure = nil
 	status.isSplitting = true
 
@@ -203,7 +203,7 @@ function Split:Stop()
 	
 	if( hadSplitFailure ) then
 		QuickAuctions:Log(L["Could not post all auctions, ran out of space."])
-		QuickAuctions:Print(L["Not all your auctions were posted, ran out of space to split items even after waiting 10 seconds."])
+		QuickAuctions:Print(L["Not all your auctions were posted, ran out of space to split items even after waiting 20 seconds."])
 	end
 
 	QuickAuctions.Post:ScanStopped()
