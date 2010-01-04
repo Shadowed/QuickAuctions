@@ -97,14 +97,14 @@ function Manage:CancelScan()
 	
 	if( #(scanList) == 0 ) then
 		QuickAuctions:Log("cancelstatus", L["Nothing to cancel, you have no unsold auctions up."])
+		QuickAuctions:UnlockButtons()
 		return
 	end
-
+	
 	QuickAuctions.Split:ScanStopped()
 	QuickAuctions.Split:Stop()
 	QuickAuctions.Post:Stop()
 
-	
 	status.isCancelling = true
 	status.totalScanQueue = #(scanList)
 	status.queueTable = scanList
@@ -373,17 +373,22 @@ function Manage:Cancel(isTest)
 				( isWhitelist and ( buyout > lowestBuyout or ( buyout == lowestBuyout and lowestBid < bid ) ) ) or
 				( QuickAuctions.db.global.smartCancel and QuickAuctions.Scan:IsPlayerOnly(itemID) and buyout < fallback ) ) then
 				
+				local undercutBuyout, undercutBid, undercutOwner = QuickAuctions.Scan:GetSecondLowest(itemID, lowestBuyout)
+				undercutBuyout = undercutBuyout or lowestBuyout
+				undercutBid = undercutBid or lowestBid
+				undercutOwner = undercutOwner or lowestOwner
+				
 				-- Don't cancel if the buyout is equal, or below our threshold
 				if( QuickAuctions.db.global.smartCancel and lowestBuyout <= threshold and not QuickAuctions.Scan:IsPlayerOnly(itemID)) then
 					if( not tempList[name] ) then
 						tempList[name] = true
 						
-						QuickAuctions:Log(name .. "notcancel", string.format(L["Undercut on %s by |cfffed000%s|r, their buyout %s, yours %s (per item), threshold is %s not cancelling"], itemLink, lowestOwner, QuickAuctions:FormatTextMoney(lowestBuyout, true), QuickAuctions:FormatTextMoney(buyout, true), QuickAuctions:FormatTextMoney(threshold, true)))
+						QuickAuctions:Log(name .. "notcancel", string.format(L["Undercut on %s by |cfffed000%s|r, their buyout %s, yours %s (per item), threshold is %s not cancelling"], itemLink, undercutOwner, QuickAuctions:FormatTextMoney(undercutBuyout, true), QuickAuctions:FormatTextMoney(buyout, true), QuickAuctions:FormatTextMoney(threshold, true)))
 					end
 				-- Don't cancel an auction if it has a bid and we're set to not cancel those
 				elseif( not QuickAuctions.db.global.cancelWithBid and activeBid > 0 ) then
 					if( not isTest ) then
-						QuickAuctions:Log(name .. "bid", string.format(L["Undercut on %s by |cfffed000%s|r, but %s placed a bid of %s so not cancelling"], itemLink, lowestOwner, highBidder, QuickAuctions:FormatTextMoney(activeBid, true)))
+						QuickAuctions:Log(name .. "bid", string.format(L["Undercut on %s by |cfffed000%s|r, but %s placed a bid of %s so not cancelling"], itemLink, undercutOwner, highBidder, QuickAuctions:FormatTextMoney(activeBid, true)))
 					end
 				else
 					if( isTest ) then return true end
@@ -392,7 +397,7 @@ function Manage:Cancel(isTest)
 						if( QuickAuctions.Scan:IsPlayerOnly(itemID) and buyout < fallback ) then
 							QuickAuctions:Log(name .. "cancel", string.format(L["You are the only one posting %s, the fallback is %s (per item), cancelling so you can relist it for more gold"], itemLink, QuickAuctions:FormatTextMoney(fallback)))
 						else
-							QuickAuctions:Log(name .. "cancel", string.format(L["Undercut on %s by |cfffed000%s|r, buyout %s, yours %s (per item)"], itemLink, lowestOwner, QuickAuctions:FormatTextMoney(lowestBuyout, true), QuickAuctions:FormatTextMoney(buyout, true)))
+							QuickAuctions:Log(name .. "cancel", string.format(L["Undercut on %s by |cfffed000%s|r, buyout %s, yours %s (per item)"], itemLink, undercutOwner, QuickAuctions:FormatTextMoney(undercutBuyout, true), QuickAuctions:FormatTextMoney(buyout, true)))
 						end
 					end
 					
