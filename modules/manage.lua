@@ -416,6 +416,10 @@ local function sortByStack(a, b)
 	local aStack = select(8, GetItemInfo(a)) or 20
 	local bStack = select(8, GetItemInfo(b)) or 20
 	
+	if( aStack == bStack ) then
+		return GetItemCount(a) < GetItemCount(b)
+	end
+	
 	return aStack < bStack
 end
 
