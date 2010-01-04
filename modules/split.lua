@@ -202,7 +202,7 @@ function Split:Stop()
 	eventThrottle:Hide()
 	
 	if( hadSplitFailure ) then
-		QuickAuctions:Log(L["Could not post all auctions, ran out of space."], true)
+		QuickAuctions:Log(L["Could not post all auctions, ran out of space."])
 		QuickAuctions:Print(L["Not all your auctions were posted, ran out of space to split items even after waiting 10 seconds."])
 	end
 
