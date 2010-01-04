@@ -160,7 +160,6 @@ function Mail:AutoLoot()
 		AutoLootMailItem(LOOT_MAIL_INDEX)
 	-- Can't grab the first mail, but we have a second so increase it and try again
 	elseif( GetInboxNumItems() > LOOT_MAIL_INDEX ) then
-		print("Trying the next slot")
 		LOOT_MAIL_INDEX = LOOT_MAIL_INDEX + 1
 		self:AutoLoot()
 	end
