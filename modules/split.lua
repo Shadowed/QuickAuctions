@@ -188,6 +188,7 @@ function Split:Start()
 	table.wipe(lockedSlot)
 	table.wipe(alreadySplit)
 	table.wipe(alreadyFound)
+	table.wipe(splitQueue)
 	
 	self:RegisterEvent("BAG_UPDATE")
 	self:UpdateBags()
@@ -197,7 +198,6 @@ function Split:Stop()
 	if( not status.isSplitting ) then return end
 	
 	status.isSplitting = nil
-	table.wipe(splitQueue)
 	self:UnregisterEvent("BAG_UPDATE")
 	eventThrottle:Hide()
 	
@@ -210,5 +210,7 @@ function Split:Stop()
 end
 
 function Split:QueueItem(link, quantity)
-	table.insert(splitQueue, {link = link, quantity = quantity})
+	if( status.isSplitting ) then
+		table.insert(splitQueue, {link = link, quantity = quantity})
+	end
 end
