@@ -133,6 +133,41 @@ function Manage:CHAT_MSG_SYSTEM(event, msg)
 	end
 end
 
+function Manage:CancelMatch(match)
+	QuickAuctions:WipeLog()
+	QuickAuctions:LockButtons()
+	self:RegisterEvent("CHAT_MSG_SYSTEM")
+	
+	table.wipe(tempList)
+	table.wipe(status)
+	status.isCancelling = true
+	
+	local itemID = tonumber(string.match(match, "item:(%d+)"))
+	if( itemID ) then
+		match = GetItemInfo(itemID)
+	end
+	
+	for i=1, GetNumAuctionItems("owner") do
+		local name, _, _, _, _, _, _, _, _, _, _, _, wasSold = GetAuctionItemInfo("owner", i)     
+		local itemLink = GetAuctionItemLink("owner", i)
+		if( wasSold == 0 and string.match(string.lower(name), string.lower(match)) ) then
+			if( not tempList[name] ) then
+				tempList[name] = true
+				QuickAuctions:Log(name, string.format(L["Cancelled %s"], itemLink))
+			end
+			
+			totalToCancel = totalToCancel + 1
+			totalCancelled = totalCancelled + 1
+			CancelAuction(i)
+		end
+	end
+	
+	if( totalToCancel == 0 ) then
+		QuickAuctions:Log("cancelstatus", string.format(L["Nothing to cancel, no matches found for \"%s\""], match))
+		self:StopCancelling()
+	end
+end
+
 function Manage:CancelAll(group, duration)
 	QuickAuctions:WipeLog()
 	QuickAuctions:LockButtons()
