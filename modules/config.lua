@@ -274,7 +274,7 @@ local groupSettings = {
 			desc = {
 				order = 1,
 				type = "description",
-				name = function(info) return string.format(L["Undercutting auctions by %s until price goes below %s, unless there is greater than a |cfffed000%.2f%%|r price difference between lowest and second lowest in which case undercutting second lowest auction."], QuickAuctions:FormatTextMoney(getGroupSetting("undercut", info[2])), QuickAuctions:FormatTextMoney(getGroupSetting("threshold", info[2])), getGroupSetting("priceThreshold", info[2]) * 100) end,
+				name = function(info) return string.format(L["Undercutting auctions by %s/per item until price goes below %s/per item, unless there is greater than a |cfffed000%.2f%%|r price difference between lowest and second lowest in which case undercutting second lowest auction."], QuickAuctions:FormatTextMoney(getGroupSetting("undercut", info[2])), QuickAuctions:FormatTextMoney(getGroupSetting("threshold", info[2])), getGroupSetting("priceThreshold", info[2]) * 100) end,
 				hidden = hideHelpText,
 			},
 			header = {
@@ -380,9 +380,9 @@ local groupSettings = {
 					local threshold = getGroupSetting("threshold", info[2])
 					
 					if( autoFallback ) then
-						return string.format(L["Once market goes below %s, auctions will be automatically posted at the fallback price of %s."], QuickAuctions:FormatTextMoney(threshold), QuickAuctions:FormatTextMoney(fallback))
+						return string.format(L["Once market goes below %s/per item, auctions will be automatically posted at the fallback price of %s/per item."], QuickAuctions:FormatTextMoney(threshold), QuickAuctions:FormatTextMoney(fallback))
 					else
-						return string.format(L["When no auctions are up, or the market price is above %s auctions will be posted at the fallback price of %s."], QuickAuctions:FormatTextMoney(fallback * fallbackCap), QuickAuctions:FormatTextMoney(fallback))
+						return string.format(L["When no auctions are up, or the market price is above %s/per item auctions will be posted at the fallback price of %s/per item."], QuickAuctions:FormatTextMoney(fallback * fallbackCap), QuickAuctions:FormatTextMoney(fallback))
 					end
 				end,
 				hidden = hideHelpText,
@@ -478,7 +478,6 @@ local function loadGeneralOptions()
 						type = "toggle",
 						name = L["Auto recheck mail"],
 						desc = L["Automatically rechecks mail every 60 seconds when you have too much mail.\n\nIf you loot all mail with this enabled, it will wait and recheck then keep auto looting."],
-						width = "full",
 						hidden = hideIfConflictingMail,
 					},
 				},
@@ -524,7 +523,7 @@ local function loadGeneralOptions()
 					help = {
 						order = 0,
 						type = "description",
-						name = L["The below are fallback settings for groups, if you do not override a setting in a group then it will use the settings below."],
+						name = L["The below are fallback settings for groups, if you do not override a setting in a group then it will use the settings below.\n\nWarning! All auction prices are per item, not overall. If you set it to post at a fallback of 1g and you post in stacks of 20 that means the fallback will be 20g."],
 					},
 				},
 			},
@@ -1345,8 +1344,17 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 	local cmd, arg = string.split(" ", msg or "", 2)
 	cmd = string.lower(cmd or "")
 	
+	-- Cancel search
+	if( cmd == "cancel" ) then
+		if( not arg or arg == "" ) then
+			QuickAuctions:Print(L["You did not seem to enter any filters to cancel with. If you really meant to cancel everything, use /qa cancelall"])
+		elseif( AuctionFrame and AuctionFrame:IsVisible() ) then
+			QuickAuctions.Manage:CancelMatch(arg)
+		else
+			QuickAuctions:Print(L["Cannot cancel auctions without the Auction House window open."])
+		end
 	-- Mass cancel
-	if( cmd == "cancelall" ) then
+	elseif( cmd == "cancelall" ) then
 		if( AuctionFrame and AuctionFrame:IsVisible() ) then
 			local parsedArg = string.trim(string.lower(arg or ""))
 			
@@ -1406,6 +1414,7 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 	else
 		QuickAuctions:Print(L["Slash commands"])
 		QuickAuctions:Echo(L["/qa cancelall <group/12/2> - Cancels all active auctions, or cancels auctions in a group if you pass one, or cancels auctions with less than 12 or 2 hours left."])
+		QuickAuctions:Echo(L["/qa cancel <match> - Cancels all auctions that match the entered filter, if you enter glyph it will cancel everything with \"glyph\" in it."])
 		QuickAuctions:Echo(L["/qa summary - Shows the auction summary"])
 		QuickAuctions:Echo(L["/qa tradeskill - Toggles showing the craft queue window for tradeskills"])
 		QuickAuctions:Echo(L["/qa config - Toggles the configuration"])
