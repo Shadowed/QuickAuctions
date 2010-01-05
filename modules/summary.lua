@@ -319,9 +319,7 @@ function Summary:Update()
 			
 			row.tooltipData = nil
 			
-			if( data.quantity and data.quantity == 0 ) then
-				row.quantity:SetText(data.quantity)
-			elseif( data.quantity ) then
+			if( data.quantity ) then
 				local inventory = GetItemCount(data.link) > 0 and string.format("(%d) ", GetItemCount(data.link)) or ""
 				local activeNumber = QuickAuctions.Scan:GetPlayerItemQuantity(data.link)
 				local active = ""
