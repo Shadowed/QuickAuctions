@@ -545,6 +545,7 @@ local function updateWhitelist()
 			type = "description",
 			name = visualName,
 			fontSize = "medium",
+			width = "half",
 		}
 		
 		options.args.whitelist.args.list.args[player] = {
@@ -608,7 +609,9 @@ local function loadWhitelistOptions()
 							if( value == "" ) then return L["No name entered."] end
 							
 							for playerID, player in pairs(QuickAuctions.db.factionrealm.whitelist) do
-								return string.format(L["The player \"%s\" is already on your whitelist."], player)
+								if( playerID == value ) then
+									return string.format(L["The player \"%s\" is already on your whitelist."], player)
+								end
 							end
 							
 							for player in pairs(QuickAuctions.db.factionrealm.player) do
@@ -620,7 +623,7 @@ local function loadWhitelistOptions()
 							return true
 						end,
 						set = function(info, value)
-							QuickAuctions.db.factionrealm[string.lower(value)] = value
+							QuickAuctions.db.factionrealm.whitelist[string.lower(value)] = value
 							updateWhitelist()
 						end,
 						get = false,
