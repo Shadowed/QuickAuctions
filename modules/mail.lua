@@ -152,7 +152,7 @@ end
 function Mail:AutoLoot()
 	-- Already looted everything after the invalid indexes we had, so fail it
 	if( LOOT_MAIL_INDEX > 1 and LOOT_MAIL_INDEX > GetInboxNumItems() ) then
-		self:StopAutoLooting(true)
+		self:StopAutoLooting()
 		return
 	end
 	
