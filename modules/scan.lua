@@ -5,9 +5,9 @@ local status = QuickAuctions.status
 local auctionData = {}
 Scan.auctionData = auctionData
 
-local DEBUG_MODE = false
+QuickAuctions.DEBUG_MODE = false
 local function debug(...)
-	if( DEBUG_MODE ) then
+	if( QuickAuctions.DEBUG_MODE ) then
 		table.insert(TestLog, {GetTime(), ...})
 	end
 end
@@ -304,13 +304,12 @@ function Scan:GetLowestAuction(link)
 end
 
 -- Do a delay before scanning the auctions so it has time to load all of the owner information
-local BASE_DELAY = 0.50
+local BASE_DELAY = 0.10
 Scan.scanFrame = CreateFrame("Frame")
-Scan.scanFrame.timeDelay = BASE_DELAY
 Scan.scanFrame:SetScript("OnUpdate", function(self, elapsed)
-	self.timeElapsed = self.timeElapsed + elapsed
-	if( self.timeElapsed >= self.timeDelay ) then
-		self.timeElapsed = 0
+	self.timeLeft = self.timeLeft - elapsed
+	if( self.timeLeft <= 0 ) then
+		self.timeLeft = 0
 		self:Hide()
 
 		Scan:ScanAuctions()
@@ -319,33 +318,11 @@ end)
 Scan.scanFrame:Hide()
 
 function Scan:AUCTION_ITEM_LIST_UPDATE()
-	self:UnregisterEvent("AUCTION_ITEM_LIST_UPDATE")
-	
-	if( select(2, GetNumAuctionItems("list")) >= 1 ) then
-		local badData
-		for i=1, GetNumAuctionItems("list") do
-			local name, _, _, _, _, _, _, _, _, _, _, owner = GetAuctionItemInfo("list", i)     
-			if( not name or not owner ) then
-				badData = true
-				break
-			end
-		end
-		
-		if( not badData ) then
-			status.skipRetry = true
-			debug("Got all necessary data", status.queryName, status.page)
+	status.timeDelay = 0
 
-			self.scanFrame:Hide()
-			self:ScanAuctions()
-			return
-		end
-	end
-	
-	debug("Delaying", BASE_DELAY, status.queryName, status.page)
-	
-	self.scanFrame.timeDelay = BASE_DELAY
-	self.scanFrame.timeElapsed = 0
-	self.scanFrame:Show()
+	self:UnregisterEvent("AUCTION_ITEM_LIST_UPDATE")
+	self.scanFrame:Hide()
+	self:ScanAuctions()
 end
 
 -- Time to scan auctions!
@@ -354,7 +331,7 @@ function Scan:ScanAuctions()
 	local totalPages = math.ceil(total / NUM_AUCTION_ITEMS_PER_PAGE)
 		
 	-- Check for bad data quickly
-	if( status.retries < 3 and not status.skipRetry ) then
+	if( status.retries < 3 ) then
 		-- Blizzard doesn't resolve the GUID -> name of the owner until GetAuctionItemInfo is called for it
 		-- meaning will call it for everything on the list then if we had any bad data will requery
 		local badData
@@ -362,30 +339,27 @@ function Scan:ScanAuctions()
 			local name, _, _, _, _, _, _, _, _, _, _, owner = GetAuctionItemInfo("list", i)     
 			if( not name or not owner ) then
 				badData = true
-				break
 			end
 		end
 		
 		if( badData ) then
-			status.retries = status.retries + 1
-			
 			-- Hard retry
 			if( status.hardRetry ) then
+				status.retries = status.retries + 1
 				debug("Bad data, hard retry", status.page, status.retries)
 				self:SendMessage("QA_QUERY_UPDATE", "retry", status.filter, status.page + 1, totalPages, status.retries, 3)
 				self:SendQuery()
 			-- Soft retry
 			else
-				self.scanFrame.timeElapsed = 0
-				self.scanFrame.timeDelay = status.retries * 0.66
+				status.timeDelay = status.timeDelay + BASE_DELAY
+				self.scanFrame.timeLeft = BASE_DELAY
 				self.scanFrame:Show()
 				
-				debug("Bad data, soft retry", status.page, status.retries, self.scanFrame.timeDelay)
-				
-				-- QA will wait 0.66 seconds per retry (0.66, 1.32, 1.98 = 3.96 seconds) more during a soft retry
-				-- if that still fails, it will fallback on a hard retry where it will requery 3 times, if the requeries
-				-- fail still, then it will let the data through with an unknown owner
-				if( status.retries >= 3 ) then
+				debug("Bad data, soft retry", status.page, status.retries, self.scanFrame.timeLeft)
+	
+				-- If after 4 seconds of retrying we still don't have data, will go and requery to try and solve the issue
+				-- if we still don't have data, then we are going to go through with scanning it anyway
+				if( status.timeDelay >= 4 ) then
 					status.hardRetry = true
 					status.retries = 0
 				end
@@ -394,9 +368,9 @@ function Scan:ScanAuctions()
 		end
 	end
 	
-	status.skipRetry = nil
 	status.hardRetry = nil
 	status.retries = 0
+
 	
 	-- Find the lowest auction (if any) out of this list
 	for i=1, shown do
