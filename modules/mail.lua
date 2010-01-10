@@ -114,8 +114,8 @@ function Mail:OnInitialize()
 			
 			cacheFrame.text:SetFormattedText("%d", seconds)
 		else
-			local timeLeft = self.timeLeft - elapsed
-			if( timeLeft <= 0 ) then
+			self.timeLeft = self.timeLeft - elapsed
+			if( self.timeLeft <= 0 ) then
 				self.timeLeft = 2
 				CheckInbox()
 			end
@@ -152,7 +152,13 @@ end
 function Mail:AutoLoot()
 	-- Already looted everything after the invalid indexes we had, so fail it
 	if( LOOT_MAIL_INDEX > 1 and LOOT_MAIL_INDEX > GetInboxNumItems() ) then
-		self:StopAutoLooting()
+		if( resetIndex ) then
+			self:StopAutoLooting()
+		else
+			resetIndex = true
+			LOOT_MAIL_INDEX = 1
+			self:AutoLoot()
+		end
 		return
 	end
 	
@@ -173,6 +179,7 @@ function Mail:StopAutoLooting(failed)
 		QuickAuctions:Print(L["Cannot finish auto looting, inventory is full or too many unique items."])
 	end
 	
+	resetIndex = nil
 	autoLootTotal = nil
 	lootAfterSend = nil
 	LOOT_MAIL_INDEX = 1
@@ -245,6 +252,7 @@ function Mail:MAIL_INBOX_UPDATE()
 end
 
 function Mail:MAIL_CLOSED()
+	resetIndex = nil
 	allowTimerStart = true
 	waitingForData = nil
 	self:StopAutoLooting()
