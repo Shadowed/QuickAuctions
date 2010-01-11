@@ -11,6 +11,7 @@ local playerName = string.lower(UnitName("player"))
 local allowTimerStart = true
 local LOOT_MAIL_INDEX = 1
 local MAIL_WAIT_TIME = 0.30
+local RECHECK_TIME = 2
 local FOUND_POSTAL
 
 function Mail:OnInitialize()
@@ -101,7 +102,7 @@ function Mail:OnInitialize()
 				-- until data becomes available
 				if( QuickAuctions.db.global.autoCheck ) then
 					waitingForData = true
-					self.timeLeft = 2
+					self.timeLeft = RECHECK_TIME
 					cacheFrame.text:SetText(nil)
 					
 					CheckInbox()
@@ -116,7 +117,7 @@ function Mail:OnInitialize()
 		else
 			self.timeLeft = self.timeLeft - elapsed
 			if( self.timeLeft <= 0 ) then
-				self.timeLeft = 2
+				self.timeLeft = RECHECK_TIME
 				CheckInbox()
 			end
 		end
@@ -179,6 +180,11 @@ function Mail:StopAutoLooting(failed)
 		QuickAuctions:Print(L["Cannot finish auto looting, inventory is full or too many unique items."])
 	end
 	
+	-- Immediately send off, as we know we won't (likely) be needing anything more
+	if( self:GetPendingAttachments() > 0 ) then
+		self:SendMail()
+	end
+
 	resetIndex = nil
 	autoLootTotal = nil
 	lootAfterSend = nil
@@ -223,10 +229,11 @@ function Mail:MAIL_INBOX_UPDATE()
 		cacheFrame:Hide()
 	-- Start a timer since we're over the limit of 50 items before waiting for it to recache
 	elseif( ( cacheFrame.endTime and current >= 50 and lastTotal ~= total ) or ( current >= 50 and allowTimerStart ) ) then
+		resetIndex = nil
 		allowTimerStart = nil
 		waitingForData = nil
 		lastTotal = total
-		cacheFrame.endTime = GetTime() + 61
+		cacheFrame.endTime = GetTime() + 60
 		cacheFrame:Show()
 	end
 	
