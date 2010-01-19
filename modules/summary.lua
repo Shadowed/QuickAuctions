@@ -244,7 +244,7 @@ function Summary:CompileData()
 		for id, data in pairs(displayData) do
 			if( data.enabled and data.isParent ) then
 				for _, childData in pairs(displayData) do
-					if( not childData.parent and string.match(childData.name, data.name .. "$") ) then
+					if( not childData.parent and string.match(string.lower(childData.name), string.lower(data.name) .. "$") ) then
 						childData.parent = data.name
 					end
 				end
