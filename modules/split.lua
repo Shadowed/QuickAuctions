@@ -21,18 +21,25 @@ end
 -- This isn't really the most efficient code for doing splits, but as QA requires the user to not be doing anything else
 -- and splitting in general is a pain I'll take the CPU cost
 function Split:FindEmptySlot(itemFamily)
-	for bag=0, 4 do
+	local backupBag, backupSlot
+	for bag=4, 0, -1 do
 		local bagFamily = bag == 0 and 0 or GetItemFamily(GetInventoryItemLink("player", ContainerIDToInventoryID(bag)))
 		if( bagFamily == 0 or bagFamily == itemFamily ) then
 			for slot=1, GetContainerNumSlots(bag) do
 				if( not GetContainerItemLink(bag, slot) and not lockedSlot[bag .. slot] ) then
-					return bag, slot
+					-- If it's a special bag, return immediately because we want to prioritize using them over a normal bag
+					if( bagFamily ~= 0 ) then
+						 return bag, slot
+					end
+					
+					-- If it's not, will just save that slot for later
+					backupBag, backupSlot = bag, slot
 				end
 			end
 		end
 	end
 	
-	return nil, nil
+	return backupBag, backupSlot
 end
 
 -- Finds any split queues we didn't already check if they have data
