@@ -5,7 +5,7 @@ local L = QuickAuctions.L
 
 local eventThrottle = CreateFrame("Frame", nil, MailFrame)
 local reverseLookup = QuickAuctions.modules.Manage.reverseLookup
-local bagTimer, itemTimer, cacheFrame, activeMailTarget, mailTimer, lastTotal, autoLootTotal, lootAfterSend, waitingForData
+local bagTimer, itemTimer, cacheFrame, activeMailTarget, mailTimer, lastTotal, autoLootTotal, lootAfterSend, waitingForData, resetIndex
 local lockedItems, mailTargets = {}, {}
 local playerName = string.lower(UnitName("player"))
 local allowTimerStart = true
