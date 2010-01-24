@@ -5,7 +5,7 @@ local L = QuickAuctions.L
 
 local eventThrottle = CreateFrame("Frame", nil, MailFrame)
 local reverseLookup = QuickAuctions.modules.Manage.reverseLookup
-local bagTimer, itemTimer, cacheFrame, activeMailTarget, mailTimer, lastTotal, autoLootTotal, lootAfterSend, waitingForData, resetIndex
+local bagTimer, itemTimer, cacheFrame, activeMailTarget, mailTimer, lastTotal, autoLootTotal, waitingForData, resetIndex
 local lockedItems, mailTargets = {}, {}
 local playerName = string.lower(UnitName("player"))
 local allowTimerStart = true
@@ -154,7 +154,7 @@ function Mail:AutoLoot()
 	-- Already looted everything after the invalid indexes we had, so fail it
 	if( LOOT_MAIL_INDEX > 1 and LOOT_MAIL_INDEX > GetInboxNumItems() ) then
 		if( resetIndex ) then
-			self:StopAutoLooting()
+			self:StopAutoLooting(true)
 		else
 			resetIndex = true
 			LOOT_MAIL_INDEX = 1
@@ -164,7 +164,7 @@ function Mail:AutoLoot()
 	end
 	
 	local money, cod, _, items, _, _, _, _, isGM = select(5, GetInboxHeaderInfo(LOOT_MAIL_INDEX))
-	if( ( not cod or cod <= 0 ) and not isGM and ( ( money and money > 0 ) or ( items and items > 0 ) ) ) then
+	if( not isGM and ( not cod or cod <= 0 ) and ( ( money and money > 0 ) or ( items and items > 0 ) ) ) then
 		mailTimer = nil
 		self.massOpening:SetText(L["Opening..."])
 		AutoLootMailItem(LOOT_MAIL_INDEX)
@@ -187,7 +187,6 @@ function Mail:StopAutoLooting(failed)
 
 	resetIndex = nil
 	autoLootTotal = nil
-	lootAfterSend = nil
 	LOOT_MAIL_INDEX = 1
 	
 	self:UnregisterEvent("UI_ERROR_MESSAGE")
@@ -200,7 +199,6 @@ function Mail:UI_ERROR_MESSAGE(event, msg)
 		-- Send off our pending mail first to free up more room to auto loot
 		if( msg == ERR_INV_FULL and activeMailTarget and self:GetPendingAttachments() > 0 ) then
 			self.massOpening:SetText(L["Waiting..."])
-			lootAfterSend = true
 			autoLootTotal = -1
 			bagTimer = MAIL_WAIT_TIME
 			eventThrottle:Show()
@@ -211,8 +209,15 @@ function Mail:UI_ERROR_MESSAGE(event, msg)
 		
 		-- Try the next index in case we can still loot more such as in the case of glyphs
 		LOOT_MAIL_INDEX = LOOT_MAIL_INDEX + 1
-		if( LOOT_MAIL_INDEX > GetInboxNumItems() ) then
-			self:StopAutoLooting(true)
+		
+		-- If we've exhausted all slots, but we still have <50 and more mail pending, wait until new data comes and keep looting it
+		local current, total = GetInboxNumItems()
+		if( LOOT_MAIL_INDEX > current ) then
+			if( LOOT_MAIL_INDEX > total and total <= 50 ) then
+				self:StopAutoLooting(true)
+			else
+				self.massOpening:SetText(L["Waiting..."])
+			end
 			return
 		end
 		
@@ -238,7 +243,7 @@ function Mail:MAIL_INBOX_UPDATE()
 	end
 	
 	-- The last item we setup to auto loot is finished, time for the next one
-	if( self.massOpening:IsEnabled() == 0 and not lootAfterSend and autoLootTotal ~= current ) then
+	if( self.massOpening:IsEnabled() == 0 and autoLootTotal ~= current ) then
 		autoLootTotal = GetInboxNumItems()
 		
 		-- If we're auto checking mail when new data is available, will wait and continue auto looting, otherwise we just stop now
@@ -338,6 +343,13 @@ function Mail:SendMail()
 
 	itemTimer = nil
 	activeMailTarget = nil
+
+	-- Wait twice as much time to make sure it gets sent off
+	if( self.massOpening:IsEnabled() == 0 ) then
+		autoLootTotal = -1
+		mailTimer = MAIL_WAIT_TIME * 2
+		eventThrottle:Show()
+	end
 end
 
 function Mail:GetPendingAttachments()
@@ -368,15 +380,6 @@ function Mail:UpdateBags()
 		if( activeMailTarget ) then
 			SendMailNameEditBox:SetText(activeMailTarget)
 		end
-	end
-	
-	-- We sent off our pending mail early because we ran out of space, can resume sending now
-	if( lootAfterSend and self:GetPendingAttachments() == 0 ) then
-		lootAfterSend = nil
-		autoLootTotal = GetInboxNumItems()
-		mailTimer = MAIL_WAIT_TIME
-		eventThrottle:Show()
-		return
 	end
 
 	-- If we exit before the loot after send checks then it will stop too early
