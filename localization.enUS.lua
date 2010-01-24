@@ -131,6 +131,7 @@ QuickAuctions.L = {
 	["Mass add"] = "Mass add",
 	["Mass adds all items matching the below, entering \"Glyph of\" will mass add all items starting with \"Glyph of\" to this group."] = "Mass adds all items matching the below, entering \"Glyph of\" will mass add all items starting with \"Glyph of\" to this group.",
 	["Mass cancelling posted items"] = "Mass cancelling posted items",
+	["Mass cancelling posted items below %s"] = "Mass cancelling posted items below %s",
 	["Mass cancelling posted items in the group |cfffed000%s|r"] = "Mass cancelling posted items in the group |cfffed000%s|r",
 	["Mass cancelling posted items with less than %d hours left"] = "Mass cancelling posted items with less than %d hours left",
 	["Mass mailing"] = "Mass mailing",

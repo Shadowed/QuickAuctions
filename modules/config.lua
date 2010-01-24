@@ -1361,7 +1361,7 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 		if( AuctionFrame and AuctionFrame:IsVisible() ) then
 			local parsedArg = string.trim(string.lower(arg or ""))
 			
-			local groupName, cancelTime
+			local groupName, cancelTime, cancelBelow
 			if( tonumber(parsedArg) ) then
 				parsedArg = tonumber(parsedArg)
 				if( parsedArg ~= 12 and parsedArg ~= 2 ) then
@@ -1371,6 +1371,12 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 				
 				cancelTime = parsedArg == 12 and 3 or 2
 				--1 = <30 minutes, 2 = <2 hours, 3 = <12 hours, 4 = <13 hours
+				
+			elseif( string.find(parsedArg, "%d+g") or string.find(parsedArg, "%d+s") or string.find(parsedArg, "%d+c")) then
+				local gold = tonumber(string.match(parsedArg, "([0-9]+)g"))
+				local silver = tonumber(string.match(parsedArg, "([0-9]+)s"))
+				local copper = tonumber(string.match(parsedArg, "([0-9]+)c"))
+				cancelBelow = (copper or 0) + ((gold or 0) * COPPER_PER_GOLD) + ((silver or 0) * COPPER_PER_SILVER)
 				
 			elseif( parsedArg ~= "" ) then
 				for name in pairs(QuickAuctions.db.global.groups) do
@@ -1386,7 +1392,7 @@ SlashCmdList["QUICKAUCTIONS"] = function(msg)
 				end
 			end
 			
-			QuickAuctions.Manage:CancelAll(groupName, cancelTime)
+			QuickAuctions.Manage:CancelAll(groupName, cancelTime, cancelBelow)
 		else
 			QuickAuctions:Print(L["Cannot cancel auctions without the Auction House window open."])
 		end

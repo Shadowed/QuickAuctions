@@ -168,7 +168,7 @@ function Manage:CancelMatch(match)
 	end
 end
 
-function Manage:CancelAll(group, duration)
+function Manage:CancelAll(group, duration, price)
 	QuickAuctions:WipeLog()
 	QuickAuctions:LockButtons()
 	self:RegisterEvent("CHAT_MSG_SYSTEM")
@@ -183,16 +183,18 @@ function Manage:CancelAll(group, duration)
 		QuickAuctions:Log("masscancel", string.format(L["Mass cancelling posted items with less than %d hours left"], duration == 3 and 12 or 2))
 	elseif( group ) then
 		QuickAuctions:Log("masscancel", string.format(L["Mass cancelling posted items in the group |cfffed000%s|r"], group))
+	elseif( money ) then
+		QuickAuctions:Log("masscancel", string.format(L["Mass cancelling posted items below %s"], QuickAuctions:FormatTextMoney(money)))
 	else
 		QuickAuctions:Log("masscancel", L["Mass cancelling posted items"])
 	end
 	
 	for i=1, GetNumAuctionItems("owner") do
-		local name, _, _, _, _, _, _, _, _, _, _, _, wasSold = GetAuctionItemInfo("owner", i)     
+		local name, _, _, _, _, _, _, _, buyoutPrice, _, _, _, wasSold = GetAuctionItemInfo("owner", i)     
 		local timeLeft = GetAuctionItemTimeLeft("owner", i)
 		local itemLink = GetAuctionItemLink("owner", i)
 		local itemID = QuickAuctions:GetSafeLink(itemLink)
-		if( wasSold == 0 and ( group and reverseLookup[itemID] == group or not group ) and ( duration and timeLeft <= duration or not duration ) ) then
+		if( wasSold == 0 and ( group and reverseLookup[itemID] == group or not group ) and ( duration and timeLeft <= duration or not duration ) and ( price and buyoutPrice <= price or not price ) ) then
 			if( name and not tempList[name] ) then
 				tempList[name] = true
 				QuickAuctions:Log(name, string.format(L["Cancelled %s"], itemLink))
