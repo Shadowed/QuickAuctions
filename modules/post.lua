@@ -179,10 +179,13 @@ function Post:PostAuction(queue)
 	else
 		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s"], itemLink, quantityText, postTotal[itemID], QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
 	end
+	
+	local time = QuickAuctions.Manage:GetConfigValue(itemID, "postTime")
+	time = time == 48 and 3 or time == 24 and 2 or 1
 		
 	PickupContainerItem(bag, slot)
 	ClickAuctionSellItemButton()
-	StartAuction(bid, buyout, QuickAuctions.Manage:GetConfigValue(itemID, "postTime") * 60)
+	StartAuction(bid, buyout, time)
 end
 
 -- This looks a bit odd I know, not sure if I want to keep it like this (or if I even can) where it posts something as soon as it can
