@@ -87,6 +87,20 @@ function Tradeskill:Update()
 	end
 end
 
+function Tradeskill:BuyMaterials()
+	for i=1, GetMerchantNumItems() do
+		local link = QuickAuctions:GetSafeLink(GetMerchantItemLink(i))
+		if( materials[link] ) then
+			local maxStack = GetMerchantItemMaxStack(i)
+			local toBuy = materials[link] - GetItemCount(link)
+			while( toBuy >= 0 ) do
+				BuyMerchantItem(i, math.min(toBuy, maxStack))
+				toBuy = toBuy - maxStack
+			end
+		end
+	end
+end
+
 -- Rebuild the item list
 local function sortItems(a, b)
 	return a > b
@@ -116,19 +130,62 @@ function Tradeskill:CreateFrame()
 		Tradeskill:RebuildList()
 		Tradeskill:Update()
 	end
+
+	local function showTooltip(self)
+		GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
+		GameTooltip:SetText(self.tooltip, nil, nil, nil, nil, true)
+		GameTooltip:Show()
+	end
+
+	local function hideTooltip(self)
+		GameTooltip:Hide()
+	end
 	
 	-- Toggle showing the queue frame thing
 	self.button = CreateFrame("Button", nil, TradeSkillFrame, "UIPanelButtonGrayTemplate")
 	self.button:SetHeight(18)
 	self.button:SetWidth(30)
 	self.button:SetText("QA")
-	self.button:SetPoint("TOPRIGHT", TradeSkillFrame, "TOPRIGHT", -65, -15)
+	self.button.tooltip = L["Click to view Quick Auctions tradeskill queue"]
+	self.button:SetPoint("TOPRIGHT", TradeSkillFrame, "TOPRIGHT", -60, -15)
+	self.button:SetScript("OnEnter", showTooltip)
+	self.button:SetScript("OnLeave", hideTooltip)
 	self.button:SetScript("OnClick", function()
 		if( Tradeskill.frame:IsVisible() ) then
 			Tradeskill.frame:Hide()
 		else
 			Tradeskill.frame:Show()
 		end
+	end)
+	
+	local timeLeft = 0
+	local function OnUpdate(self, elapsed)
+		timeLeft = timeLeft - elapsed
+		if( timeLeft <= 0 ) then
+			self:Enable()
+			self:SetText("Buy")
+			self:SetScript("OnUpdate", nil)
+			return
+		end
+		
+		self:SetFormattedText("%.1f", timeLeft)
+	end
+
+	-- Toggle showing the queue frame thing
+	self.buy = CreateFrame("Button", nil, TradeSkillFrame, "UIPanelButtonGrayTemplate")
+	self.buy:SetHeight(18)
+	self.buy:SetWidth(30)
+	self.buy:SetText(L["Buy"])
+	self.buy:SetPoint("TOPLEFT", TradeSkillFrame, "TOPLEFT", 68, -15)
+	self.buy.tooltip = L["Click to buy materials required.\n\nThis might lock your client up for a few seconds."]
+	self.buy:SetScript("OnEnter", showTooltip)
+	self.buy:SetScript("OnLeave", hideTooltip)
+	self.buy:SetScript("OnHide", function() timeLeft = 0 end)
+	self.buy:SetScript("OnClick", function(self)
+		timeLeft = 4
+		self:SetScript("OnUpdate", OnUpdate)
+		self:Disable()
+		Tradeskill:BuyMaterials()
 	end)
 	
 	-- Actual queue frame UI
