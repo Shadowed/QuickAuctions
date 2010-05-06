@@ -76,7 +76,6 @@ function Post:CHAT_MSG_SYSTEM(event, msg)
 		overallTotal = overallTotal + 1
 		QuickAuctions:SetButtonProgress("post", overallTotal, status.totalPostQueued)
 		
-		print(overallTotal, status.totalPostQueued, status.isPosting, scanRunning)
 		if( overallTotal >= status.totalPostQueued and not scanRunning ) then
 			Post:Stop()
 			return
