@@ -101,8 +101,8 @@ function Manage:CancelScan()
 		return
 	end
 	
-	QuickAuctions.Split:ScanStopped()
-	QuickAuctions.Split:Stop()
+	--QuickAuctions.Split:ScanStopped()
+	--QuickAuctions.Split:Stop()
 	QuickAuctions.Post:Stop()
 
 	status.isCancelling = true
@@ -504,9 +504,9 @@ function Manage:PostScan()
 	status.totalPostQueued = 0
 	status.totalScanQueue = #(postQueue)
 	status.queueTable = postQueue
-	QuickAuctions.Split:ScanStarted()
+	--QuickAuctions.Split:ScanStarted()
 	QuickAuctions.Post:ScanStarted()
-	QuickAuctions.Split:Start()
+	--QuickAuctions.Split:Start()
 	QuickAuctions.Scan:StartItemScan(scanList)
 end
 
@@ -518,8 +518,8 @@ function Manage:StopPosting()
 	status.totalScanQueue = 0
 	self:StopLog()
 	
-	QuickAuctions.Split:ScanStopped()
-	QuickAuctions.Split:Stop()
+	--QuickAuctions.Split:ScanStopped()
+	--QuickAuctions.Split:Stop()
 	QuickAuctions.Post:Stop()
 	QuickAuctions:UnlockButtons()
 end
@@ -585,14 +585,11 @@ function Manage:PostItems(itemID)
 	end
 
 	-- The splitter will automatically pass items to the post queuer, meaning if an item doesn't even stack it will handle that just fine
-	for i=1, auctionsCreated do
-		stats[itemID] = (stats[itemID] or 0) + 1
-		status.totalPostQueued = status.totalPostQueued + 1
-		
-		QuickAuctions.Split:QueueItem(itemID, perAuction)
-	end
-
-	QuickAuctions.Split:UpdateBags()
+	stats[itemID] = (stats[itemID] or 0) + auctionsCreated
+	status.totalPostQueued = status.totalPostQueued + auctionsCreated
+	QuickAuctions.Post:QueueItem(itemID, perAuction, auctionsCreated)
+	--QuickAuctions.Split:QueueItem(itemID, perAuction)
+	--QuickAuctions.Split:UpdateBags()
 end
 
 -- Log handler
@@ -632,7 +629,7 @@ end
 function Manage:QA_STOP_SCAN(event, interrupted)
 	self:StopLog()
 	status.isManaging = nil
-	QuickAuctions.Split:ScanStopped()
+	--QuickAuctions.Split:ScanStopped()
 
 	if( interrupted ) then
 		QuickAuctions:Log("scaninterrupt", L["Scan interrupted before it could finish"])

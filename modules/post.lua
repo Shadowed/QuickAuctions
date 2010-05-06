@@ -2,7 +2,7 @@ local QuickAuctions = select(2, ...)
 local Post = QuickAuctions:NewModule("Post", "AceEvent-3.0")
 local L = QuickAuctions.L
 local status = QuickAuctions.status
-local postQueue, postTotal, overallTotal, scanRunning = {}, {}, 0
+local postQueue, overallTotal, queueLeft, scanRunning = {}, 0, 0, nil
 local POST_TIMEOUT = 20
 local frame = CreateFrame("Frame")
 frame:Hide()
@@ -24,7 +24,7 @@ end
 function Post:ScanStopped()
 	scanRunning = nil
 	
-	if( #(postQueue) == 0 and not status.isSplitting and overallTotal >= status.totalPostQueued ) then
+	if( #(postQueue) == 0 and overallTotal >= status.totalPostQueued ) then
 		self:Stop()
 	end
 end
@@ -53,7 +53,6 @@ function Post:Stop()
 	QuickAuctions:UnlockButtons()
 	
 	table.wipe(postQueue)
-	table.wipe(postTotal)
 	
 	overallTotal = 0
 	status.isPosting = nil
@@ -73,13 +72,18 @@ end)
 -- Check if an auction was posted and move on if so
 function Post:CHAT_MSG_SYSTEM(event, msg)
 	if( msg == ERR_AUCTION_STARTED ) then
-		-- Update posted count
+		queueLeft = queueLeft - 1
 		overallTotal = overallTotal + 1
 		QuickAuctions:SetButtonProgress("post", overallTotal, status.totalPostQueued)
 		
+		print(overallTotal, status.totalPostQueued, status.isPosting, scanRunning)
 		if( overallTotal >= status.totalPostQueued and not scanRunning ) then
 			Post:Stop()
 			return
+		-- Time to move onto our next queue!
+		elseif( queueLeft <= 0 and #(postQueue) > 0 ) then
+			self:Start()
+			self:PostAuction(table.remove(postQueue, 1))
 		end
 		
 		-- Also set our timeout so it knows if it can fully stop
@@ -88,14 +92,23 @@ function Post:CHAT_MSG_SYSTEM(event, msg)
 	end
 end
 
+function Post:FindItemSlot(findLink)
+	for bag=0, 4 do
+		for slot=1, GetContainerNumSlots(bag) do
+			local link = QuickAuctions:GetSafeLink(GetContainerItemLink(bag, slot))
+			if( link and link == findLink ) then
+				return bag, slot
+			end
+		end
+	end
+end
+
 function Post:PostAuction(queue)
 	if( not queue ) then return end
 	
-	local itemID, bag, slot = queue.link, queue.bag, queue.slot
+	local itemID, bag, slot = queue.link, self:FindItemSlot(queue.link)
 	local name, itemLink = GetItemInfo(itemID)
 	local lowestBuyout, lowestBid, lowestOwner, isWhitelist, isPlayer = QuickAuctions.Scan:GetLowestAuction(itemID)
-	
-	postTotal[itemID] = (postTotal[itemID] or 0) + 1
 	
 	-- Set our initial costs
 	local fallbackCap, buyoutTooLow, bidTooLow, autoFallback, bid, buyout, differencedPrice, buyoutThresholded
@@ -155,46 +168,49 @@ function Post:PostAuction(queue)
 		end
 	end
 	
-	local quantity = select(2, GetContainerItemInfo(bag, slot))
-	local quantityText = quantity > 1 and " x " .. quantity or ""
+	local quantityText = queue.stackSize > 1 and " x " .. queue.stackSize or ""
 	
 	-- Increase the bid/buyout based on how many items we're posting
-	bid = math.floor(bid * quantity)
-	buyout = math.floor(buyout * quantity)
+	bid = math.floor(bid * queue.stackSize)
+	buyout = math.floor(buyout * queue.stackSize)
 	
 	if( buyoutThresholded ) then
-		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (Increased buyout price due to going below thresold)"], itemLink, quantityText, postTotal[itemID], QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
+		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d) bid %s, buyout %s (Increased buyout price due to going below thresold)"], itemLink, quantityText, QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
 	elseif( buyoutTooLow ) then
-		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (Buyout went below zero, undercut by 1 copper instead)"], itemLink, quantityText, postTotal[itemID], QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
+		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d) bid %s, buyout %s (Buyout went below zero, undercut by 1 copper instead)"], itemLink, quantityText, QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
 	elseif( autoFallback ) then
-		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (Forced to fallback price, market below threshold)"], itemLink, quantityText, postTotal[itemID], QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
+		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d) bid %s, buyout %s (Forced to fallback price, market below threshold)"], itemLink, quantityText, QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
 	elseif( differencedPrice ) then
-		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (Price difference too high, used second lowest price intead)"], itemLink, quantityText, postTotal[itemID], QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
+		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d) bid %s, buyout %s (Price difference too high, used second lowest price intead)"], itemLink, quantityText, QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
 	elseif( fallbackCap ) then
-		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (Forced to fallback price, lowest price was too high)"], itemLink, quantityText, postTotal[itemID], QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
+		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d) bid %s, buyout %s (Forced to fallback price, lowest price was too high)"], itemLink, quantityText, QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
 	elseif( bidTooLow ) then
-		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (Increased bid price due to going below thresold)"], itemLink, quantityText, postTotal[itemID], QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
+		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d) bid %s, buyout %s (Increased bid price due to going below thresold)"], itemLink, quantityText, QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
 	elseif( not lowestOwner ) then
-		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s (No other auctions up)"], itemLink, quantityText, postTotal[itemID], QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
+		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d) bid %s, buyout %s (No other auctions up)"], itemLink, quantityText, QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
 	else
-		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d/%d) bid %s, buyout %s"], itemLink, quantityText, postTotal[itemID], QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
+		QuickAuctions:Log(name, string.format(L["Posting %s%s (%d) bid %s, buyout %s"], itemLink, quantityText, QuickAuctions.Manage.stats[itemID] or 0, QuickAuctions:FormatTextMoney(bid), QuickAuctions:FormatTextMoney(buyout)))
 	end
+	
+	queueLeft = queue.numStacks
 	
 	local time = QuickAuctions.Manage:GetConfigValue(itemID, "postTime")
 	time = time == 48 and 3 or time == 24 and 2 or 1
 		
 	PickupContainerItem(bag, slot)
 	ClickAuctionSellItemButton()
-	StartAuction(bid, buyout, time)
+	StartAuction(bid, buyout, time, queue.stackSize, queue.numStacks)
 end
 
 -- This looks a bit odd I know, not sure if I want to keep it like this (or if I even can) where it posts something as soon as it can
 -- I THINK it will work fine, but if it doesn't I'm going to change it back to post once, wait for event, post again, repeat
-function Post:QueueItem(link, bag, slot)
-	table.insert(postQueue, {link = link, bag = bag, slot = slot})
+function Post:QueueItem(link, stackSize, numStacks)
+	table.insert(postQueue, {link = link, stackSize = stackSize, numStacks = numStacks})
 	
-	self:Start()
-	self:PostAuction(table.remove(postQueue, 1))
+	if( queueLeft <= 0 ) then
+		self:Start()
+		self:PostAuction(table.remove(postQueue, 1))
+	end
 end
 
 
