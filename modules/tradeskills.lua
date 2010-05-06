@@ -93,7 +93,7 @@ function Tradeskill:BuyMaterials()
 		if( materials[link] ) then
 			local maxStack = GetMerchantItemMaxStack(i)
 			local toBuy = materials[link] - GetItemCount(link)
-			while( toBuy >= 0 ) do
+			while( toBuy > 0 ) do
 				BuyMerchantItem(i, math.min(toBuy, maxStack))
 				toBuy = toBuy - maxStack
 			end
