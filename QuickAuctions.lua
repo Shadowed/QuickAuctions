@@ -22,6 +22,7 @@ function QuickAuctions:OnInitialize()
 			perAuction = {default = 1},
 			priceThreshold = {default = 10},
 			ignoreStacks = {default = 1000},
+			groupStatus = {},
 			categories = {},
 		},
 		char = {

@@ -1026,9 +1026,9 @@ end
 local function renameGroup(info, value)
 	local oldName = idToGroup[info[2]]
 	local target = QuickAuctions.db.factionrealm.mail[oldName]
-	if( oldTarget ) then
+	if( target ) then
 		QuickAuctions.db.factionrealm.mail[oldName] = nil
-		QuickAuctions.db.factionreaml.mail[value] = target
+		QuickAuctions.db.factionrealm.mail[value] = target
 	end
 	
 	QuickAuctions.db.global.groups[value] = CopyTable(QuickAuctions.db.global.groups[oldName])
@@ -1106,6 +1106,7 @@ local groupTable = {
 	order = 0,
 	type = "group",
 	childGroups = "tab",
+	hidden = function(info) return QuickAuctions.db.profile.groupStatus[idToGroup[info[#(info)]]] end,
 	name = function(info) return idToGroup[info[#(info)]] end,
 	args = {
 		general = {
@@ -1233,6 +1234,7 @@ updateGroups = function()
 	for id, group in pairs(idToGroup) do
 		if( type(group) == "string" and not QuickAuctions.db.global.groups[group] ) then
 			options.args.groups.args[id] = nil
+			options.args.groupstatus.args.list.args[id] = nil
 			idToGroup[id] = nil
 			idToGroup[group] = nil
 		end
@@ -1244,6 +1246,12 @@ updateGroups = function()
 			idToGroup[group] = true
 			options.args.groups.args[tostring(groupID)] = CopyTable(groupTable)
 			options.args.groups.args[tostring(groupID)].args.add.args.list = addItemsTable
+
+			options.args.groupstatus.args.list.args[tostring(groupID)] = {
+				order = 1,
+				type = "toggle",
+				name = groupTable.name,
+			}
 
 			local hasItems
 			for itemID in pairs(items) do
@@ -1319,6 +1327,41 @@ local function loadPreloadOptions()
 	}
 end
 
+local function loadGroupStatus()
+	options.args.groupstatus = {
+		order = 2.5,
+		type = "group",
+		name = L["Group status"],
+		set = function(info, value)
+			QuickAuctions.db.profile.groupStatus[idToGroup[info[#(info)]]] = not value and true or nil
+		end,
+		get = function(info)
+			return not QuickAuctions.db.profile.groupStatus[idToGroup[info[#(info)]]]
+		end,
+		args = {
+			help = {
+				order = 0,
+				type = "group",
+				inline = true,
+				name = L["Help"],
+				args = {
+					help = {
+						type = "description",
+						name = L["Enabling groups will cause them to be active and usable in this profile. If you disable them you will no longer see them in the configuration menu, and they will not be managed by Quick Auctions.|n|nFor all intents and purposes, they do not exist in Quick Auctions."],
+					}
+				}
+			},
+			list = {
+				order = 1,
+				type = "group",
+				inline = true,
+				name = L["Groups"],
+				args = {},
+			}
+		}
+	}
+end
+
 local function loadOptions()
 	options = {
 		type = "group",	
@@ -1329,8 +1372,9 @@ local function loadOptions()
 	
 	loadGeneralOptions()
 	loadWhitelistOptions()
-	loadPreloadOptions()
+	--loadPreloadOptions()
 	loadMailOptions()
+	loadGroupStatus()
 	loadGroupOptions()
 	
 	options.args.profile = LibStub("AceDBOptions-3.0"):GetOptionsTable(QuickAuctions.db, true)

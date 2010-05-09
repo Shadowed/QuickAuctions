@@ -43,8 +43,10 @@ function Manage:UpdateReverseLookup()
 	table.wipe(reverseLookup)
 	
 	for group, items in pairs(QuickAuctions.db.global.groups) do
-		for itemID in pairs(items) do
-			reverseLookup[itemID] = group
+		if( not QuickAuctions.db.profile.groupStatus[group] ) then
+			for itemID in pairs(items) do
+				reverseLookup[itemID] = group
+			end
 		end
 	end
 end
