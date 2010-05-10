@@ -71,7 +71,7 @@ function Mail:OnInitialize()
 		end
 	end)
 	check:SetPoint("TOPLEFT", MailFrame, "TOPLEFT", 68, -13)
-	check.tooltip = L["Enables Quick Auctions auto mailer, the last patch of mails will take ~10 seconds to send.\n\n[WARNING!] You will not get any confirmation before it starts to send mails, it is your own fault if you mistype your bankers name."]
+	check.tooltip = L["Enables Quick Auctions auto mailer, the last batch of mails will take ~10 seconds to send.|n|n[WARNING!] You will not get any confirmation before it starts to send mails, it is your own fault if you mistype your bankers name."]
 	QuickAuctionsAutoMailText:SetText(L["Auto mail"])
 
 	if( MailFrame:IsVisible() ) then
