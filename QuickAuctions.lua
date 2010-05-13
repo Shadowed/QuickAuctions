@@ -62,6 +62,7 @@ function QuickAuctions:OnInitialize()
 	self.Summary = self.modules.Summary
 	self.Tradeskill = self.modules.Tradeskill
 	self.Status = self.modules.Status
+	self.Mail = self.modules.Mail
 		
 	-- Add this character to the alt list so it's not undercut by the player
 	self.db.factionrealm.player[UnitName("player")] = true

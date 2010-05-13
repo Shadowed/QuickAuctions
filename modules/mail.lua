@@ -5,7 +5,7 @@ local L = QuickAuctions.L
 
 local eventThrottle = CreateFrame("Frame", nil, MailFrame)
 local reverseLookup = QuickAuctions.modules.Manage.reverseLookup
-local bagTimer, itemTimer, cacheFrame, activeMailTarget, mailTimer, lastTotal, autoLootTotal, waitingForData, resetIndex
+local bagTimer, itemTimer, cacheFrame, activeMailTarget, mailTimer, lastTotal, autoLootTotal, waitingForData, resetIndex, waitForCancel
 local lockedItems, mailTargets = {}, {}
 local playerName = string.lower(UnitName("player"))
 local allowTimerStart = true
@@ -139,7 +139,13 @@ end
 function Mail:StartAutoLooting()
 	local total
 	autoLootTotal, total = GetInboxNumItems()
-	if( autoLootTotal == 0 and total == 0 ) then return end
+	
+	if( QuickAuctions.status.isCancelling and total == 0 ) then
+		self.massOpening:SetText(L["Waiting..."])
+		waitForCancel = true
+	elseif( autoLootTotal == 0 and total == 0 ) then
+		return
+	end
 	
 	if( QuickAuctions.db.global.autoCheck and autoLootTotal == 0 and total > 0 ) then
 		self.massOpening:SetText(L["Waiting..."])
@@ -242,6 +248,12 @@ function Mail:MAIL_INBOX_UPDATE()
 		cacheFrame:Show()
 	end
 	
+	-- We were waiting for data to show up after a cancel
+	if( waitForCancel and current > 0 ) then
+		waitForCancel = nil
+		self:AutoLoot()
+	end
+	
 	-- The last item we setup to auto loot is finished, time for the next one
 	if( self.massOpening:IsEnabled() == 0 and autoLootTotal ~= current ) then
 		autoLootTotal = GetInboxNumItems()
@@ -333,6 +345,7 @@ function Mail:Stop()
 	
 	bagTimer = nil
 	itemTimer = nil
+	waitForCancel = nil
 end
 
 function Mail:SendMail()

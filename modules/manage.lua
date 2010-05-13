@@ -127,7 +127,7 @@ function Manage:CHAT_MSG_SYSTEM(event, msg)
 			if( not AuctionFrame:IsVisible() ) then
 				QuickAuctions:Print(string.format(L["Finished cancelling |cfffed000%d|r auctions"], totalCancelled))
 			end
-
+			
 			self:StopCancelling()
 		else
 			QuickAuctions:Log("cancelprogress", string.format(L["Cancelling |cfffed000%d|r of |cfffed000%d|r"], totalCancelled - totalToCancel, totalCancelled))
