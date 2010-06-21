@@ -5,7 +5,7 @@ local L = QuickAuctions.L
 
 local eventThrottle = CreateFrame("Frame", nil, MailFrame)
 local reverseLookup = QuickAuctions.modules.Manage.reverseLookup
-local bagTimer, itemTimer, cacheFrame, activeMailTarget, mailTimer, lastTotal, autoLootTotal, waitingForData, resetIndex, waitForCancel
+local bagTimer, itemTimer, cacheFrame, activeMailTarget, mailTimer, lastTotal, autoLootTotal, waitingForData, resetIndex, waitForCancel, alertCap
 local lockedItems, mailTargets = {}, {}
 local playerName = string.lower(UnitName("player"))
 local allowTimerStart = true
@@ -137,6 +137,8 @@ end
 
 -- Deal swith auto looting of mail!
 function Mail:StartAutoLooting()
+	alertCap = nil
+	
 	local total
 	autoLootTotal, total = GetInboxNumItems()
 	
@@ -201,7 +203,7 @@ function Mail:StopAutoLooting(failed)
 end
 
 function Mail:UI_ERROR_MESSAGE(event, msg)
-	if( msg == ERR_INV_FULL or msg == ERR_ITEM_MAX_COUNT ) then
+	if( msg == ERR_TOO_MUCH_GOLD or msg == ERR_INV_FULL or msg == ERR_ITEM_MAX_COUNT ) then
 		-- Send off our pending mail first to free up more room to auto loot
 		if( msg == ERR_INV_FULL and activeMailTarget and self:GetPendingAttachments() > 0 ) then
 			self.massOpening:SetText(L["Waiting..."])
@@ -211,6 +213,10 @@ function Mail:UI_ERROR_MESSAGE(event, msg)
 
 			self:SendMail()
 			return
+		-- Warn that they are at gold cap
+		elseif( msg == ERR_TOO_MUCH_GOLD and not alertCap ) then
+			QuickAuctions:Print(L["You are at the gold cap and cannot loot gold from the mailbox."])
+			alertCap = true
 		end
 		
 		-- Try the next index in case we can still loot more such as in the case of glyphs
